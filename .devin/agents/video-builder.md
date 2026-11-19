@@ -51,7 +51,8 @@ bạn dừng êm và báo rõ cho parent.
    | `send` | — | Tin nhắn bay thành bubble của user |
    | `bubble` | `who` (`agent`), `text` (markdown), `reveal` | Bubble trợ lý hiện dần |
    | `work` | `text` | Chỉ báo "Đang làm…" của trợ lý |
-   | `files` | `items` `[[tên file, số dòng]]` | Panel kết quả file bên phải |
+   | `files` | `items` `[[tên file, số dòng]]`, `title?` | Panel kết quả file bên phải (đổi tiêu đề bằng `title`) |
+   | `tab` | `name` (`slide`/`hd`/`bt`/`vd`/`chat`) | Chuyển tab trên header portal |
    | `pause` | `dur` | Dừng hình |
 
    - Mọi step đều có thể kèm `"say": "lời thoại"` — renderer tự đọc TTS

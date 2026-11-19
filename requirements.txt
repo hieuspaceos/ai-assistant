@@ -6,5 +6,6 @@
 #   ffmpeg                        — render video bài giảng (tools/render-video.py)
 #   ttyd                          — chế độ Terminal nhúng web (không bắt buộc)
 #   ImageMagick (magick) / sips   — nén + resize ảnh trong skill (sips có sẵn trên macOS)
-openpyxl>=3.1.0
-python-docx>=1.1.0
+# Chặn trên ở major kế — pip không tự kéo bản đổi API về máy học viên.
+openpyxl>=3.1.0,<4
+python-docx>=1.1.0,<2

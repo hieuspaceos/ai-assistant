@@ -154,15 +154,20 @@ function md(s) {
     .replace(/<\/ul>\n<ul>/g,'')
     .replace(/\n/g,'<br>');
 }
+// escape chuỗi thường (không qua md) trước khi đưa vào innerHTML
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
 
 /* ---------- trạng thái tích luỹ ---------- */
 let bubbles, typing, pendingMsg, sentOnce, placeholder;
-let cursor, ripple, activeTab, workMsg, filesList, card, subtitle, flashTarget;
+let cursor, ripple, activeTab, workMsg, filesList, filesTitle, card, subtitle, flashTarget;
 function resetState() {
   bubbles = [];
   typing = ''; pendingMsg = ''; sentOnce = {}; placeholder = 'Nhờ trợ lý giúp gì đó…';
   cursor = {x: 640, y: 360}; ripple = null;
-  activeTab = 'chat'; workMsg = null; filesList = null;
+  activeTab = 'chat'; workMsg = null; filesList = null; filesTitle = 'folder ket-qua/ — file đã tách';
   card = null; subtitle = ''; flashTarget = null;
 }
 resetState();
@@ -184,7 +189,7 @@ ready.then(scene => {
   (scene.lessons || []).forEach((l, i) => {
     const d = document.createElement('div');
     d.className = 'ls' + (l.active ? ' on' : '');
-    d.innerHTML = `<div class="n">${i}</div><div><b>${l.name}</b><small>${l.sub || ''}</small></div>`;
+    d.innerHTML = `<div class="n">${i}</div><div><b>${esc(l.name)}</b><small>${esc(l.sub || '')}</small></div>`;
     $('#lessons').appendChild(d);
   });
 
@@ -269,7 +274,7 @@ ready.then(scene => {
         break;
 
       case 'files':
-        if (local >= 0) filesList = s.items;
+        if (local >= 0) { filesList = s.items; if (s.title) filesTitle = s.title; }
         break;
 
       case 'tab':
@@ -296,18 +301,18 @@ function draw() {
   $('#log').innerHTML = bubbles.map(b => {
     const h = b.prog >= 1 ? 'auto' : Math.max(0, b.prog * 300) + 'px';
     return `<div class="row ${b.who}"><div class="bub" style="overflow:hidden;max-height:${h}">${b.html}</div></div>`;
-  }).join('') + (workMsg ? `<div class="work"><div class="dot"></div>${workMsg}</div>` : '');
+  }).join('') + (workMsg ? `<div class="work"><div class="dot"></div>${esc(workMsg)}</div>` : '');
 
   // composer
   $('#ctext').innerHTML = typing
     ? md(typing) + '<span class="caret"></span>'
-    : `<span class="ph">${placeholder}</span>`;
+    : `<span class="ph">${esc(placeholder)}</span>`;
 
   // files
   if (filesList) {
     $('#files').classList.add('show');
-    $('#files').innerHTML = '<h5>folder ket-qua/ — file đã tách</h5>' +
-      filesList.map(f => `<div class="f"><span>${f[0]}</span><b>${f[1]}</b></div>`).join('');
+    $('#files').innerHTML = `<h5>${esc(filesTitle)}</h5>` +
+      filesList.map(f => `<div class="f"><span>${esc(f[0])}</span><b>${esc(f[1])}</b></div>`).join('');
   }
 
   // cursor + ripple

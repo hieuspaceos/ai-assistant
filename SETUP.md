@@ -31,7 +31,8 @@ hoặc chụp màn hình gửi họ.
 
 ## Bước 3 — Cài thêm cho chế độ "Terminal" (ttyd, không bắt buộc)
 
-Mở PowerShell, chạy:
+`start.bat` tự thử cài ttyd qua winget lần đầu chạy — thường không cần
+làm gì thêm. Muốn cài tay trước (hoặc lần đó winget lỗi), mở PowerShell:
 
 ```powershell
 winget install --id tsl0922.ttyd -e

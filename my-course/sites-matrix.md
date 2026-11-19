@@ -1,7 +1,7 @@
 # Ma trận website — trợ lý kết nối được tới đâu
 
 Cập nhật: 2026-11-19. Test thật trên Chrome đã đăng nhập
-`phantronghieu1@gmail.com` + phiên Microsoft/Zalo của user.
+tài khoản Google + phiên Microsoft/Zalo của một user thật.
 
 **Cơ chế:** một extension lái phiên đăng nhập SẴN trong trình duyệt —
 mở tab, đọc DOM, click/gõ, scroll, chụp ảnh, fetch cùng origin.
@@ -28,11 +28,11 @@ Ký hiệu: ✅ đã test thật · 🟡 vào được, thao tác chưa test sâ
 | GA4 | ✅ số liệu dashboard | ✅ | — | |
 | Search Console | ✅ property + nav | ✅ | — | |
 | Microsoft 365 | ✅ dashboard | 🟡 | — | cookie banner |
-| Word online | ✅ file list thật | ✅ | 🟡 | tài khoản cty imagetraveldmc |
-| OneDrive Business | ✅ file list + libraries | ✅ | — | imagetraveldmc sharepoint |
+| Word online | ✅ file list thật | ✅ | 🟡 | tài khoản công ty |
+| OneDrive Business | ✅ file list + libraries | ✅ | — | sharepoint tài khoản công ty |
 | Google Slides | ✅ home + templates | — | — | user chưa có file |
 | Google Trends | ✅ bảng trend VN (26 dòng) | ✅ | — | không cần login |
-| Google Ads | ✅ dashboard, 3 account | ✅ | 🟡 | account 262-673-9409 |
+| Google Ads | ✅ dashboard, 3 account | ✅ | 🟡 | account (mã đã che) |
 | Notion | ✅ workspace đầy đủ | ✅ | ✅ **tạo page + gõ + Move to Trash** | menu Actions = `click` text |
 | Pinterest | ✅ feed + boards | ✅ | 🟡 | login Google SSO |
 | Figma | ✅ files team | ✅ | 🟡 | login Google SSO |

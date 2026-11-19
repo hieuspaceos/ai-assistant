@@ -8,6 +8,8 @@ my-course/.shots/
 .logs/
 __pycache__/
 *.pyc
+*.tmp
+.devin/skills.bak/
 
 # OS junk
 .DS_Store

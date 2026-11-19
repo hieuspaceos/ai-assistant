@@ -279,11 +279,14 @@ async function send() {
   }
 }
 sendBtn.onclick = send;
-input.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) send(); });
 
 function handleEvent(ev) {
   if (ev.t === 'ready') {
-    if (!msgs.children.length) say(S.hello);
+    if (!msgs.children.length) {
+      say(S.hello);
+      curBubble = null;   // lời agent đầu tiên phải ra bubble riêng, không nối vào lời chào
+    }
   }
   else if (ev.t === 'text') addText(ev.text);
   else if (ev.t === 'tool') addTool(ev.title, ev.status);
@@ -301,8 +304,10 @@ async function poll() {
     const data = await res.json();
     if (data.reset) {
       // bridge vừa restart (cursor cũ không còn hợp lệ) → dựng lại màn hình
+      // và mở lại nút Gửi — nếu không nó kẹt disabled mãi sau khi bridge chết
       msgs.innerHTML = '';
       curBubble = null;
+      setBusy(false);
     }
     if (!connected) {
       connected = true;

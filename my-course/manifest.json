@@ -1,6 +1,6 @@
 {
-  "learner_name": "Test E2E",
-  "intro": "Khoá học giúp bạn nhờ trợ lý AI làm các việc lặp lại hằng tuần — bắt đầu từ việc đổi tên + nén ảnh export từ Canva để đăng web.",
+  "learner_name": "",
+  "intro": "",
   "recipes": [
     {
       "command": "/anh-web",

@@ -106,20 +106,20 @@ const FOLDER_PRESETS = [
   { path:'~/Documents', vi:'Documents', en:'Documents' },
 ];
 const APP_PRESETS = [
-  { id:'zalo',          vi:'Zalo Web',        en:'Zalo Web' },
-  { id:'outlook',       vi:'Outlook Web',     en:'Outlook Web' },
-  { id:'wordpress',     vi:'WordPress',        en:'WordPress' },
-  { id:'google-sheets', vi:'Google Sheets',    en:'Google Sheets' },
-  { id:'canva',         vi:'Canva',            en:'Canva' },
-  { id:'zalo-oa',       vi:'Zalo OA',          en:'Zalo OA' },
-  { id:'trinh-duyet',   vi:'Trình duyệt (extension)', en:'Browser (extension)' },
+  { id:'zalo',          type:'browser', vi:'Zalo Web',        en:'Zalo Web' },
+  { id:'outlook',       type:'browser', vi:'Outlook Web',     en:'Outlook Web' },
+  { id:'wordpress',     type:'rest',    vi:'WordPress',        en:'WordPress' },
+  { id:'google-sheets', type:'browser', vi:'Google Sheets',    en:'Google Sheets' },
+  { id:'canva',         type:'browser', vi:'Canva',            en:'Canva' },
+  { id:'zalo-oa',       type:'rest',    vi:'Zalo OA',          en:'Zalo OA' },
+  { id:'trinh-duyet',   type:'browser', vi:'Trình duyệt (extension)', en:'Browser (extension)' },
 ];
 let selFolders = new Set(['~/Downloads']);
 let selApps = new Set();
 
 function t(k){ return T[lang][k]; }
 function el(html){ const d=document.createElement('div'); d.innerHTML=html.trim(); return d.firstChild; }
-function dots(){ const d=document.getElementById('dots'); d.innerHTML=''; for(let i=0;i<4;i++) d.appendChild(el(`<div class="step-dot${i<=stepIdx?' on':''}"></div>`)); }
+function dots(){ const d=document.getElementById('dots'); d.innerHTML=''; for(let i=0;i<5;i++) d.appendChild(el(`<div class="step-dot${i<=stepIdx?' on':''}"></div>`)); }
 function go(i){ stepIdx=i; dots(); [stepLang,stepName,stepFolder,stepApps,stepDone][i](); }
 
 function stepLang(){
@@ -228,7 +228,7 @@ async function finish(){
       }else{
         const p=APP_PRESETS.find(a=>a.id===id);
         await fetch(BRIDGE+'/api/connections',{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({app:{id,name:(p?p[lang]:id),type:'browser',status:'not-connected'}})}).catch(()=>{});
+          body:JSON.stringify({app:{id,name:(p?p[lang]:id),type:(p&&p.type)||'browser',status:'not-connected'}})}).catch(()=>{});
       }
     }
   }catch(e){ btn.disabled=false; btn.textContent=t('next'); return; }

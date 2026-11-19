@@ -61,7 +61,10 @@ curl -s -X POST http://localhost:7683/api/browser -d '{"action":"<action>", ...}
 | `wait` | `tabId?`, `ms` | Chờ trang tải (tối đa 5 giây/lần) |
 | `reload` | — | Nạp lại extension sau khi sửa code — tự kết nối lại |
 | `tclick` | `tabId?`, `sel`/`ref` hoặc `x`,`y` | **Click chuột THẬT** (qua CDP) — dùng khi app bỏ qua click giả (Zalo, FB, editor khó tính). Tab sẽ được đưa lên trước |
+| `tright` | giống `tclick` | **Chuột phải THẬT** — mở context menu của app |
+| `tmove` | giống `tclick` | **Hover THẬT** — lộ nút/menu chỉ hiện khi rê chuột |
 | `ttype` | `tabId?`, `sel`/`ref`, `text` | **Gõ chữ THẬT** — click thật vào ô rồi chèn text. Đường duy nhất gõ được vào editor Zalo (`#richInput`), có thể cả grid Sheets/Docs |
+| `tinsert` | `tabId?`, `text`, `mode?` | **Chèn text THẬT** tại con trỏ đang đứng; `mode=char` bắn phím từng ký tự — ghi được vào grid Google Sheets (xem `/cap-nhat-sheet`) |
 | `tkey` | `tabId?`, `sel`/`ref`?, `key`, `modifiers?` | **Nhấn phím THẬT** (Enter, mũi tên...); `modifiers` bitmask 4=Cmd/Ctrl |
 | `tdetach` | `tabId?` | Tắt banner "đang gỡ lỗi" sau khi dùng xong nhóm `t*` |
 

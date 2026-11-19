@@ -5,11 +5,6 @@
       "path": "~/Downloads",
       "access": "read",
       "note": "noi thuong co file tai ve (anh Canva, file dinh kem)"
-    },
-    {
-      "path": "/Users/hieuspace/Desktop",
-      "access": "read",
-      "note": ""
     }
   ]
 }

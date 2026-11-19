@@ -62,6 +62,8 @@ curl -s -X POST http://localhost:7683/api/browser -d '{"action":"<action>", ...}
 | `wait` | `tabId?`, `ms` | Wait for the page (max 5s per call) |
 | `reload` | — | Reload the extension after code edits — reconnects itself |
 | `tclick` | `tabId?`, `sel`/`ref` or `x`,`y` | **REAL mouse click** (via CDP) — for apps ignoring synthetic clicks (Zalo, FB, picky editors). Brings the tab forward |
+| `tright` | same as `tclick` | **REAL right-click** — opens the app's context menu |
+| `tmove` | same as `tclick` | **REAL hover** — reveals buttons/menus that only show on hover |
 | `ttype` | `tabId?`, `sel`/`ref`, `text` | **REAL typing** — real-clicks the field then inserts text. The only way into Zalo's editor (`#richInput`) |
 | `tinsert` | `tabId?`, `text`, `mode?` | Real text at the current caret; `mode=char` fires per-char keys — writes into the Google Sheets grid |
 | `tkey` | `tabId?`, `sel`/`ref`?, `key`, `modifiers?` | **REAL key press** (Enter, arrows...); `modifiers` bitmask 4=Cmd/Ctrl |

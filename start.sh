@@ -7,7 +7,8 @@
 # ============================================================
 cd "$(dirname "$0")"
 ROOT="$(pwd)"
-LOGDIR="${TMPDIR:-/tmp}/ai-assistant-logs"
+# log để trong repo (đã gitignore) — cùng một chỗ với log Windows, dễ tìm
+LOGDIR="$ROOT/.logs"
 mkdir -p "$LOGDIR"
 
 echo ""

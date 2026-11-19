@@ -7,13 +7,129 @@ let manifest = null;
 let currentLesson = null;
 let chatChecked = false;
 let chatMode = 'chat';
+let LANG = 'vi';
+
+/* Chuỗi UI theo ngôn ngữ trong my-course/config.json (onboarding chọn vi/en).
+   Phần tử tĩnh trong index.html gắn data-i18n / data-i18n-ph /
+   data-i18n-title / data-i18n-html; chuỗi động trong file này dùng t(). */
+const I18N = {
+  vi: {
+    loading: 'Đang tải…',
+    lessons: 'Bài học',
+    recipesTitle: 'Công thức nhanh',
+    recipeHint: 'Gõ các lệnh này trong tab “Hỏi trợ lý”',
+    introLesson: 'Làm quen & cài đặt',
+    emptyLessons: 'Chưa có bài nào. Mở tab "Hỏi trợ lý" và gõ /phong-van nhé.',
+    emptyApps: 'Chưa có app nào — trợ lý tự thêm khi bạn cần.',
+    tabSlide: 'Slide', tabGuide: 'Hướng dẫn', tabExercise: 'Bài tập', tabAsk: 'Hỏi trợ lý',
+    welcomeTitle: 'Chào bạn!',
+    welcomeSub: 'Đây là khoá học được trợ lý AI thiết kế riêng cho công việc của bạn.',
+    chatFrameTitle: 'Chat với trợ lý (kiểu tin nhắn)',
+    how1: '<b>Nhờ trợ lý</b> bất cứ việc gì — bấm nút <b>Hỏi trợ lý</b> phía trên.',
+    how2: '<b>Chọn một bài</b> bên trái để xem slide và hướng dẫn.',
+    how3: '<b>Kẹt cứ hỏi</b>: không có câu hỏi nào là “ngốc” cả.',
+    extTitle: 'Trạng thái cánh tay trình duyệt (extension Trợ Lý AI)',
+    extOn: 'Đã nối trình duyệt', extOff: 'Chưa nối trình duyệt',
+    settings: 'Cài đặt', closeTitle: 'Đóng',
+    appsTitle: 'Kết nối ứng dụng',
+    appsHint: 'Chấm xanh = trợ lý dùng được ngay · Chấm xám = cần thêm một bước nhỏ — cứ hỏi trợ lý trong chat, nó dẫn từng bước.',
+    foldersTitle: 'Folder trợ lý được đọc',
+    foldersHint: 'Trợ lý chỉ được mở các ngăn trong danh sách này (giống cho phép người giúp việc mở ngăn tủ nào). Thêm folder ở đây, hoặc đồng ý khi trợ lý xin trong chat.',
+    folderPh: 'dán đường dẫn folder…',
+    readOnly: 'chỉ đọc', readWrite: 'đọc + sửa',
+    addBtn: 'Thêm', addFolderBtn: '+ thêm folder',
+    delPermTitle: 'Gỡ quyền', recheckTitle: 'Kiểm tra lại',
+    btnOpen: 'Mở trang', btnSetup: 'Cài',
+    openTitle: 'Mở trang này trên trình duyệt', setupTitle: 'Điền thông tin kết nối',
+    saveCheck: 'Lưu & kiểm tra',
+    setupLocal: 'Chỉ lưu trên máy bạn, vào file ẩn — không gửi đi đâu.',
+    dlgCancel: 'Huỷ', dlgOk: 'Đồng ý', dlgOkShort: 'Đã hiểu',
+    delLessonTitle: 'Xoá bài này (giữ lại công thức)',
+    helloPrefix: 'Chào ',
+    creating: 'File đang được tạo — quay lại sau nhé.',
+    slideCreating: 'Slide đang được tạo — quay lại sau vài phút nhé.',
+    noExercise: 'Bài này không có bài tập — chỉ cần mở được trợ lý là đạt.',
+    delConfirmTitle: 'Xoá bài "{t}"?',
+    delConfirmMsg: 'Slide, video, hướng dẫn của bài này sẽ mất hết. Công thức nhanh (như /anh-web) vẫn được giữ lại vì bạn đã học xong.',
+    delOk: 'Xoá bài',
+    delFailTitle: 'Chưa xoá được',
+    delFailMsg: 'Kiểm tra lại xem chat-bridge có đang chạy không nhé — thử chạy lại file start.',
+    warnChat: '<b>Chế độ Chat chưa mở:</b> chạy lại <code>start.bat</code>, hoặc bấm sang tab <b>Terminal</b> bên cạnh để dùng tạm.',
+    warnCli: '<b>Terminal chưa mở:</b> chạy lại <code>start.bat</code>, hoặc mở PowerShell gõ <code>devin</code> để học bình thường.',
+    hintNotReady: 'Trợ lý chưa sẵn sàng — mở lại file <code>start</code> rồi tải lại trang này. Nếu mới dùng lần đầu, bấm <a href="onboarding.html"><b>vào đây để cài đặt</b></a>.',
+    hintNoLessons: 'Chưa có bài nào? Bấm <b>Hỏi trợ lý</b> và gõ <code>/phong-van</code>, nó sẽ hỏi vài câu rồi thiết kế khoá học riêng cho bạn.',
+    hintReady: 'Chọn một bài bên trái để học — hoặc bấm <b>Hỏi trợ lý</b> để nhờ bất cứ việc gì, không cần mở bài học.',
+  },
+  en: {
+    loading: 'Loading…',
+    lessons: 'Lessons',
+    recipesTitle: 'Quick recipes',
+    recipeHint: 'Type these in the "Ask the assistant" tab',
+    introLesson: 'Getting started & setup',
+    emptyLessons: 'No lessons yet. Open "Ask the assistant" and type /interview.',
+    emptyApps: 'No apps yet — the assistant adds them as needed.',
+    tabSlide: 'Slide', tabGuide: 'Guide', tabExercise: 'Exercise', tabAsk: 'Ask the assistant',
+    welcomeTitle: 'Hello!',
+    welcomeSub: 'A course your AI assistant designed around your actual work.',
+    chatFrameTitle: 'Chat with the assistant',
+    how1: '<b>Ask the assistant</b> for anything — click <b>Ask the assistant</b> above.',
+    how2: '<b>Pick a lesson</b> on the left to see slides and the guide.',
+    how3: '<b>Stuck? Just ask</b> — no question is a silly one.',
+    extTitle: 'Browser arm status (Trợ Lý AI extension)',
+    extOn: 'Browser connected', extOff: 'Browser not connected',
+    settings: 'Settings', closeTitle: 'Close',
+    appsTitle: 'App connections',
+    appsHint: 'Green dot = ready to use · Gray dot = needs one small step — just ask the assistant in chat, it will walk you through.',
+    foldersTitle: 'Folders the assistant may read',
+    foldersHint: 'The assistant can only open drawers on this list (like telling a helper which cabinets they may open). Add folders here, or approve when the assistant asks in chat.',
+    folderPh: 'paste a folder path…',
+    readOnly: 'read-only', readWrite: 'read + write',
+    addBtn: 'Add', addFolderBtn: '+ add folder',
+    delPermTitle: 'Remove access', recheckTitle: 'Check again',
+    btnOpen: 'Open', btnSetup: 'Set up',
+    openTitle: 'Open this page in your browser', setupTitle: 'Enter connection details',
+    saveCheck: 'Save & check',
+    setupLocal: 'Saved only on this machine, in a hidden file — never sent anywhere.',
+    dlgCancel: 'Cancel', dlgOk: 'OK', dlgOkShort: 'Got it',
+    delLessonTitle: 'Delete this lesson (keeps the recipes)',
+    helloPrefix: 'Hi ',
+    creating: 'This file is being created — check back soon.',
+    slideCreating: 'Slides are being created — check back in a few minutes.',
+    noExercise: 'This lesson has no exercise — opening the assistant is enough.',
+    delConfirmTitle: 'Delete lesson "{t}"?',
+    delConfirmMsg: 'Its slides, video and guide will be gone for good. Quick recipes (like /web-images) stay because you already learned them.',
+    delOk: 'Delete',
+    delFailTitle: 'Couldn\'t delete',
+    delFailMsg: 'Check whether the chat bridge is running — try running the start file again.',
+    warnChat: '<b>Chat mode isn\'t up:</b> run the <code>start</code> file again, or switch to the <b>Terminal</b> tab meanwhile.',
+    warnCli: '<b>Terminal isn\'t up:</b> run the <code>start</code> file again, or open a shell and type <code>devin</code>.',
+    hintNotReady: 'The assistant isn\'t ready — run the <code>start</code> file again and reload. First time here? <a href="onboarding.html"><b>Click to set up</b></a>.',
+    hintNoLessons: 'No lessons yet? Click <b>Ask the assistant</b> and type <code>/interview</code> — it will ask a few questions then design a course just for you.',
+    hintReady: 'Pick a lesson on the left — or click <b>Ask the assistant</b> for anything, no lesson needed.',
+  },
+};
+function t(k) { return (I18N[LANG] && I18N[LANG][k]) || I18N.vi[k] || k; }
+function applyI18n() {
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-html]').forEach(el => { el.innerHTML = t(el.dataset.i18nHtml); });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = t(el.dataset.i18nPh); });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
+}
+async function initI18n() {
+  try {
+    const r = await fetch(BRIDGE_URL + '/api/config', { signal: cfgSig() });
+    const c = await r.json();
+    if (c && c.language) LANG = c.language;
+  } catch { /* bridge chưa chạy → giữ mặc định vi */ }
+  applyI18n();
+}
 
 const $ = (sel) => document.querySelector(sel);
 
 /* Hộp thoại nhỏ thay confirm()/alert() — đồng bộ style portal.
    uiConfirm(title, msg, okText) → Promise<boolean>
    uiAlert(title, msg)           → Promise<void> */
-function uiDlg({title, msg, okText = 'Đồng ý', danger = false, canCancel = true}) {
+function uiDlg({title, msg, okText = t('dlgOk'), danger = false, canCancel = true}) {
   return new Promise(resolve => {
     const ov = $('#dlg-overlay');
     $('#dlg-title').textContent = title;
@@ -37,7 +153,7 @@ function uiDlg({title, msg, okText = 'Đồng ý', danger = false, canCancel = t
   });
 }
 const uiConfirm = (title, msg, okText) => uiDlg({title, msg, okText, danger: true});
-const uiAlert = (title, msg) => uiDlg({title, msg, okText: 'Đã hiểu', canCancel: false});
+const uiAlert = (title, msg) => uiDlg({title, msg, okText: t('dlgOkShort'), canCancel: false});
 
 async function loadManifest() {
   try {
@@ -55,7 +171,9 @@ async function loadManifest() {
    chưa có bài → gợi ý /phong-van; đã có bài → nhắc chọn bài hoặc hỏi trợ lý. */
 async function renderWelcome() {
   const hint = $('#welcome-hint'), title = $('#welcome-title');
-  if (manifest.learner_name) title.textContent = 'Chào ' + manifest.learner_name + '!';
+  title.textContent = manifest.learner_name
+    ? t('helloPrefix') + manifest.learner_name + '!'
+    : t('welcomeTitle');
 
   let cfg = null;
   try {
@@ -64,11 +182,11 @@ async function renderWelcome() {
   } catch { /* bridge chết */ }
 
   if (!cfg || !cfg.language) {
-    hint.innerHTML = 'Trợ lý chưa sẵn sàng — mở lại file <code>start</code> rồi tải lại trang này. Nếu mới dùng lần đầu, bấm <a href="onboarding.html"><b>vào đây để cài đặt</b></a>.';
+    hint.innerHTML = t('hintNotReady');
   } else if (!manifest.lessons.length) {
-    hint.innerHTML = 'Chưa có bài nào? Bấm <b>Hỏi trợ lý</b> và gõ <code>/phong-van</code>, nó sẽ hỏi vài câu rồi thiết kế khoá học riêng cho bạn.';
+    hint.innerHTML = t('hintNoLessons');
   } else {
-    hint.innerHTML = 'Chọn một bài bên trái để học — hoặc bấm <b>Hỏi trợ lý</b> để nhờ bất cứ việc gì, không cần mở bài học.';
+    hint.innerHTML = t('hintReady');
   }
 }
 function cfgSig() { return (window.AbortSignal && AbortSignal.timeout) ? AbortSignal.timeout(2500) : undefined; }
@@ -79,14 +197,14 @@ function renderLessonList() {
 
   const intro = document.createElement('button');
   intro.className = 'lesson';
-  intro.innerHTML = `<span class="num">0</span><span class="t">Làm quen &amp; cài đặt</span>`;
+  intro.innerHTML = `<span class="num">0</span><span class="t">${escapeHtml(t('introLesson'))}</span>`;
   intro.onclick = () => selectLesson(null, intro);
   box.appendChild(intro);
 
   if (!manifest.lessons.length) {
     const p = document.createElement('p');
     p.className = 'empty';
-    p.textContent = 'Chưa có bài nào. Mở tab "Hỏi trợ lý" và gõ /phong-van nhé.';
+    p.textContent = t('emptyLessons');
     box.appendChild(p);
     return;
   }
@@ -95,7 +213,7 @@ function renderLessonList() {
     const btn = document.createElement('button');
     btn.className = 'lesson';
     btn.innerHTML = `<span class="num">${i + 1}</span><span class="t">${escapeHtml(b.title)}</span>` +
-      `<span class="del" role="button" title="Xoá bài này (giữ lại công thức)">×</span>`;
+      `<span class="del" role="button" title="${escapeHtml(t('delLessonTitle'))}">×</span>`;
     btn.onclick = () => selectLesson(b, btn);
     btn.querySelector('.del').onclick = (ev) => { ev.stopPropagation(); deleteLesson(b); };
     box.appendChild(btn);
@@ -113,9 +231,9 @@ function renderLessonList() {
 
 async function deleteLesson(b) {
   const ok = await uiConfirm(
-    `Xoá bài "${b.title}"?`,
-    'Slide, video, hướng dẫn của bài này sẽ mất hết. Công thức nhanh (như /anh-web) vẫn được giữ lại vì bạn đã học xong.',
-    'Xoá bài');
+    t('delConfirmTitle').replace('{t}', b.title),
+    t('delConfirmMsg'),
+    t('delOk'));
   if (!ok) return;
   try {
     const res = await fetch(BRIDGE_URL + '/api/delete-lesson', {
@@ -124,7 +242,7 @@ async function deleteLesson(b) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.err || 'lỗi');
   } catch (e) {
-    await uiAlert('Chưa xoá được', 'Kiểm tra lại xem chat-bridge có đang chạy không nhé — thử chạy lại file start.');
+    await uiAlert(t('delFailTitle'), t('delFailMsg'));
     return;
   }
   if (currentLesson === b) {
@@ -155,20 +273,20 @@ function loadIntro() {
   setPaneHtml('slide', iframe('/intro/slides.html'));
   loadMdInto('guide', '/SETUP.md');
   $('#guide-video').hidden = true;
-  setPaneHtml('exercise', emptyMsg('Bài này không có bài tập — chỉ cần mở được trợ lý là đạt.'));
+  setPaneHtml('exercise', emptyMsg(t('noExercise')));
 }
 
 function loadLesson(lesson) {
   const base = baseUrl(lesson);
   setPaneHtml('slide', lesson.has_slides !== false
     ? iframe(base + 'slides.html')
-    : emptyMsg('Slide đang được tạo — quay lại sau vài phút nhé.'));
+    : emptyMsg(t('slideCreating')));
   loadMdInto('guide', base + 'guide.md');
   loadMdInto('exercise', base + 'exercise.md');
 
   const gv = $('#guide-video');
   if (lesson.has_video) {
-    gv.innerHTML = `<video controls src="${base}video.mp4"></video>`;
+    gv.innerHTML = `<video controls src="${escapeHtml(base)}video.mp4"></video>`;
     gv.hidden = false;
   } else {
     gv.innerHTML = '';
@@ -185,16 +303,24 @@ async function loadMdInto(pane, url, fallbackTitle) {
       ? DOMPurify.sanitize(marked.parse(md))
       : escapeHtml(md).replace(/\n/g, '<br>');   // thiếu thư viện → chữ thường
     setPaneHtml(pane, `<div class="md">${html}</div>`);
+    // phần tử cuộn thật là .md (nó mới có overflow:auto), không phải #guide-md —
+    // gắn sau mỗi lần render vì DOM bị thay
+    if (pane === 'guide') {
+      const md = document.querySelector('#guide-md .md');
+      if (md) md.addEventListener('scroll', () => {
+        $('#guide-video').classList.toggle('mini', md.scrollTop > 80);
+      });
+    }
   } catch {
-    setPaneHtml(pane, emptyMsg(fallbackTitle || 'File đang được tạo — quay lại sau nhé.'));
+    setPaneHtml(pane, emptyMsg(fallbackTitle || t('creating')));
   }
 }
 
 function setPaneHtml(pane, html) {
   $(pane === 'guide' ? '#guide-md' : '#pane-' + pane).innerHTML = html;
 }
-function iframe(src) { return `<iframe class="deck" src="${escapeHtml(src)}"></iframe>`; }
-function emptyMsg(t) { return `<div class="empty-msg">${t}</div>`; }
+function iframe(src) { return `<iframe class="deck" sandbox="allow-scripts allow-same-origin" src="${escapeHtml(src)}"></iframe>`; }
+function emptyMsg(txt) { return `<div class="empty-msg">${txt}</div>`; }
 function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 /* ---- tabs ---- */
@@ -247,26 +373,19 @@ async function setChatMode(mode) {
       if (!chatFrame.src) chatFrame.src = '/web/chat.html?bridge=' + encodeURIComponent(BRIDGE_URL);
       status.innerHTML = '';
     } else {
-      status.innerHTML = `<span class="warn"><b>Chế độ Chat chưa mở:</b> chạy lại <code>start.bat</code>,
-        hoặc bấm sang tab <b>Terminal</b> bên cạnh để dùng tạm.</span>`;
+      status.innerHTML = `<span class="warn">${t('warnChat')}</span>`;
     }
   } else {
     if (await ping(TTYD_URL)) {
       if (!termFrame.src) termFrame.src = TTYD_URL;
       status.innerHTML = '';
     } else {
-      status.innerHTML = `<span class="warn"><b>Terminal chưa mở:</b> chạy lại <code>start.bat</code>,
-        hoặc mở PowerShell gõ <code>devin</code> để học bình thường.</span>`;
+      status.innerHTML = `<span class="warn">${t('warnCli')}</span>`;
     }
   }
 }
 
-loadManifest();
-
-/* ---- video mini-player: cuộn hướng dẫn xuống thì video thu nhỏ nổi góc ---- */
-$('#guide-md').addEventListener('scroll', () => {
-  $('#guide-video').classList.toggle('mini', $('#guide-md').scrollTop > 80);
-});
+initI18n().finally(loadManifest);
 
 /* ---- trạng thái extension Trợ Lý AI (cánh tay trình duyệt) ---- */
 const EXT_BRIDGE = 'http://localhost:7683';
@@ -277,10 +396,10 @@ async function pollExtStatus() {
     const r = await fetch(EXT_BRIDGE + '/api/browser/status', { signal: sig });
     const d = await r.json();
     el.classList.toggle('on', !!d.connected);
-    txt.textContent = d.connected ? 'Đã nối trình duyệt' : 'Chưa nối trình duyệt';
+    txt.textContent = d.connected ? t('extOn') : t('extOff');
   } catch {
     el.classList.remove('on');
-    txt.textContent = 'Chưa nối trình duyệt';
+    txt.textContent = t('extOff');
   }
 }
 pollExtStatus();
@@ -312,14 +431,17 @@ document.addEventListener('keydown', e => {
 async function renderApps() {
   let apps = [];
   try {
+    const list = $('#app-list');
+    // một form "Cài" đang mở → không rebuild (rebuild = mất trắng chữ đang
+    // gõ). auto-refresh 15s + mỗi check-connection đều gọi hàm này → phải bỏ qua.
+    if (list.querySelector('.app-setup:not([hidden])')) return null;
     const d = await (await fetch(BRIDGE_URL + '/api/connections')).json();
     apps = d.apps || [];
-    const list = $('#app-list');
     list.innerHTML = '';
     if (!apps.length) {
       const p = document.createElement('p');
       p.className = 'empty';
-      p.textContent = 'Chưa có app nào — trợ lý tự thêm khi bạn cần.';
+      p.textContent = t('emptyApps');
       list.appendChild(p);
       return apps;
     }
@@ -339,9 +461,9 @@ async function renderApps() {
           `<span class="app-sub">${escapeHtml(sub)}</span>` +
         `</span>` +
         (a.open_url
-          ? `<button class="app-open" title="Mở trang này trên trình duyệt">Mở trang</button>`
+          ? `<button class="app-open" title="${escapeHtml(t('openTitle'))}">${escapeHtml(t('btnOpen'))}</button>`
           : '') +
-        `<button class="app-check" title="Kiểm tra lại">↻</button>`;
+        `<button class="app-check" title="${escapeHtml(t('recheckTitle'))}">↻</button>`;
       const openBtn = row.querySelector('.app-open');
       if (openBtn) openBtn.onclick = () => { window.open(a.open_url, '_blank'); };
       row.querySelector('.app-check').onclick = async () => {
@@ -359,8 +481,8 @@ async function renderApps() {
       if (a.setup_fields && a.setup_fields.length) {
         const setupBtn = document.createElement('button');
         setupBtn.className = 'app-open';
-        setupBtn.textContent = 'Cài';
-        setupBtn.title = 'Điền thông tin kết nối';
+        setupBtn.textContent = t('btnSetup');
+        setupBtn.title = t('setupTitle');
         const form = document.createElement('div');
         form.className = 'app-setup';
         form.hidden = true;
@@ -372,8 +494,8 @@ async function renderApps() {
             ` placeholder="${escapeHtml(f.ph || '')}"></label>`
           ).join('') +
           `<div class="app-setup-foot">` +
-            `<button class="app-save">Lưu & kiểm tra</button>` +
-            `<span class="app-setup-hint">Chỉ lưu trên máy bạn, vào file ẩn — không gửi đi đâu.</span>` +
+            `<button class="app-save">${escapeHtml(t('saveCheck'))}</button>` +
+            `<span class="app-setup-hint">${escapeHtml(t('setupLocal'))}</span>` +
           `</div>`;
         setupBtn.onclick = () => { form.hidden = !form.hidden; };
         row.insertBefore(setupBtn, row.querySelector('.app-check'));
@@ -384,7 +506,7 @@ async function renderApps() {
           });
           if (!Object.keys(fields).length) return;
           const btn = form.querySelector('.app-save');
-          btn.textContent = 'đang lưu…';
+          btn.textContent = '…';
           const res = await (await fetch(BRIDGE_URL + '/api/secrets', {
             method: 'POST', body: JSON.stringify({ app: a.id, fields })
           })).json();
@@ -392,6 +514,7 @@ async function renderApps() {
           await fetch(BRIDGE_URL + '/api/check-connection', {
             method: 'POST', body: JSON.stringify({ id: a.id })
           });
+          form.hidden = true;   // đóng form trước khi render — không bị skip
           renderApps();
         };
         wrap.appendChild(form);
@@ -412,8 +535,8 @@ async function renderFolders() {
       row.className = 'folder-row';
       row.innerHTML =
         `<span class="folder-path" title="${escapeHtml(f.note || f.path)}">${escapeHtml(f.path)}</span>` +
-        `<span class="folder-lv">${f.access === 'read-write' ? 'đọc+sửa' : 'chỉ đọc'}</span>` +
-        `<button class="folder-del" title="Gỡ quyền">×</button>`;
+        `<span class="folder-lv">${f.access === 'read-write' ? t('readWrite') : t('readOnly')}</span>` +
+        `<button class="folder-del" title="${escapeHtml(t('delPermTitle'))}">×</button>`;
       row.querySelector('.folder-del').onclick = async () => {
         await fetch(BRIDGE_URL + '/api/remove-permission', {
           method: 'POST', body: JSON.stringify({ path: f.path })

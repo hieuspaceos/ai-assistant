@@ -148,7 +148,12 @@ function Load-Json($fp, $fallback) {
     try { return Get-Content $fp -Raw -Encoding UTF8 | ConvertFrom-Json } catch { return $fallback }
 }
 function Save-Json($fp, $obj) {
-    $obj | ConvertTo-Json -Depth 20 | Set-Content $fp -Encoding UTF8
+    # Ghi ra file tạm rồi đổi tên (atomic — crash giữa chừng không corrupt),
+    # UTF8 KHÔNG BOM — file có BOM làm json.load() của Python/jq đọc hỏng.
+    $json = $obj | ConvertTo-Json -Depth 20
+    $tmp = "$fp.tmp"
+    [IO.File]::WriteAllText($tmp, $json, [Text.UTF8Encoding]::new($false))
+    Move-Item -Force $tmp $fp
 }
 function Expand-Path($p) {
     $p = [string]$p
@@ -362,7 +367,7 @@ try {
                         try {
                             $m = Get-Content $mf -Raw -Encoding UTF8 | ConvertFrom-Json
                             $m.lessons = @($m.lessons | Where-Object { $_.folder -ne $folder })
-                            $m | ConvertTo-Json -Depth 10 | Set-Content $mf -Encoding UTF8
+                            Save-Json $mf $m
                         } catch {}
                         Send-Json $ctx @{ ok = $true }
                     } else {
@@ -405,9 +410,13 @@ try {
                     Send-Json $ctx @{ err = "thiếu app.id" } 400
                 } else {
                     $k = Load-Json $ConnFp @{ apps = @() }
-                    $arr = @($k.apps | Where-Object { $_.id -ne $body.app.id })
-                    $arr += $body.app
-                    $k.apps = $arr
+                    # thay tại chỗ để giữ thứ tự hiển thị trong panel Cài đặt
+                    $idx = -1
+                    for ($i = 0; $i -lt @($k.apps).Count; $i++) {
+                        if ($k.apps[$i].id -eq $body.app.id) { $idx = $i; break }
+                    }
+                    if ($idx -ge 0) { $k.apps[$idx] = $body.app }
+                    else { $k.apps = @($k.apps) + $body.app }
                     Save-Json $ConnFp $k
                     Send-Json $ctx @{ ok = $true }
                 }
@@ -477,13 +486,26 @@ try {
                         $m = Get-Content $mf -Raw -Encoding UTF8 | ConvertFrom-Json
                         if ($name) {
                             $m | Add-Member -NotePropertyName learner_name -NotePropertyValue $name -Force
-                            $m | ConvertTo-Json -Depth 10 | Set-Content $mf -Encoding UTF8
+                            Save-Json $mf $m
                         }
                     } catch {}
+                    # Skill pack đè lên .devin\skills nhưng skill học viên TỰ
+                    # TẠO (không có trong pack) phải giữ: dir cũ backup sang
+                    # skills.bak rồi merge phần riêng về.
                     $pack = Join-Path $SkillPacks $lang
                     if (Test-Path $pack -PathType Container) {
-                        if (Test-Path $SkillsDir) { Remove-Item $SkillsDir -Recurse -Force }
+                        $bak = "$SkillsDir.bak"
+                        if (Test-Path $SkillsDir) {
+                            if (Test-Path $bak) { Remove-Item $bak -Recurse -Force }
+                            Move-Item $SkillsDir $bak
+                        }
                         Copy-Item $pack $SkillsDir -Recurse
+                        if (Test-Path $bak) {
+                            Get-ChildItem $bak -Directory | ForEach-Object {
+                                $dst = Join-Path $SkillsDir $_.Name
+                                if (-not (Test-Path $dst)) { Copy-Item $_.FullName $dst -Recurse }
+                            }
+                        }
                     }
                     Send-Json $ctx @{ ok = $true }
                 }
@@ -497,11 +519,9 @@ try {
                     Send-Json $ctx @{ err = "không thấy app" } 404
                 } else {
                     $res = Run-Probe $app.probe
-                    $arr = @($k.apps | Where-Object { $_.id -ne $app.id })
+                    # sửa tại chỗ trên object trong mảng — giữ nguyên thứ tự
                     $app | Add-Member -NotePropertyName status -NotePropertyValue $(if ($res.ok) { "connected" } else { "not-connected" }) -Force
                     $app | Add-Member -NotePropertyName check_message -NotePropertyValue $res.msg -Force
-                    $arr += $app
-                    $k.apps = $arr
                     Save-Json $ConnFp $k
                     Send-Json $ctx $res
                 }

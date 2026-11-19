@@ -60,6 +60,7 @@ class Acp:
             stderr=subprocess.DEVNULL, text=True, bufsize=1)
         self.next_id = 10
         self.session_id = None
+        self.dead = False
         self.lock = threading.Lock()
         threading.Thread(target=self._reader, daemon=True).start()
 
@@ -88,6 +89,10 @@ class Acp:
             except json.JSONDecodeError:
                 continue
             self._dispatch(m)
+        # stdout đóng = devin acp chết → báo UI thay vì để chat treo im lặng
+        self.dead = True
+        broadcast({"t": "err",
+                   "msg": "trợ lý vừa dừng đột ngột — chạy lại file start rồi thử lại"})
 
     def _dispatch(self, m):
         # Kết quả của session/new (bất kể id nào)
@@ -158,13 +163,19 @@ SKILL_PACKS = os.path.join(os.path.abspath(CWD), ".devin", "skill-packs")
 SKILLS_DIR = os.path.join(os.path.abspath(CWD), ".devin", "skills")
 
 def load_json(fp, fallback):
+    # utf-8-sig: file ghi bằng PowerShell (Set-Content UTF8) có BOM —
+    # utf-8 thường đọc sẽ lỗi và fallback im lặng làm mất dữ liệu
     try:
-        return json.load(open(fp, encoding="utf-8"))
+        return json.load(open(fp, encoding="utf-8-sig"))
     except Exception:
         return fallback
 
 def save_json(fp, obj):
-    json.dump(obj, open(fp, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+    # ghi ra file tạm rồi đổi tên — crash giữa chừng không corrupt file
+    tmp = fp + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(obj, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, fp)
 
 def run_probe(probe):
     """Kiểm tra một kết nối còn sống không → {ok, msg}.
@@ -313,11 +324,16 @@ class Handler(BaseHTTPRequestHandler):
         except json.JSONDecodeError:
             data = {}
         if path == "/api/prompt":
+            if acp.dead:
+                self._json({"err": "trợ lý đã dừng — chạy lại file start"}, 503); return
             if not acp.session_id:
                 self._json({"err": "chưa có session"}, 503); return
-            acp.call("session/prompt", {
-                "sessionId": acp.session_id,
-                "prompt": [{"type": "text", "text": data.get("text", "")}]})
+            try:
+                acp.call("session/prompt", {
+                    "sessionId": acp.session_id,
+                    "prompt": [{"type": "text", "text": data.get("text", "")}]})
+            except (BrokenPipeError, OSError):
+                self._json({"err": "trợ lý đã dừng — chạy lại file start"}, 503); return
             self._json({"ok": True})
         elif path == "/api/respond":
             if data.get("optionId") == "__cancel__":
@@ -372,13 +388,18 @@ class Handler(BaseHTTPRequestHandler):
             save_json(PERM_FP, q)
             self._json({"ok": True})
         elif path == "/api/connections":
-            # Upsert một app vào registry kết nối
+            # Upsert một app vào registry kết nối — thay tại chỗ để giữ
+            # thứ tự hiển thị trong panel Cài đặt
             app = data.get("app")
             if not isinstance(app, dict) or not app.get("id"):
                 self._json({"err": "thiếu app.id"}, 400); return
             k = load_json(CONN_FP, {"apps": []})
-            k["apps"] = [a for a in k["apps"] if a.get("id") != app["id"]]
-            k["apps"].append(app)
+            for i, a in enumerate(k["apps"]):
+                if a.get("id") == app["id"]:
+                    k["apps"][i] = app
+                    break
+            else:
+                k["apps"].append(app)
             save_json(CONN_FP, k)
             self._json({"ok": True})
         elif path == "/api/remove-connection":
@@ -424,12 +445,23 @@ class Handler(BaseHTTPRequestHandler):
                           ensure_ascii=False, indent=2)
             except Exception:
                 pass
-            # Cài bộ skill theo ngôn ngữ (skill pack đè lên .devin/skills/)
+            # Cài bộ skill theo ngôn ngữ: pack đè lên .devin/skills/ nhưng
+            # skill học viên TỰ TẠO (không có trong pack) phải giữ lại —
+            # dir cũ backup sang skills.bak rồi merge phần riêng về.
             pack = os.path.join(SKILL_PACKS, lang)
             if os.path.isdir(pack):
+                bak = SKILLS_DIR + ".bak"
                 if os.path.isdir(SKILLS_DIR):
-                    shutil.rmtree(SKILLS_DIR)
+                    if os.path.isdir(bak):
+                        shutil.rmtree(bak)
+                    os.replace(SKILLS_DIR, bak)
                 shutil.copytree(pack, SKILLS_DIR)
+                if os.path.isdir(bak):
+                    for name in os.listdir(bak):
+                        src = os.path.join(bak, name)
+                        dst = os.path.join(SKILLS_DIR, name)
+                        if os.path.isdir(src) and not os.path.exists(dst):
+                            shutil.copytree(src, dst)
             self._json({"ok": True})
         elif path == "/api/check-connection":
             aid = str(data.get("id", ""))

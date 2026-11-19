@@ -358,6 +358,8 @@ def main():
             {**scene, 'steps': [{k: v for k, v in s.items() if not k.startswith('_')}
                                 for s in steps]},
             ensure_ascii=False)
+        # chuỗi "</script>" trong text scene phá thẻ script đang nhúng vào
+        baked_json = baked_json.replace('</', '<\\/')
         # nhúng scene thẳng vào HTML — tránh race giữa fetch và lúc chụp
         player_html = open(os.path.join(ROOT, 'tools/scene-player.html'),
                            encoding='utf-8').read()
@@ -377,6 +379,12 @@ def main():
             def log_message(self, *a):
                 pass
             def do_GET(self):
+                # chặn dotfile/dot-folder giống serve.py — server này cũng
+                # phục vụ project root, chứa .devin/secrets.local.json
+                parts = [p for p in urlparse(self.path).path.split('/') if p]
+                if any(p.startswith('.') for p in parts):
+                    self.send_error(404)
+                    return
                 if self.path.startswith('/player.html'):
                     self.send_response(200)
                     self.send_header('Content-Type', 'text/html; charset=utf-8')

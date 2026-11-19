@@ -28,6 +28,8 @@ Các action v1:
   paste {tabId?, sel?, text} — dán text/TSV (chỉ app nhận sự kiện giả mới dùng được)
   rect {tabId?, sel|ref} — toạ độ tâm phần tử (phục vụ nhóm t*)
   tclick {tabId?, sel|ref|x,y} — click chuột THẬT qua CDP (app bỏ qua click giả)
+  tright {tabId?, sel|ref|x,y} — chuột phải thật (mở context menu)
+  tmove {tabId?, sel|ref|x,y} — hover chuột thật (lộ nút/menu ẩn)
   ttype {tabId?, sel|ref, text} — click thật + chèn text thật (editor Zalo #richInput)
   tinsert {tabId?, text, mode?} — chèn text thật tại con trỏ; mode=char bắn
                           phím từng ký tự (ghi được vào grid Google Sheets)
@@ -112,12 +114,12 @@ def ws_recv(sock):
 
 def ws_handshake(sock, headers):
     # Chỉ nhận WS từ extension (origin chrome-extension://...) hoặc không có
-    # Origin — một trang web lạ phải bị chặn, nếu không nó chiếm slot extension
-    # và nhận được mọi lệnh agent gửi xuống.
+    # Origin — trang web (kể cả trang localhost) không được vào: nó chiếm slot
+    # extension và nhận được mọi lệnh agent gửi xuống.
     mo = re.search(r"^origin:\s*(\S+)", headers, re.I | re.M)
     if mo:
         o = mo.group(1).strip()
-        if not is_local_origin(o) and not o.startswith(EXT_ORIGIN_PREFIXES):
+        if not o.startswith(EXT_ORIGIN_PREFIXES):
             return False
     key = re.search(r"sec-websocket-key:\s*(\S+)", headers, re.I)
     if not key:
@@ -217,6 +219,8 @@ def handle_api(method, path, body):
             d = json.loads(body or b"{}")
         except json.JSONDecodeError:
             return {"ok": False, "err": "json lỗi"}
+        if not isinstance(d, dict):
+            return {"ok": False, "err": "body phải là json object"}
         action = d.pop("action", "")
         res = ext_call(action, d)
         # screenshot lớn → ghi file, trả đường dẫn cho gọn
@@ -227,6 +231,16 @@ def handle_api(method, path, body):
             with open(fp, "wb") as f:
                 f.write(base64.b64decode(res.pop("png_b64")))
             res["file"] = os.path.relpath(fp, os.path.abspath(CWD))
+            # ảnh chụp tích luỹ mãi — chỉ giữ 50 tấm mới nhất
+            try:
+                shots = sorted(
+                    (os.path.join(d2, f) for f in os.listdir(d2)
+                     if f.startswith("shot-") and f.endswith(".png")),
+                    key=os.path.getmtime)
+                for old in shots[:-50]:
+                    os.remove(old)
+            except OSError:
+                pass
         return res
     return {"err": "not found"}, 404
 
@@ -242,6 +256,9 @@ def serve_conn(sock):
         method, path = parts[0], parts[1] if len(parts) > 1 else "/"
         if method == "GET" and path == "/ext" and "upgrade: websocket" in head.lower():
             if ws_handshake(sock, head):
+                # read_http đặt timeout 15s để đọc header — phải gỡ ra, nếu
+                # không WS rớt sau 15s im lặng (extension flap liên tục)
+                sock.settimeout(None)
                 with ext_lock:
                     old = ext_sock
                     ext_sock = sock
