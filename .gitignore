@@ -1,0 +1,14 @@
+# Local secrets & credentials — NEVER commit
+.devin/secrets.local.json
+.devin/mcp_config.local.json
+*.local.json
+
+# Runtime artifacts
+my-course/.shots/
+.logs/
+__pycache__/
+*.pyc
+
+# OS junk
+.DS_Store
+Thumbs.db

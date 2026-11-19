@@ -1,0 +1,15 @@
+{
+  "description": "Folders the assistant may read/write. my-course/ and ai-assistant/ are always allowed. Manage via portal or ask the assistant.",
+  "folders": [
+    {
+      "path": "~/Downloads",
+      "access": "read",
+      "note": "noi thuong co file tai ve (anh Canva, file dinh kem)"
+    },
+    {
+      "path": "/Users/hieuspace/Desktop",
+      "access": "read",
+      "note": ""
+    }
+  ]
+}

@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chat với trợ lý</title>
+<link rel="stylesheet" href="vendor/fonts.css">
+<style>
+/* Hallmark · app screen · theme: Ultraviolet (deal 3/3) · redesign: full · scope: app — companion to styles.css */
+@import url("vendor/tokens.css");
+@import url("vendor/base.css");
+
+:root { --mono: var(--font-outlier); }
+
+body {
+  height: 100vh; display: flex; flex-direction: column;
+  font-size: var(--text-md);
+  /* chừa dải giấy phía dưới cho cụm nút chế độ nổi của portal cha */
+  padding-bottom: 52px;
+}
+
+#messages {
+  flex: 1; overflow-y: auto; padding: var(--space-lg) var(--space-md) var(--space-xs);
+  display: flex; flex-direction: column; gap: var(--space-sm);
+}
+.msg {
+  max-width: 82%; padding: var(--space-sm) var(--space-md); border-radius: var(--radius-card);
+  line-height: 1.6; word-wrap: break-word;
+}
+.msg.user {
+  align-self: flex-end;
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  border-bottom-right-radius: 4px; white-space: pre-wrap;
+}
+.msg.agent {
+  align-self: flex-start; background: var(--color-paper-2); color: var(--color-ink);
+  border-bottom-left-radius: 4px;
+}
+.msg.agent p { margin: 0 0 var(--space-xs); } .msg.agent p:last-child { margin-bottom: 0; }
+.msg.agent ul, .msg.agent ol { margin: var(--space-2xs) 0 var(--space-sm) var(--space-lg); }
+.msg.agent li { margin: var(--space-3xs) 0; }
+.msg.agent code {
+  background: var(--color-accent-soft); padding: var(--space-3xs) var(--space-xs); border-radius: 6px;
+  font-size: var(--text-sm); font-family: var(--mono); color: var(--color-accent-deep);
+}
+.msg.agent pre {
+  background: var(--color-ink); color: var(--color-paper); padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-card); overflow-x: auto; margin: var(--space-xs) 0;
+}
+.msg.agent pre code { background: none; color: inherit; padding: 0; }
+.msg.agent h1,.msg.agent h2,.msg.agent h3 { margin: var(--space-sm) 0 var(--space-2xs); font-size: var(--text-lg); font-weight: 500;  }
+.msg.agent strong { color: var(--color-accent-deep); }
+.msg.agent table { border-collapse: collapse; margin: var(--space-xs) 0; font-size: var(--text-sm); }
+.msg.agent th,.msg.agent td { border: var(--rule-hair) solid var(--color-rule); padding: var(--space-2xs) var(--space-sm); }
+.msg.agent th { background: var(--color-paper-3); font-weight: 500; }
+.msg.agent blockquote { border: var(--rule-hair) solid var(--color-rule); border-radius: var(--radius-card); margin: var(--space-xs) 0; padding: var(--space-xs) var(--space-sm); color: var(--color-muted); }
+
+.tool {
+  align-self: flex-start; font-size: var(--text-xs); color: var(--color-muted);
+  padding: 0 var(--space-sm); font-family: var(--mono);
+}
+.tool::before { content: "·"; color: var(--color-accent); font-weight: 700; margin-right: 6px; }
+.tool.done { opacity: .55; }
+
+/* permission card — hàng hairline + pill xin phép */
+.perm {
+  align-self: stretch; max-width: 82%;
+  background: var(--color-paper-2);
+  border-radius: var(--radius-card); padding: var(--space-sm) var(--space-md);
+}
+.perm .perm-title { font-size: var(--text-sm); color: var(--color-ink-2); margin-bottom: var(--space-sm); font-family: var(--mono); }
+.perm .perm-btns { display: flex; gap: var(--space-xs); flex-wrap: wrap; }
+.perm button {
+  border: 0; background: none; color: var(--color-accent-deep);
+  height: 32px; padding: 0 var(--space-md); border-radius: var(--radius-pill); cursor: pointer;
+  font-size: var(--text-sm); font-weight: 500; font-family: var(--font-display); 
+  box-shadow: inset 0 0 0 1.5px var(--color-rule-2);
+  transition: background-color var(--dur-micro) var(--ease-out);
+}
+.perm button:hover { box-shadow: inset 0 0 0 1.5px var(--color-accent); }
+.perm button.primary {
+  background: var(--color-accent); color: var(--color-accent-ink);
+  box-shadow: none;
+}
+.perm button.primary:hover { background: var(--color-accent-deep); }
+
+.hint-chips { display: flex; gap: var(--space-xs); padding: 0 var(--space-md) var(--space-xs); flex-wrap: wrap; }
+.hint-chips button {
+  border: 0; color: var(--color-accent-deep);
+  height: 32px; padding: 0 var(--space-md); border-radius: var(--radius-pill); cursor: pointer;
+  font-size: var(--text-sm); font-weight: 500; font-family: var(--font-display); 
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--color-rule-2);
+  transition: background-color var(--dur-micro) var(--ease-out);
+}
+.hint-chips button:hover { box-shadow: inset 0 0 0 1.5px var(--color-accent); }
+.hint-chips button:active { background: var(--color-paper-3); }
+#send:active { background: var(--color-accent-deep); }
+
+#inputbar {
+  display: flex; gap: var(--space-sm); padding: var(--space-sm) var(--space-md);
+  border-top: var(--rule-hair) solid var(--color-rule);
+}
+#input {
+  flex: 1; border: 0; border-radius: var(--radius-pill);
+  height: 44px; padding: 0 var(--space-md); font-size: var(--text-md); outline: none;
+  background: var(--color-paper-2); color: var(--color-ink);
+  box-shadow: inset 0 0 0 1.5px var(--color-rule-2);
+}
+#input:focus-visible { outline: none; box-shadow: inset 0 0 0 1.5px var(--color-ink); }
+#send {
+  border: 0; border-radius: var(--radius-pill);
+  height: 44px; padding: 0 var(--space-lg); font-size: var(--text-md); font-weight: 500; cursor: pointer;
+  font-family: var(--font-display); 
+  background: var(--color-accent); color: var(--color-accent-ink);
+  transition: background-color var(--dur-micro) var(--ease-out);
+}
+#send:hover { background: var(--color-accent-deep); }
+#send:disabled { background: var(--color-paper-3); color: var(--color-muted); cursor: not-allowed; }
+#status {
+  font-size: var(--text-xs); color: var(--color-muted); padding: var(--space-2xs) var(--space-md) 0;
+  display: none; font-family: var(--mono);
+}
+.thinking { opacity: .6; font-style: italic; }
+</style>
+</head>
+<body>
+  <div id="status">Trợ lý đang làm việc…</div>
+  <div id="messages"></div>
+  <div class="hint-chips" id="chips"></div>
+  <div id="inputbar">
+    <input id="input" placeholder="Nhắn cho trợ lý… (VD: /phong-van)" autocomplete="off">
+    <button id="send">Gửi</button>
+  </div>
+<script>
+// chỉ cho phép trỏ bridge về localhost — tham số lạ (link độc) bị bỏ qua
+const BRIDGE = (() => {
+  const b = new URLSearchParams(location.search).get('bridge') || 'http://localhost:7682';
+  try {
+    const u = new URL(b);
+    if ((u.hostname === 'localhost' || u.hostname === '127.0.0.1') && u.protocol === 'http:')
+      return 'http://' + u.host;
+  } catch {}
+  return 'http://localhost:7682';
+})();
+const msgs = document.getElementById('messages');
+const input = document.getElementById('input');
+const sendBtn = document.getElementById('send');
+const statusEl = document.getElementById('status');
+const chipsEl = document.getElementById('chips');
+
+// chuỗi UI theo ngôn ngữ trong config (onboarding chọn vi/en)
+const STR = {
+  vi: {
+    hints: [{label: 'Bắt đầu phỏng vấn', text: '/phong-van'},
+            {label: 'Học một bài', text: '/hoc-bai'},
+            {label: 'Giúp em việc này…', text: ''}],
+    hello: 'Xin chào! Mình là trợ lý AI của bạn. Bạn cứ nhắn như nhắn tin cho một người giúp việc.\n\nChưa biết bắt đầu từ đâu thì gõ **`/phong-van`**, mình sẽ hỏi vài câu rồi thiết kế khoá học riêng cho bạn.',
+    ph: 'Nhắn cho trợ lý… (VD: /phong-van)',
+    send: 'Gửi', busy: 'Trợ lý đang làm việc…', permSuffix: ' — bạn cho phép không?',
+    noOpt: 'Không đồng ý', errPfx: 'Ừm, có lỗi nhỏ: ',
+  },
+  en: {
+    hints: [{label: 'Start the interview', text: '/interview'},
+            {label: 'Learn a lesson', text: '/tutor'},
+            {label: 'Help me with…', text: ''}],
+    hello: 'Hi! I\'m your AI assistant — just message me like you\'d message a helpful coworker.\n\nNot sure where to start? Type **`/interview`** and I\'ll ask a few questions, then design a course just for you.',
+    ph: 'Message the assistant… (e.g. /interview)',
+    send: 'Send', busy: 'The assistant is working…', permSuffix: ' — allow it?',
+    noOpt: 'Decline', errPfx: 'Hmm, small hiccup: ',
+  },
+};
+let S = STR.vi;
+function applyStrings() {
+  chipsEl.innerHTML = '';
+  S.hints.forEach(h => {
+    const b = document.createElement('button');
+    b.textContent = h.label;
+    b.onclick = () => { input.value = h.text || input.value; input.focus(); };
+    chipsEl.appendChild(b);
+  });
+  input.placeholder = S.ph;
+  sendBtn.textContent = S.send;
+  statusEl.textContent = S.busy;
+}
+applyStrings();
+fetch(BRIDGE + '/api/config').then(r => r.json()).then(c => {
+  if (c.language === 'en') { S = STR.en; applyStrings(); }
+}).catch(() => {});
+
+let curBubble = null;
+function md(text) {
+  if (window.marked && window.DOMPurify)
+    return DOMPurify.sanitize(marked.parse(text, {breaks: true}));
+  // thiếu thư viện (offline lần đầu) → chữ thường, không được để chat chết
+  const d = document.createElement('div');
+  d.textContent = text;
+  return d.innerHTML.replace(/\n/g, '<br>');
+}
+function agentBubble() {
+  curBubble = document.createElement('div');
+  curBubble.className = 'msg agent';
+  msgs.appendChild(curBubble);
+  msgs.scrollTop = msgs.scrollHeight;
+  return curBubble;
+}
+function addText(t) {
+  if (!curBubble) agentBubble();
+  curBubble.dataset.raw = (curBubble.dataset.raw || '') + t;
+  curBubble.innerHTML = md(curBubble.dataset.raw);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+function addUser(t) {
+  curBubble = null;
+  const d = document.createElement('div');
+  d.className = 'msg user'; d.textContent = t;
+  msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight;
+}
+function addTool(title, status) {
+  curBubble = null;   // tool call = ranh giới tin nhắn → text sau mở bubble mới
+  const d = document.createElement('div');
+  d.className = 'tool' + (status !== 'in_progress' ? ' done' : '');
+  d.textContent = (status === 'in_progress' ? 'Đang làm: ' : 'Xong: ') + (title || 'việc nhỏ');
+  msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight;
+}
+function addPerm(ev) {
+  const d = document.createElement('div');
+  d.className = 'perm';
+  const t = document.createElement('div');
+  t.className = 'perm-title';
+  t.textContent = (ev.title || 'Trợ lý muốn làm một việc') + S.permSuffix;
+  d.appendChild(t);
+  const btns = document.createElement('div'); btns.className = 'perm-btns';
+  // không có option nào → vẫn phải có nút, không thì agent chờ vô hạn
+  const opts = (ev.options && ev.options.length)
+    ? ev.options
+    : [{name: S.noOpt, optionId: '__cancel__'}];
+  opts.forEach((o, i) => {
+    const b = document.createElement('button');
+    b.textContent = o.name;
+    if (i === 0) b.className = 'primary';
+    b.onclick = async () => {
+      d.remove();
+      await fetch(BRIDGE + '/api/respond', {method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id: ev.id, optionId: o.optionId})});
+    };
+    btns.appendChild(b);
+  });
+  d.appendChild(btns); msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight;
+}
+function addErr(msg) {
+  const d = document.createElement('div');
+  d.className = 'msg agent thinking';
+  d.textContent = S.errPfx + msg;
+  msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight;
+}
+function setBusy(b) {
+  statusEl.style.display = b ? 'block' : 'none';
+  sendBtn.disabled = b;   // đang xử lý thì chặn gửi trùng
+}
+function say(t) { agentBubble(); curBubble.dataset.raw = t; curBubble.innerHTML = md(t); }
+
+async function send() {
+  if (sendBtn.disabled) return;
+  const t = input.value.trim();
+  if (!t) return;
+  input.value = '';
+  addUser(t);
+  setBusy(true);
+  try {
+    await fetch(BRIDGE + '/api/prompt', {method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text: t})});
+  } catch (e) {
+    addErr('không nói chuyện được với trợ lý, thử tải lại trang');
+    setBusy(false);
+  }
+}
+sendBtn.onclick = send;
+input.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+
+function handleEvent(ev) {
+  if (ev.t === 'ready') {
+    if (!msgs.children.length) say(S.hello);
+  }
+  else if (ev.t === 'text') addText(ev.text);
+  else if (ev.t === 'tool') addTool(ev.title, ev.status);
+  else if (ev.t === 'perm') addPerm(ev);
+  else if (ev.t === 'done') { setBusy(false); curBubble = null; }
+  else if (ev.t === 'err') { addErr(ev.msg); setBusy(false); }
+}
+
+let since = 0;
+let connected = false;
+async function poll() {
+  try {
+    const res = await fetch(BRIDGE + '/api/poll?since=' + since);
+    if (!res.ok) throw new Error('bad');
+    const data = await res.json();
+    if (data.reset) {
+      // bridge vừa restart (cursor cũ không còn hợp lệ) → dựng lại màn hình
+      msgs.innerHTML = '';
+      curBubble = null;
+    }
+    if (!connected) {
+      connected = true;
+      handleEvent({t: 'ready'});
+    }
+    since = data.next;
+    (data.events || []).forEach(handleEvent);
+    setTimeout(poll, 900);
+  } catch (e) {
+    connected = false;
+    setTimeout(poll, 4000);
+  }
+}
+poll();
+input.focus();
+</script>
+<script src="vendor/marked.min.js"></script>
+<script src="vendor/purify.min.js"></script>
+</body>
+</html>

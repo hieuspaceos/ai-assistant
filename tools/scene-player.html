@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>scene player</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green: #147a4f; --green-ink: #fff;
+    --paper: #f6f7f6; --surface: #fff; --well: #eef1ef;
+    --ink: #181d1b; --ink-soft: #5d6a64; --line: #e3e8e5;
+    --mono: 'JetBrains Mono', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1280px; height: 720px; overflow: hidden;
+    font-family: 'Instrument Sans', sans-serif; background: var(--paper); color: var(--ink); }
+
+  /* ---------- khung portal ---------- */
+  #stage { width: 1280px; height: 720px; display: flex; flex-direction: column; }
+  header { height: 60px; display: flex; align-items: center; gap: 12px;
+    padding: 0 20px; border-bottom: 1px solid var(--line); background: var(--surface); }
+  .mark { width: 34px; height: 34px; border-radius: 10px; background: var(--green);
+    display: flex; align-items: center; justify-content: center; }
+  .mark svg { width: 22px; height: 22px; }
+  .brand b { font-size: 16px; font-weight: 600; display: block; }
+  .brand span { font-size: 12px; color: var(--ink-soft); }
+  #htitle { flex: 1; text-align: center; font-size: 14px; color: var(--ink-soft); }
+  #htabs { display: flex; gap: 4px; background: var(--well); padding: 4px; border-radius: 999px; }
+  #htabs span { font-size: 13px; padding: 6px 14px; border-radius: 999px; color: var(--ink-soft); }
+  #htabs span.on { background: var(--green); color: #fff; font-weight: 600; }
+  #htabs span.flash { outline: 3px solid #ffd166; }
+
+  #body { flex: 1; display: flex; min-height: 0; }
+  aside { width: 250px; border-right: 1px solid var(--line); background: var(--surface);
+    padding: 14px 10px; }
+  aside h4 { font-size: 11px; font-weight: 600; color: var(--ink-soft); letter-spacing: .04em;
+    text-transform: uppercase; margin: 4px 10px 10px; }
+  .ls { display: flex; gap: 10px; padding: 10px; border-radius: 10px; margin-bottom: 4px; }
+  .ls .n { width: 24px; height: 24px; border-radius: 7px; background: var(--well);
+    font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center;
+    color: var(--ink-soft); flex-shrink: 0; }
+  .ls.on { background: #e7f3ec; outline: 1px solid #bfe0cd; }
+  .ls.on .n { background: var(--green); color: #fff; }
+  .ls b { font-size: 13px; font-weight: 600; display: block; }
+  .ls small { font-size: 11px; color: var(--ink-soft); display: block; margin-top: 2px; }
+
+  /* ---------- khung chat ---------- */
+  #chat { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+  #log { flex: 1; padding: 22px 60px; overflow: hidden;
+    display: flex; flex-direction: column; justify-content: flex-end; }
+  .row { display: flex; margin-bottom: 14px; }
+  .row.user { justify-content: flex-end; }
+  .bub { max-width: 72%; padding: 12px 16px; border-radius: 16px; font-size: 15px; line-height: 1.5; }
+  .row.agent .bub { background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+  .row.user .bub { background: var(--green); color: var(--green-ink); border-bottom-right-radius: 4px; }
+  .bub code { font-family: var(--mono); font-size: .86em; background: var(--well);
+    padding: 1px 6px; border-radius: 5px; }
+  .row.user .bub code { background: rgba(255,255,255,.2); }
+  .bub ul { padding-left: 18px; }
+  .bub b { font-weight: 700; }
+  .work { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-soft);
+    margin-bottom: 12px; }
+  .work .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+
+  #composerbar { padding: 14px 60px 20px; }
+  #composer { display: flex; gap: 10px; align-items: flex-end; background: var(--surface);
+    border: 1px solid var(--line); border-radius: 18px; padding: 12px 12px 12px 18px; }
+  #ctext { flex: 1; font-size: 15px; min-height: 22px; white-space: pre-wrap; }
+  #ctext .caret { display: inline-block; width: 2px; height: 18px; background: var(--green);
+    vertical-align: -3px; }
+  #ctext .ph { color: var(--ink-soft); }
+  #send { width: 38px; height: 38px; border-radius: 50%; background: var(--green); border: 0;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  #send svg { width: 17px; height: 17px; }
+  #send.flash { outline: 4px solid #ffd166; }
+
+  /* ---------- kết quả file ---------- */
+  #files { position: absolute; right: 24px; top: 16px; width: 340px; background: var(--surface);
+    border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px;
+    box-shadow: 0 12px 32px rgba(20,30,25,.10); display: none; }
+  #files.show { display: block; }
+  #files h5 { font-size: 12px; color: var(--ink-soft); font-weight: 600; margin-bottom: 8px; }
+  #files .f { display: flex; justify-content: space-between; font-family: var(--mono);
+    font-size: 12px; padding: 5px 0; border-top: 1px dashed var(--line); }
+  #files .f b { color: var(--green); }
+
+  /* ---------- con trỏ ---------- */
+  #cursor { position: fixed; left: 0; top: 0; z-index: 50; pointer-events: none;
+    transition: none; }
+  #cursor svg { width: 22px; height: 22px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.3)); }
+  #ripple { position: fixed; width: 34px; height: 34px; border-radius: 50%;
+    border: 3px solid var(--green); opacity: 0; z-index: 49; pointer-events: none; }
+
+  /* ---------- thẻ tiêu đề ---------- */
+  #card { position: fixed; inset: 0; z-index: 60; display: none; align-items: center;
+    justify-content: center; background: var(--paper); flex-direction: column; gap: 14px; }
+  #card.show { display: flex; }
+  #card .k { font-size: 14px; font-weight: 600; color: var(--green); letter-spacing: .1em; }
+  #card h1 { font-size: 44px; font-weight: 700; letter-spacing: -0.02em; text-align: center;
+    max-width: 800px; }
+  #card p { font-size: 18px; color: var(--ink-soft); }
+  #card .mark { width: 56px; height: 56px; border-radius: 16px; }
+  #card .mark svg { width: 34px; height: 34px; }
+  #sub { position: fixed; left: 0; right: 0; bottom: 18px; text-align: center; z-index: 55;
+    font-size: 19px; font-weight: 500; color: var(--ink); pointer-events: none; }
+  #sub span { background: rgba(255,255,255,.94); padding: 10px 22px; border-radius: 999px;
+    border: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <header>
+    <div class="mark"><svg viewBox="0 0 38 38"><path d="M19 6 36 14.5 19 23 2 14.5Z" fill="#fff"/><path d="M12 18.4v6.1c0 2.2 3.1 3.6 7 3.6s7-1.4 7-3.6v-6.1l-7 3.2z" fill="#fff"/><circle cx="34.5" cy="22" r="1.8" fill="#fff"/></svg></div>
+    <div class="brand"><b>Trợ lý AI</b><span>khoá học của riêng bạn</span></div>
+    <div id="htitle"></div>
+    <div id="htabs"><span data-t="slide">Slide</span><span data-t="hd">Hướng dẫn</span><span data-t="bt">Bài tập</span><span data-t="vd">Video</span><span data-t="chat">Hỏi trợ lý</span></div>
+  </header>
+  <div id="body">
+    <aside><h4>Bài học</h4><div id="lessons"></div></aside>
+    <div id="chat">
+      <div id="log"></div>
+      <div id="files"></div>
+      <div id="composerbar">
+        <div id="composer">
+          <div id="ctext"></div>
+          <button id="send"><svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5m0 0-6 6m6-6 6 6" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="cursor"><svg viewBox="0 0 24 24"><path d="M5 3l14 7.5-6 1.6-2.4 6.4z" fill="#fff" stroke="#181d1b" stroke-width="1.6"/></svg></div>
+<div id="ripple"></div>
+<div id="sub"><span id="subt"></span></div>
+<div id="card"><div class="mark"><svg viewBox="0 0 38 38"><path d="M19 6 36 14.5 19 23 2 14.5Z" fill="#fff"/><path d="M12 18.4v6.1c0 2.2 3.1 3.6 7 3.6s7-1.4 7-3.6v-6.1l-7 3.2z" fill="#fff"/><circle cx="34.5" cy="22" r="1.8" fill="#fff"/></svg></div><div class="k" id="cardk"></div><h1 id="cardh"></h1><p id="cardp"></p></div>
+
+<script>
+var SCENE_URL = new URLSearchParams(location.search).get('scene') || 'scene.json';
+</script>
+<script>
+const Q = new URLSearchParams(location.search);
+const T = parseFloat(Q.get('t') || '0');
+const $ = s => document.querySelector(s);
+
+/* mini markdown: **bold**, `code`, dòng mới, - bullet */
+function md(s) {
+  return s
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')
+    .replace(/`(.+?)`/g,'<code>$1</code>')
+    .replace(/^- (.+)$/gm,'<ul><li>$1</li></ul>')
+    .replace(/<\/ul>\n<ul>/g,'')
+    .replace(/\n/g,'<br>');
+}
+
+/* ---------- trạng thái tích luỹ ---------- */
+let bubbles, typing, pendingMsg, sentOnce, placeholder;
+let cursor, ripple, activeTab, workMsg, filesList, card, subtitle, flashTarget;
+function resetState() {
+  bubbles = [];
+  typing = ''; pendingMsg = ''; sentOnce = {}; placeholder = 'Nhờ trợ lý giúp gì đó…';
+  cursor = {x: 640, y: 360}; ripple = null;
+  activeTab = 'chat'; workMsg = null; filesList = null;
+  card = null; subtitle = ''; flashTarget = null;
+}
+resetState();
+
+function el(id) {
+  return { chat: '#ctext', send: '#send', tab: '#htabs span[data-t="chat"]' }[id] || id;
+}
+function center(sel) {
+  const r = document.querySelector(sel).getBoundingClientRect();
+  return {x: r.left + r.width/2, y: r.top + r.height/2};
+}
+
+/* ---------- áp dụng scene ---------- */
+const ready = window.SCENE_INLINE
+  ? Promise.resolve(window.SCENE_INLINE)
+  : fetch(SCENE_URL).then(r => r.json());
+ready.then(scene => {
+  $('#htitle').textContent = scene.title || '';
+  (scene.lessons || []).forEach((l, i) => {
+    const d = document.createElement('div');
+    d.className = 'ls' + (l.active ? ' on' : '');
+    d.innerHTML = `<div class="n">${i}</div><div><b>${l.name}</b><small>${l.sub || ''}</small></div>`;
+    $('#lessons').appendChild(d);
+  });
+
+  // tính mốc thời gian
+  let acc = 0;
+  const steps = scene.steps.map(s => { const o = {...s, start: acc}; acc += s.dur; return o; });
+  const total = acc;
+
+  window.__seek = function(t) {
+  resetState();
+  for (const s of steps) {
+    const local = t - s.start;
+    const p = Math.min(Math.max(local / s.dur, 0), 1);   // tiến độ 0..1 trong bước
+    const done = local >= s.dur;
+
+    switch (s.kind) {
+      case 'card':
+        if (local >= 0 && local < s.dur) { card = s; subtitle = s.sub || ''; }
+        break;
+
+      case 'say':
+        if (local >= 0 && local < s.dur) subtitle = s.text;
+        break;
+
+      case 'move': {
+        const to = center(el(s.to));
+        if (local < 0) break;
+        if (done) { cursor = to; break; }
+        const from = s.from ? center(el(s.from)) : cursor;
+        const e = 1 - Math.pow(1 - p, 3);               // ease-out
+        cursor = { x: from.x + (to.x - from.x) * e, y: from.y + (to.y - from.y) * e };
+        break;
+      }
+
+      case 'flash':
+        if (local >= 0 && local < s.dur) flashTarget = el(s.target);
+        break;
+
+      case 'click': {
+        const to = center(el(s.target));
+        if (local < 0) break;
+        if (done) { cursor = to; break; }
+        const from = cursor;
+        if (p < 0.6) {                                  // di chuyển tới
+          const e = 1 - Math.pow(1 - p / 0.6, 3);
+          cursor = { x: from.x + (to.x - from.x) * e, y: from.y + (to.y - from.y) * e };
+        } else {                                        // bấm + ripple
+          cursor = to;
+          ripple = { x: to.x, y: to.y, prog: (p - 0.6) / 0.4 };
+        }
+        break;
+      }
+
+      case 'type': {
+        if (local < 0) break;
+        pendingMsg = s.text;
+        if (done) { typing = s.text; break; }
+        typing = s.text.slice(0, Math.ceil(p * s.text.length));
+        break;
+      }
+
+      case 'send':
+        if (local >= 0) {
+          typing = '';
+          if (pendingMsg && !sentOnce[s.start]) {
+            bubbles.push({ who: 'user', html: md(pendingMsg), prog: 1 });
+            sentOnce[s.start] = true;
+          }
+        }
+        break;
+
+      case 'bubble': {
+        if (local < 0) break;
+        const txt = md(s.text);
+        bubbles.push({ who: s.who, html: txt, prog: done ? 1 : p });
+        break;
+      }
+
+      case 'work':
+        workMsg = (local >= 0 && local < s.dur) ? (s.text || 'Đang làm việc…') : workMsg;
+        if (local >= 0 && done) workMsg = null;
+        break;
+
+      case 'files':
+        if (local >= 0) filesList = s.items;
+        break;
+
+      case 'tab':
+        if (local >= 0) activeTab = s.name;
+        break;
+    }
+  }
+
+  draw();
+  };  // __seek
+  window.__seek(T);
+  window.__ready = true;
+});
+
+function draw() {
+  // tab
+  document.querySelectorAll('#htabs span').forEach(sp =>
+    sp.classList.toggle('on', sp.dataset.t === activeTab));
+  const ft = flashTarget ? document.querySelector(flashTarget) : null;
+  if (ft) ft.classList.add('flash');
+  if (flashTarget === '#send') $('#send').classList.add('flash');
+
+  // bubbles: cắt theo prog (lộ dần theo chiều cao)
+  $('#log').innerHTML = bubbles.map(b => {
+    const h = b.prog >= 1 ? 'auto' : Math.max(0, b.prog * 300) + 'px';
+    return `<div class="row ${b.who}"><div class="bub" style="overflow:hidden;max-height:${h}">${b.html}</div></div>`;
+  }).join('') + (workMsg ? `<div class="work"><div class="dot"></div>${workMsg}</div>` : '');
+
+  // composer
+  $('#ctext').innerHTML = typing
+    ? md(typing) + '<span class="caret"></span>'
+    : `<span class="ph">${placeholder}</span>`;
+
+  // files
+  if (filesList) {
+    $('#files').classList.add('show');
+    $('#files').innerHTML = '<h5>folder ket-qua/ — file đã tách</h5>' +
+      filesList.map(f => `<div class="f"><span>${f[0]}</span><b>${f[1]}</b></div>`).join('');
+  }
+
+  // cursor + ripple
+  const c = $('#cursor');
+  c.style.transform = `translate(${cursor.x - 4}px, ${cursor.y - 2}px)`;
+  const r = $('#ripple');
+  if (ripple) {
+    r.style.opacity = String(0.8 * (1 - ripple.prog));
+    const sc = 0.4 + ripple.prog * 1.4;
+    r.style.transform = `translate(${ripple.x - 17}px, ${ripple.y - 17}px) scale(${sc})`;
+  } else r.style.opacity = '0';
+
+  // card + subtitle
+  if (card) {
+    $('#card').classList.add('show');
+    $('#cardk').textContent = card.kicker || '';
+    $('#cardh').textContent = card.heading || '';
+    $('#cardp').textContent = card.text || '';
+  }
+  $('#subt').textContent = subtitle;
+  $('#sub').style.display = subtitle ? 'block' : 'none';
+}
+</script>
+</body>
+</html>

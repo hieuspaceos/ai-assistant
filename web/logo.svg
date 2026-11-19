@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 38 38" role="img" aria-label="Trợ lý AI">
+  <rect width="38" height="38" rx="11" fill="#147a4f"/>
+  <!-- mũ tốt nghiệp: đỉnh thoi + vành + tua -->
+  <path d="M19 9.5 31.5 15.5 19 21.5 6.5 15.5Z" fill="#fff"/>
+  <path d="M14.5 19.1v5.2c0 1.8 2 2.9 4.5 2.9s4.5-1.1 4.5-2.9v-5.2l-4.5 2.1z" fill="#fff"/>
+  <path d="M30.7 15.5v5.4" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="30.7" cy="23.4" r="1.7" fill="#fff"/>
+  <!-- tia lửa thông minh trên vành mũ -->
+  <path d="M19 21.9c.16 1.02.92 1.78 1.95 1.95-1.03.17-1.79.93-1.95 1.95-.16-1.02-.92-1.78-1.95-1.95 1.03-.17 1.79-.93 1.95-1.95z" fill="#147a4f"/>
+</svg>

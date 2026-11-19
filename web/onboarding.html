@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trợ lý AI — thiết lập lần đầu</title>
+<link rel="stylesheet" href="vendor/fonts.css">
+<link rel="icon" type="image/svg+xml" href="logo.svg">
+<style>
+:root { --accent:#0f9d58; --accent-d:#0b7a44; --bg:#f6f8f7; --card:#fff; --ink:#1d2129; --mut:#6b7280; --line:#e3e8e5; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Instrument Sans',system-ui,sans-serif; background:var(--bg); color:var(--ink); min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:20px; padding:36px 40px; width:min(560px,100%); box-shadow:0 8px 40px rgba(15,157,88,.07); }
+.brand { display:flex; align-items:center; gap:12px; margin-bottom:26px; }
+.brand-name { font-weight:700; font-size:18px; }
+.brand-sub { color:var(--mut); font-size:13px; }
+.steps { display:flex; gap:6px; margin-bottom:26px; }
+.step-dot { flex:1; height:4px; border-radius:2px; background:var(--line); }
+.step-dot.on { background:var(--accent); }
+h1 { font-size:24px; margin-bottom:8px; }
+.lead { color:var(--mut); margin-bottom:24px; line-height:1.55; }
+.opts { display:grid; gap:10px; margin-bottom:26px; }
+.opts.cols { grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); }
+.opt { display:flex; align-items:center; gap:12px; padding:14px 16px; border:2px solid var(--line); border-radius:12px; cursor:pointer; font-size:15px; transition:.15s; background:#fff; }
+.opt:hover { border-color:var(--accent); }
+.opt.sel { border-color:var(--accent); background:#f0faf4; }
+.opt .flag { font-size:22px; }
+.opt small { display:block; color:var(--mut); font-weight:400; margin-top:2px; }
+input[type=text] { width:100%; padding:14px 16px; font-size:16px; border:2px solid var(--line); border-radius:12px; font-family:inherit; margin-bottom:26px; }
+input[type=text]:focus { outline:none; border-color:var(--accent); }
+.row { display:flex; gap:10px; justify-content:space-between; }
+button.btn { padding:12px 26px; border:none; border-radius:12px; font-size:15px; font-weight:600; font-family:inherit; cursor:pointer; }
+.btn.pri { background:var(--accent); color:#fff; }
+.btn.pri:hover { background:var(--accent-d); }
+.btn.pri:disabled { background:#b9c9c0; cursor:default; }
+.btn.ghost { background:transparent; color:var(--mut); }
+.check { padding:10px 14px; border:2px solid var(--line); border-radius:10px; cursor:pointer; display:flex; gap:8px; align-items:center; font-size:14px; }
+.check.sel { border-color:var(--accent); background:#f0faf4; }
+.check input { accent-color:var(--accent); }
+.custom-row { display:flex; gap:8px; margin-top:10px; }
+.custom-row input { flex:1; margin-bottom:0; padding:10px 14px; font-size:14px; }
+.note { font-size:13px; color:var(--mut); margin-top:14px; line-height:1.5; }
+.done-check { font-size:44px; text-align:center; margin-bottom:10px; }
+.err { color:#c0392b; font-size:13px; margin-top:10px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="brand">
+    <svg viewBox="0 0 38 38" width="38" height="38" aria-hidden="true">
+      <rect width="38" height="38" rx="11" fill="#0f9d58"/>
+      <path d="M19 9.5 31.5 15.5 19 21.5 6.5 15.5Z" fill="#fff"/>
+      <path d="M14.5 19.1v5.2c0 1.8 2 2.9 4.5 2.9s4.5-1.1 4.5-2.9v-5.2l-4.5 2.1z" fill="#fff"/>
+      <path d="M30.7 15.5v5.4" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="30.7" cy="23.4" r="1.7" fill="#fff"/>
+    </svg>
+    <div><div class="brand-name">Trợ lý AI</div><div class="brand-sub" id="brand-sub"></div></div>
+  </div>
+  <div class="steps" id="dots"></div>
+  <div id="step"></div>
+</div>
+<script>
+const BRIDGE = 'http://localhost:7682';
+let lang = 'vi', learnerName = '', folders = [], stepIdx = 0;
+
+const T = {
+  vi: {
+    sub:'thiết lập lần đầu', welcome:'Chào bạn! Chọn ngôn ngữ trước nhé',
+    welcomeLead:'Trợ lý sẽ nói chuyện và dạy bạn bằng ngôn ngữ này.',
+    name:'Bạn tên gì?', nameLead:'Để trợ lý gọi bạn cho đúng — có thể là tên, biệt danh, gì cũng được.',
+    namePh:'Ví dụ: Hiếu', nameSkip:'Bỏ qua',
+    folder:'Trợ lý được đọc folder nào?', folderLead:'Trợ lý chỉ đụng vào những folder bạn cho phép ở đây — phần còn lại nó không thấy. Chọn folder hay để file làm việc.',
+    folderHint:'Mặc định là <b>chỉ đọc</b> (trợ lý xem được, không sửa xoá). Sau này chỉnh thêm trong portal.',
+    folderCustom:'Thêm folder khác…',
+    apps:'Muốn trợ lý dùng app nào?', appsLead:'Chọn các ứng dụng bạn hay dùng — trợ lý sẽ hướng dẫn kết nối từng cái sau. Không chọn cũng không sao.',
+    next:'Tiếp →', back:'← Quay lại', start:'Bắt đầu dùng →',
+    done:'Xong hết!', doneLead:'Trợ lý đã sẵn sàng. Mình sẽ đưa bạn tới portal — chỗ hỏi trợ lý và bắt đầu khoá học.',
+    appNote:'Riêng <b>Trình duyệt</b>: cần cài thêm một gói nhỏ vào Chrome/Edge — trợ lý sẽ hướng dẫn khi bạn cần dùng tới.',
+    errFolder:'Không thấy folder này trên máy — kiểm tra lại đường dẫn nhé',
+    errEmpty:'Gõ đường dẫn folder trước đã (ví dụ ~/Documents hoặc D:\\work)',
+    errBridge:'Không gọi được trợ lý — kiểm tra bridge :7682 đang chạy chưa',
+    saving:'Đang lưu…',
+  },
+  en: {
+    sub:'first-time setup', welcome:'Hi there! Pick a language first',
+    welcomeLead:'The assistant will talk and teach you in this language.',
+    name:'What\'s your name?', nameLead:'So the assistant greets you properly — a name or nickname, anything works.',
+    namePh:'e.g. Alex', nameSkip:'Skip',
+    folder:'Which folders can the assistant read?', folderLead:'The assistant only touches folders you allow here — everything else stays invisible to it. Pick where your work files live.',
+    folderHint:'Default is <b>read-only</b> (the assistant can look, not change). You can adjust later in the portal.',
+    folderCustom:'Add another folder…',
+    apps:'Which apps should the assistant use?', appsLead:'Pick the apps you use — the assistant will guide you through connecting each one later. Skipping is fine too.',
+    next:'Next →', back:'← Back', start:'Start using it →',
+    done:'All set!', doneLead:'Your assistant is ready. Taking you to the portal — where you can ask it things and start your course.',
+    appNote:'For the <b>Browser</b>: it needs one small add-on in Chrome/Edge — the assistant will guide you when you first need it.',
+    errFolder:'That folder isn\'t on this machine — check the path',
+    errEmpty:'Type a folder path first (e.g. ~/Documents or D:\\work)',
+    errBridge:'Can\'t reach the assistant — check the bridge :7682 is running',
+    saving:'Saving…',
+  },
+};
+
+const FOLDER_PRESETS = [
+  { path:'~/Downloads', vi:'Downloads', en:'Downloads' },
+  { path:'~/Desktop',   vi:'Desktop',   en:'Desktop' },
+  { path:'~/Documents', vi:'Documents', en:'Documents' },
+];
+const APP_PRESETS = [
+  { id:'zalo',          vi:'Zalo Web',        en:'Zalo Web' },
+  { id:'outlook',       vi:'Outlook Web',     en:'Outlook Web' },
+  { id:'wordpress',     vi:'WordPress',        en:'WordPress' },
+  { id:'google-sheets', vi:'Google Sheets',    en:'Google Sheets' },
+  { id:'canva',         vi:'Canva',            en:'Canva' },
+  { id:'zalo-oa',       vi:'Zalo OA',          en:'Zalo OA' },
+  { id:'trinh-duyet',   vi:'Trình duyệt (extension)', en:'Browser (extension)' },
+];
+let selFolders = new Set(['~/Downloads']);
+let selApps = new Set();
+
+function t(k){ return T[lang][k]; }
+function el(html){ const d=document.createElement('div'); d.innerHTML=html.trim(); return d.firstChild; }
+function dots(){ const d=document.getElementById('dots'); d.innerHTML=''; for(let i=0;i<4;i++) d.appendChild(el(`<div class="step-dot${i<=stepIdx?' on':''}"></div>`)); }
+function go(i){ stepIdx=i; dots(); [stepLang,stepName,stepFolder,stepApps,stepDone][i](); }
+
+function stepLang(){
+  const s=document.getElementById('step');
+  s.innerHTML=`<h1>${T.vi.welcome}<br><span style="font-size:19px;color:var(--mut);font-weight:500">${T.en.welcome}</span></h1>
+    <p class="lead">${T.vi.welcomeLead}<br>${T.en.welcomeLead}</p><div class="opts" id="opts"></div>`;
+  document.getElementById('brand-sub').textContent=t('sub');
+  const opts=s.querySelector('#opts');
+  [['vi','🇻🇳','Tiếng Việt','Trợ lý nói tiếng Việt'],['en','🇬🇧','English','Assistant speaks English']].forEach(([v,f,n,sub])=>{
+    const o=el(`<div class="opt${lang===v?' sel':''}"><span class="flag">${f}</span><div><b>${n}</b><small>${sub}</small></div></div>`);
+    o.onclick=()=>{ lang=v; go(0); };
+    opts.appendChild(o);
+  });
+  s.appendChild(el(`<div class="row"><span></span><button class="btn pri">${t('next')}</button></div>`))
+    .querySelector('button').onclick=()=>go(1);
+}
+
+function stepName(){
+  const s=document.getElementById('step');
+  s.innerHTML=`<h1>${t('name')}</h1><p class="lead">${t('nameLead')}</p>
+    <input type="text" id="nm" placeholder="${t('namePh')}">
+    <div class="row"><button class="btn ghost">${t('back')}</button><button class="btn pri">${t('next')}</button></div>`;
+  const inp=s.querySelector('#nm'); inp.value=learnerName; inp.focus();
+  s.querySelector('.ghost').onclick=()=>{ learnerName=inp.value.trim(); go(0); };
+  const next=()=>{ learnerName=inp.value.trim(); go(2); };
+  s.querySelector('.pri').onclick=next;
+  inp.onkeydown=e=>{ if(e.key==='Enter') next(); };
+}
+
+function stepFolder(){
+  const s=document.getElementById('step');
+  s.innerHTML=`<h1>${t('folder')}</h1><p class="lead">${t('folderLead')}</p><div class="opts cols" id="fl"></div>
+    <div class="custom-row"><input type="text" id="cf" placeholder="${t('folderCustom')}"><button class="btn pri" id="cfbtn">+</button></div>
+    <p class="note">${t('folderHint')}</p><p class="err" id="fe"></p>
+    <div class="row" style="margin-top:22px"><button class="btn ghost">${t('back')}</button><button class="btn pri">${t('next')}</button></div>`;
+  const fl=s.querySelector('#fl');
+  function render(){
+    fl.innerHTML='';
+    [...FOLDER_PRESETS.map(p=>p.path), ...folders.filter(f=>!FOLDER_PRESETS.some(p=>p.path===f))].forEach(p=>{
+      const c=el(`<label class="check${selFolders.has(p)?' sel':''}"><input type="checkbox"${selFolders.has(p)?' checked':''}><span></span></label>`);
+      c.querySelector('span').textContent='📁 '+p;
+      c.querySelector('input').onchange=e=>{ e.target.checked?selFolders.add(p):selFolders.delete(p); c.classList.toggle('sel',e.target.checked); };
+      fl.appendChild(c);
+    });
+  }
+  render();
+  const addCustom=async()=>{
+    const v=s.querySelector('#cf').value.trim();
+    if(!v){ s.querySelector('#fe').textContent=t('errEmpty'); return; }
+    try{
+      const r=await fetch(BRIDGE+'/api/permissions',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({path:v,access:'read'})});
+      if(r.ok){ folders.push(v); selFolders.add(v); s.querySelector('#cf').value=''; s.querySelector('#fe').textContent=''; render(); }
+      else s.querySelector('#fe').textContent=t('errFolder');
+    }catch(e){ s.querySelector('#fe').textContent=t('errBridge'); }
+  };
+  s.querySelector('#cfbtn').onclick=addCustom;
+  s.querySelector('#cf').onkeydown=e=>{ if(e.key==='Enter') addCustom(); };
+  s.querySelector('.ghost').onclick=()=>go(1);
+  s.querySelector('.row .pri').onclick=()=>go(3);
+}
+
+function stepApps(){
+  const s=document.getElementById('step');
+  s.innerHTML=`<h1>${t('apps')}</h1><p class="lead">${t('appsLead')}</p><div class="opts cols" id="al"></div>
+    <p class="note">${t('appNote')}</p>
+    <div class="row" style="margin-top:22px"><button class="btn ghost">${t('back')}</button><button class="btn pri" id="fin">${t('next')}</button></div>`;
+  const al=s.querySelector('#al');
+  // Danh sách preset + app nào trong connections.json mà preset chưa liệt kê thì hiện thêm
+  fetch(BRIDGE+'/api/connections').then(r=>r.json()).then(k=>{
+    const have = new Set(APP_PRESETS.map(a=>a.id));
+    (k.apps||[]).forEach(a=>{
+      if(!have.has(a.id)) APP_PRESETS.push({id:a.id, vi:a.name||a.id, en:a.name||a.id});
+    });
+    renderApps();
+  }).catch(()=>renderApps());
+  function renderApps(){
+    al.innerHTML='';
+    APP_PRESETS.forEach(a=>{
+      const c=el(`<label class="check${selApps.has(a.id)?' sel':''}"><input type="checkbox"${selApps.has(a.id)?' checked':''}><span></span></label>`);
+      c.querySelector('span').textContent=a[lang];
+      c.querySelector('input').onchange=e=>{ e.target.checked?selApps.add(a.id):selApps.delete(a.id); c.classList.toggle('sel',e.target.checked); };
+      al.appendChild(c);
+    });
+  }
+  s.querySelector('.ghost').onclick=()=>go(2);
+  s.querySelector('#fin').onclick=finish;
+}
+
+async function finish(){
+  const btn=document.getElementById('fin'); btn.disabled=true; btn.textContent=t('saving');
+  try{
+    await fetch(BRIDGE+'/api/setup',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({language:lang,learner_name:learnerName})});
+    for(const p of selFolders)
+      await fetch(BRIDGE+'/api/permissions',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({path:p,access:'read'})}).catch(()=>{});
+    // App đã có trong connections.json → chạy probe; app chưa có → upsert đăng ký mới
+    // (upsert mới dùng /api/connections — check-connection 404 với app chưa đăng ký)
+    const k=await fetch(BRIDGE+'/api/connections').then(r=>r.json()).catch(()=>({apps:[]}));
+    const have=new Set((k.apps||[]).map(a=>a.id));
+    for(const id of selApps){
+      if(have.has(id)){
+        await fetch(BRIDGE+'/api/check-connection',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({id})}).catch(()=>{});
+      }else{
+        const p=APP_PRESETS.find(a=>a.id===id);
+        await fetch(BRIDGE+'/api/connections',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({app:{id,name:(p?p[lang]:id),type:'browser',status:'not-connected'}})}).catch(()=>{});
+      }
+    }
+  }catch(e){ btn.disabled=false; btn.textContent=t('next'); return; }
+  go(4);
+}
+
+function stepDone(){
+  const s=document.getElementById('step');
+  s.innerHTML=`<div class="done-check">🎓</div><h1 style="text-align:center">${t('done')}</h1>
+    <p class="lead" style="text-align:center">${t('doneLead')}</p>
+    <div class="row"><span></span><button class="btn pri">${t('start')}</button></div>`;
+  s.querySelector('button').onclick=()=>{ location.href='index.html'; };
+}
+
+go(0);
+</script>
+</body>
+</html>

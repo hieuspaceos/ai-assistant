@@ -1,0 +1,519 @@
+﻿# chat-bridge.ps1 — cầu nối giữa chat UI trong portal và `devin acp`.
+#
+# Chạy `devin acp` như một process con, nhận prompt từ browser qua HTTP,
+# đẩy các event (text stream, tool call, xin phép) về browser bằng polling.
+# Bản PowerShell này y hệt tools/chat-bridge.py (dùng cho macOS/Linux).
+#
+# Endpoints (mặc định port 7682, chỉ localhost):
+#   GET  /api/poll?since=N -> {"events": [...], "next": M}
+#   POST /api/prompt       -> {"text": "..."} gửi lời nhắn
+#   POST /api/respond      -> {"id": N, "optionId": "..."} trả lời xin phép
+#   GET  /api/health       -> {"ok": true, "sessionId": ...}
+
+param(
+    [int]$Port = 7682,
+    [string]$WorkDir = (Split-Path -Parent $PSScriptRoot),
+    [string]$Devin = "devin"
+)
+
+$ErrorActionPreference = "Stop"
+
+# Chỉ trang local (host loopback, mọi port — portal có thể chạy port khác
+# khi 8080 bận) được gọi API từ browser; request không có Origin
+# (Invoke-RestMethod từ agent) vẫn cho qua — trang web lạ bị chặn 403.
+function Test-LocalOrigin($origin) {
+    if ([string]::IsNullOrEmpty($origin)) { return $false }
+    try { $h = ([uri]$origin).Host } catch { return $false }
+    return $h -eq "localhost" -or $h -eq "127.0.0.1" -or $h -eq "::1" -or $h.EndsWith(".localhost")
+}
+
+# ---------- spawn devin acp ----------
+$psi = New-Object System.Diagnostics.ProcessStartInfo
+$psi.FileName = $Devin
+$psi.Arguments = "acp --process-model in-process"
+$psi.WorkingDirectory = $WorkDir
+$psi.RedirectStandardInput = $true
+$psi.RedirectStandardOutput = $true
+# KHÔNG redirect stderr: buffer đầy mà không ai đọc → devin bị khóa chết.
+# (bản .py dùng stderr=DEVNULL tương đương)
+$psi.UseShellExecute = $false
+$psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+
+$acpProc = New-Object System.Diagnostics.Process
+$acpProc.StartInfo = $psi
+$null = $acpProc.Start()
+$acpProc.StandardInput.AutoFlush = $true
+
+$script:SessionId = $null
+$script:NextId = 10
+$script:EventStore = New-Object System.Collections.ArrayList
+$script:EventBase = 0          # số event đã cắt khỏi đầu — cursor poll đếm tuyệt đối
+$MaxEvents = 3000
+
+# Dòng stdout của acp chạy qua event -> queue, main loop xử lý
+$lineQueue = New-Object 'System.Collections.Concurrent.ConcurrentQueue[string]'
+Register-ObjectEvent -InputObject $acpProc -EventName OutputDataReceived -MessageData $lineQueue -Action {
+    if ($null -ne $EventArgs.Data -and $EventArgs.Data.Trim()) {
+        $Event.MessageData.Enqueue($EventArgs.Data.Trim())
+    }
+} | Out-Null
+$acpProc.BeginOutputReadLine()
+
+function Send-Acp($obj) {
+    $json = ($obj | ConvertTo-Json -Depth 20 -Compress)
+    # Ghi byte UTF-8 thẳng vào stream — không qua WriteLine vì WriteLine
+    # dùng Console.InputEncoding (OEM codepage) làm hỏng tiếng Việt có dấu.
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($json + "`n")
+    $acpProc.StandardInput.BaseStream.Write($bytes, 0, $bytes.Length)
+    $acpProc.StandardInput.BaseStream.Flush()
+}
+
+function Call-Acp($method, $params) {
+    $id = $script:NextId; $script:NextId += 1
+    Send-Acp ([ordered]@{ jsonrpc = "2.0"; id = $id; method = $method; params = $params })
+    return $id
+}
+
+function Push-Event($ev) {
+    [void]$script:EventStore.Add($ev)
+    if ($script:EventStore.Count -gt $MaxEvents) {
+        $excess = $script:EventStore.Count - $MaxEvents
+        $script:EventStore.RemoveRange(0, $excess)
+        $script:EventBase += $excess
+    }
+}
+
+function Drain-Queue {
+    $line = $null
+    while ($lineQueue.TryDequeue([ref]$line)) {
+        try { $m = $line | ConvertFrom-Json } catch { continue }
+        # Kết quả của session/new (bất kể id nào)
+        if ($null -eq $script:SessionId -and $m.result -and $m.result.sessionId) {
+            $script:SessionId = $m.result.sessionId
+            Push-Event ([ordered]@{ t = "ready"; sessionId = $script:SessionId })
+            continue
+        }
+        if ($m.error) {
+            Push-Event ([ordered]@{ t = "err"; msg = "$($m.error.message)" })
+            continue
+        }
+        # Kết quả cuối của một lượt prompt
+        if ($m.id -and $m.result -and ($m.result.PSObject.Properties.Name -contains "stopReason")) {
+            Push-Event ([ordered]@{ t = "done" })
+            continue
+        }
+        # Agent hỏi xin phép -> chuyển cho UI
+        if ($m.method -eq "session/request_permission") {
+            $p = $m.params; $tc = $p.toolCall
+            $opts = @()
+            foreach ($o in $p.options) {
+                $opts += [ordered]@{ optionId = $o.optionId; name = $o.name; kind = $o.kind }
+            }
+            Push-Event ([ordered]@{
+                t = "perm"; id = $m.id
+                title = (if ($tc.title) { $tc.title } else { "Trợ lý muốn làm một việc" })
+                options = $opts
+            })
+            continue
+        }
+        if ($m.method -ne "session/update") {
+            # Request lạ từ agent (vd: fs/read_text_file, terminal/*) —
+            # trả lời lỗi ngay, nếu không agent chờ vô hạn.
+            if ($null -ne $m.id -and $m.method) {
+                Send-Acp ([ordered]@{ jsonrpc = "2.0"; id = $m.id; error = @{ code = -32601; message = "client không hỗ trợ $($m.method)" } })
+            }
+            continue
+        }
+        $u = $m.params.update
+        $su = $u.sessionUpdate
+        if ($su -eq "agent_message_chunk" -and $u.content.text) {
+            Push-Event ([ordered]@{ t = "text"; text = $u.content.text })
+        } elseif ($su -eq "tool_call") {
+            Push-Event ([ordered]@{ t = "tool"; title = (if ($u.title) { $u.title } else { "đang làm việc" }); status = "in_progress" })
+        } elseif ($su -eq "tool_call_update" -and ($u.status -eq "completed" -or $u.status -eq "failed")) {
+            Push-Event ([ordered]@{ t = "tool"; title = "$($u.title)"; status = $u.status })
+        }
+    }
+}
+
+# ---------- permissions.json + connections.json (Phase 0) ----------
+$McDir = Join-Path $WorkDir "my-course"
+$PermFp = Join-Path $McDir "permissions.json"
+$ConnFp = Join-Path $McDir "connections.json"
+$ConfigFp = Join-Path $McDir "config.json"
+$SkillPacks = Join-Path $WorkDir ".devin\skill-packs"
+$SkillsDir = Join-Path $WorkDir ".devin\skills"
+
+function Load-Json($fp, $fallback) {
+    try { return Get-Content $fp -Raw -Encoding UTF8 | ConvertFrom-Json } catch { return $fallback }
+}
+function Save-Json($fp, $obj) {
+    $obj | ConvertTo-Json -Depth 20 | Set-Content $fp -Encoding UTF8
+}
+function Expand-Path($p) {
+    $p = [string]$p
+    if ($p.StartsWith("~")) { $p = Join-Path $env:USERPROFILE $p.Substring(1).TrimStart('/','\') }
+    return $p
+}
+function Run-Probe($probe) {
+    # msg hiện thẳng dưới tên app trong panel Cài đặt của học viên —
+    # viết bằng lời thường, không thuật ngữ (token/MCP/extension…)
+    if (-not $probe) { return @{ ok = $false; msg = "chưa cài — cứ nhờ trợ lý trong chat, nó làm giúp" } }
+    try {
+        if ($probe.type -eq "http") {
+            $d = Invoke-RestMethod -Uri $probe.url -TimeoutSec 4
+            if (-not $probe.expect_key) {
+                $ok = $true
+            } else {
+                $v = $d.($probe.expect_key)
+                $ok = ("$v" -eq "$($probe.expect_val)")
+            }
+            return @{ ok = $ok; msg = $(if ($ok) { "đang hoạt động" } else { "chưa nối — mở trình duyệt rồi bật tiện ích Trợ Lý AI" }) }
+        }
+        if ($probe.type -eq "tabs") {
+            # Có trang web đang mở khớp URL — vd: đã mở Zalo/Outlook trong browser
+            $d = Invoke-RestMethod -Uri "http://127.0.0.1:7683/api/browser" -Method Post `
+                 -ContentType "application/json" -Body '{"action":"tabs"}' -TimeoutSec 6
+            if (-not $d.ok) {
+                return @{ ok = $false; msg = "trình duyệt chưa nối — mở Chrome/Edge lên trước" }
+            }
+            $needle = ([string]$probe.url_contains).ToLower()
+            $ok = ($needle.Length -gt 0) -and [bool](@($d.tabs) | Where-Object { ([string]$_.url).ToLower().Contains($needle) } | Select-Object -First 1)
+            return @{ ok = $ok; msg = $(if ($ok) { "đang mở sẵn — nhờ được ngay" } else { "chưa mở — bấm nút Mở trang rồi đăng nhập" }) }
+        }
+        if ($probe.type -eq "zalo-oa") {
+            $creds = Load-Json (Join-Path $WorkDir ".devin\secrets.local.json") @{}
+            $tok = [string]($creds."zalo-oa".access_token)
+            if (-not $tok) {
+                return @{ ok = $false; msg = "chưa có mã kết nối — nhờ trợ lý trong chat cài giúp" }
+            }
+            try {
+                $d = Invoke-RestMethod -Uri "https://openapi.zalo.me/v2.0/oa/getoa" -Headers @{ access_token = $tok } -TimeoutSec 8
+                $ok = ($d.error -eq 0)
+            } catch { $ok = $false }
+            return @{ ok = $ok; msg = $(if ($ok) { "đang kết nối" } else { "mã kết nối sai hoặc hết hạn — nhờ trợ lý làm mới giúp" }) }
+        }
+        if ($probe.type -eq "path") {
+            $ok = Test-Path (Expand-Path $probe.path)
+            return @{ ok = $ok; msg = $(if ($ok) { "thấy folder" } else { "không thấy folder này" }) }
+        }
+        if ($probe.type -eq "mcp") {
+            $cfg = Join-Path $WorkDir ".devin\mcp_config.local.json"
+            $j = Load-Json $cfg @{}
+            $servers = if ($j.mcpServers) { $j.mcpServers } elseif ($j.servers) { $j.servers } else { @{} }
+            $ok = $null -ne $servers.($probe.name)
+            return @{ ok = $ok; msg = $(if ($ok) { "đã cài sẵn" } else { "chưa cài — nhờ trợ lý trong chat cài giúp" }) }
+        }
+        if ($probe.type -eq "wp") {
+            # WordPress REST: đọc credentials từ secrets.local.json (gitignored)
+            $creds = Load-Json (Join-Path $WorkDir ".devin\secrets.local.json") @{}
+            $wp = $creds.wordpress
+            if (-not $wp -or -not $wp.url -or -not $wp.user -or -not $wp.app_password) {
+                return @{ ok = $false; msg = "chưa có thông tin đăng nhập — nhờ trợ lý cài giúp" }
+            }
+            $pw = ([string]$wp.app_password) -replace ' ', ''
+            $auth = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("$($wp.user):$pw"))
+            try {
+                Invoke-RestMethod -Uri ($wp.url.TrimEnd('/') + "/wp-json/wp/v2/users/me") -Headers @{ Authorization = "Basic $auth" } -TimeoutSec 8 | Out-Null
+                return @{ ok = $true; msg = "đang kết nối" }
+            } catch {
+                return @{ ok = $false; msg = "sai thông tin đăng nhập, hoặc không vào được site" }
+            }
+        }
+    } catch {
+        return @{ ok = $false; msg = "có lỗi khi kiểm tra — nhờ trợ lý xem giúp" }
+    }
+    return @{ ok = $false; msg = "kiểu kết nối lạ — nhờ trợ lý xem" }
+}
+
+# ---------- HTTP server ----------
+function Send-Json($ctx, $obj, [int]$code = 200) {
+    $body = [System.Text.Encoding]::UTF8.GetBytes(($obj | ConvertTo-Json -Depth 20 -Compress))
+    $res = $ctx.Response
+    $res.StatusCode = $code
+    $res.ContentType = "application/json; charset=utf-8"
+    $origin = $ctx.Request.Headers["Origin"]
+    if (Test-LocalOrigin $origin) {
+        $res.Headers.Add("Access-Control-Allow-Origin", $origin)
+        $res.Headers.Add("Vary", "Origin")
+    }
+    $res.Headers.Add("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+    $res.Headers.Add("Access-Control-Allow-Headers", "Content-Type")
+    $res.ContentLength64 = $body.Length
+    $res.OutputStream.Write($body, 0, $body.Length)
+    $res.OutputStream.Close()
+}
+
+Call-Acp "initialize" @{
+    protocolVersion = 1
+    clientCapabilities = @{
+        fs = @{ readTextFile = $false; writeTextFile = $false }
+        terminal = $false
+    }
+} | Out-Null
+Call-Acp "session/new" @{ cwd = $WorkDir; mcpServers = @() } | Out-Null
+
+$listener = New-Object System.Net.HttpListener
+$listener.Prefixes.Add("http://127.0.0.1:$Port/")
+try { $listener.Start() } catch {
+    Write-Host "Không mở được cổng $Port — có chương trình nào đang giữ nó rồi."
+    exit 1
+}
+Write-Host "chat-bridge: http://localhost:$Port  (cwd=$WorkDir)"
+
+try {
+    while ($listener.IsListening) {
+        $ctx = $null
+        try { $ctx = $listener.GetContext() } catch { break }
+        Drain-Queue
+        try {
+            $path = $ctx.Request.Url.AbsolutePath
+            $origin = $ctx.Request.Headers["Origin"]
+            if ($null -ne $origin -and -not (Test-LocalOrigin $origin)) {
+                Send-Json $ctx @{ err = "origin không được phép" } 403
+                continue
+            }
+            if ($ctx.Request.HttpMethod -eq "OPTIONS") {
+                $ctx.Response.StatusCode = 204
+                if (Test-LocalOrigin $origin) {
+                    $ctx.Response.Headers.Add("Access-Control-Allow-Origin", $origin)
+                    $ctx.Response.Headers.Add("Vary", "Origin")
+                }
+                $ctx.Response.Headers.Add("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+                $ctx.Response.Headers.Add("Access-Control-Allow-Headers", "Content-Type")
+                $ctx.Response.OutputStream.Close()
+                continue
+            }
+            if ($ctx.Request.HttpMethod -eq "GET" -and $path -eq "/api/health") {
+                Send-Json $ctx @{ ok = $true; sessionId = $script:SessionId }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "GET" -and $path -eq "/api/poll") {
+                $since = 0
+                [void][int]::TryParse($ctx.Request.QueryString["since"], [ref]$since)
+                $total = $script:EventBase + $script:EventStore.Count
+                # reset: cursor client trỏ ngoài vùng event còn giữ —
+                # thường là bridge vừa restart → replay toàn bộ cho client dựng lại
+                $reset = ($since -lt 0) -or ($since -lt $script:EventBase) -or ($since -gt $total)
+                if ($reset) {
+                    $evs = @($script:EventStore)
+                    Send-Json $ctx @{ events = $evs; next = $total; reset = $true }
+                } else {
+                    $idx = $since - $script:EventBase
+                    $evs = @($script:EventStore.GetRange($idx, $script:EventStore.Count - $idx))
+                    Send-Json $ctx @{ events = $evs; next = $total; reset = $false }
+                }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "GET" -and $path -eq "/api/permissions") {
+                $q = Load-Json $PermFp @{ folders = @() }
+                if (-not $q.PSObject.Properties["folders"]) { $q | Add-Member -NotePropertyName folders -NotePropertyValue @() }
+                Send-Json $ctx $q
+            }
+            elseif ($ctx.Request.HttpMethod -eq "GET" -and $path -eq "/api/connections") {
+                $k = Load-Json $ConnFp @{ apps = @() }
+                if (-not $k.PSObject.Properties["apps"]) { $k | Add-Member -NotePropertyName apps -NotePropertyValue @() }
+                Send-Json $ctx $k
+            }
+            elseif ($ctx.Request.HttpMethod -eq "GET" -and $path -eq "/api/config") {
+                Send-Json $ctx (Load-Json $ConfigFp @{})
+            }
+            elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/prompt") {
+                $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
+                $body = $reader.ReadToEnd() | ConvertFrom-Json
+                if (-not $script:SessionId) {
+                    Send-Json $ctx @{ err = "chưa có session" } 503
+                } else {
+                    Call-Acp "session/prompt" @{
+                        sessionId = $script:SessionId
+                        prompt = @(@{ type = "text"; text = $body.text })
+                    } | Out-Null
+                    Send-Json $ctx @{ ok = $true }
+                }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/respond") {
+                $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
+                $body = $reader.ReadToEnd() | ConvertFrom-Json
+                if ($body.optionId -eq "__cancel__") {
+                    # học viên từ chối / card không có nút nào → báo cancel cho agent
+                    Send-Acp ([ordered]@{
+                        jsonrpc = "2.0"; id = $body.id
+                        error = @{ code = -32800; message = "học viên không đồng ý" }
+                    })
+                } else {
+                    Send-Acp ([ordered]@{
+                        jsonrpc = "2.0"; id = $body.id
+                        result = @{ outcome = @{ outcome = "selected"; optionId = $body.optionId } }
+                    })
+                }
+                Send-Json $ctx @{ ok = $true }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/delete-lesson") {
+                $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
+                $body = $reader.ReadToEnd() | ConvertFrom-Json
+                $folder = [string]$body.folder
+                if ($folder -notmatch '^[a-zA-Z0-9_-]+$') {
+                    Send-Json $ctx @{ err = "tên folder lạ" } 400
+                } else {
+                    $course = (Resolve-Path (Join-Path $WorkDir "my-course")).Path
+                    $target = Join-Path $course $folder
+                    if ((Test-Path $target -PathType Container) -and
+                        ((Resolve-Path $target).Path.StartsWith($course + [IO.Path]::DirectorySeparatorChar))) {
+                        Remove-Item $target -Recurse -Force
+                        $mf = Join-Path $course "manifest.json"
+                        try {
+                            $m = Get-Content $mf -Raw -Encoding UTF8 | ConvertFrom-Json
+                            $m.lessons = @($m.lessons | Where-Object { $_.folder -ne $folder })
+                            $m | ConvertTo-Json -Depth 10 | Set-Content $mf -Encoding UTF8
+                        } catch {}
+                        Send-Json $ctx @{ ok = $true }
+                    } else {
+                        Send-Json $ctx @{ err = "không thấy folder bài" } 404
+                    }
+                }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/permissions") {
+                $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
+                $body = $reader.ReadToEnd() | ConvertFrom-Json
+                $p = Expand-Path ([string]$body.path).Trim()
+                $lv = [string]$body.access
+                if ($lv -ne "read" -and $lv -ne "read-write") {
+                    Send-Json $ctx @{ err = "access phải là read hoặc read-write" } 400
+                } elseif (-not (Test-Path $p -PathType Container)) {
+                    Send-Json $ctx @{ err = "không thấy folder này trên máy" } 404
+                } else {
+                    $q = Load-Json $PermFp @{ folders = @() }
+                    # so sánh sau Expand-Path — entry cũ ghi "~/Downloads" vẫn khớp được
+                    $arr = @($q.folders | Where-Object { (Expand-Path $_.path) -ne $p })
+                    $arr += @{ path = $p; access = $lv; note = ([string]$body.note).Substring(0, [Math]::Min(120, ([string]$body.note).Length)) }
+                    $q.folders = $arr
+                    Save-Json $PermFp $q
+                    Send-Json $ctx @{ ok = $true }
+                }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/remove-permission") {
+                $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
+                $body = $reader.ReadToEnd() | ConvertFrom-Json
+                $p = Expand-Path ([string]$body.path).Trim()
+                $q = Load-Json $PermFp @{ folders = @() }
+                $q.folders = @($q.folders | Where-Object { (Expand-Path $_.path) -ne $p })
+                Save-Json $PermFp $q
+                Send-Json $ctx @{ ok = $true }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/connections") {
+                $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
+                $body = $reader.ReadToEnd() | ConvertFrom-Json
+                if (-not $body.app.id) {
+                    Send-Json $ctx @{ err = "thiếu app.id" } 400
+                } else {
+                    $k = Load-Json $ConnFp @{ apps = @() }
+                    $arr = @($k.apps | Where-Object { $_.id -ne $body.app.id })
+                    $arr += $body.app
+                    $k.apps = $arr
+                    Save-Json $ConnFp $k
+                    Send-Json $ctx @{ ok = $true }
+                }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/remove-connection") {
+                $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
+                $body = $reader.ReadToEnd() | ConvertFrom-Json
+                $k = Load-Json $ConnFp @{ apps = @() }
+                $k.apps = @($k.apps | Where-Object { $_.id -ne $body.id })
+                Save-Json $ConnFp $k
+                Send-Json $ctx @{ ok = $true }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/secrets") {
+                # Form "Cài" trong panel Cài đặt: học viên dán app password WP /
+                # mã OA… → ghi vào .devin\secrets.local.json (đã gitignore).
+                # Chỉ GHI — không endpoint nào đọc secret ra ngoài.
+                $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
+                $body = $reader.ReadToEnd() | ConvertFrom-Json
+                $appId = [string]$body.app
+                if ($appId -notmatch '^[a-z0-9-]+$' -or -not $body.fields) {
+                    Send-Json $ctx @{ err = "thiếu app hoặc fields" } 400
+                } else {
+                    $fp = Join-Path $WorkDir ".devin\secrets.local.json"
+                    $creds = Load-Json $fp @{}
+                    $entry = @{}
+                    if ($creds.$appId) {
+                        $creds.$appId.PSObject.Properties | ForEach-Object { $entry[$_.Name] = $_.Value }
+                    }
+                    $n = 0
+                    foreach ($p in $body.fields.PSObject.Properties) {
+                        if ($n -ge 10) { break }
+                        $v = ([string]$p.Value).Trim()
+                        if ($v) { $entry[[string]$p.Name] = $v.Substring(0, [Math]::Min(500, $v.Length)); $n++ }
+                    }
+                    if (-not $entry.Count) {
+                        Send-Json $ctx @{ err = "chưa nhập gì" } 400
+                    } else {
+                        # Load-Json trả hashtable (file mới) hoặc PSCustomObject
+                        # (file đã có) — ghi đúng cách cho từng kiểu
+                        if ($creds -is [hashtable]) {
+                            $creds[$appId] = $entry
+                        } elseif ($creds.PSObject.Properties[$appId]) {
+                            $creds.$appId = $entry
+                        } else {
+                            $creds | Add-Member -NotePropertyName $appId -NotePropertyValue $entry -Force
+                        }
+                        New-Item -ItemType Directory -Force -Path (Split-Path $fp) | Out-Null
+                        Save-Json $fp $creds
+                        Send-Json $ctx @{ ok = $true }
+                    }
+                }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/setup") {
+                # Onboarding lần đầu: ngôn ngữ + tên → config.json + skill pack đúng ngôn ngữ
+                $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
+                $body = $reader.ReadToEnd() | ConvertFrom-Json
+                $lang = [string]$body.language
+                $name = ([string]$body.learner_name).Trim()
+                if ($name.Length -gt 80) { $name = $name.Substring(0, 80) }
+                if ($lang -ne "vi" -and $lang -ne "en") {
+                    Send-Json $ctx @{ err = "language phải là vi hoặc en" } 400
+                } else {
+                    New-Item -ItemType Directory -Force -Path $McDir | Out-Null
+                    Save-Json $ConfigFp @{ language = $lang; learner_name = $name }
+                    $mf = Join-Path $McDir "manifest.json"
+                    try {
+                        $m = Get-Content $mf -Raw -Encoding UTF8 | ConvertFrom-Json
+                        if ($name) {
+                            $m | Add-Member -NotePropertyName learner_name -NotePropertyValue $name -Force
+                            $m | ConvertTo-Json -Depth 10 | Set-Content $mf -Encoding UTF8
+                        }
+                    } catch {}
+                    $pack = Join-Path $SkillPacks $lang
+                    if (Test-Path $pack -PathType Container) {
+                        if (Test-Path $SkillsDir) { Remove-Item $SkillsDir -Recurse -Force }
+                        Copy-Item $pack $SkillsDir -Recurse
+                    }
+                    Send-Json $ctx @{ ok = $true }
+                }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/check-connection") {
+                $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
+                $body = $reader.ReadToEnd() | ConvertFrom-Json
+                $k = Load-Json $ConnFp @{ apps = @() }
+                $app = $k.apps | Where-Object { $_.id -eq $body.id } | Select-Object -First 1
+                if (-not $app) {
+                    Send-Json $ctx @{ err = "không thấy app" } 404
+                } else {
+                    $res = Run-Probe $app.probe
+                    $arr = @($k.apps | Where-Object { $_.id -ne $app.id })
+                    $app | Add-Member -NotePropertyName status -NotePropertyValue $(if ($res.ok) { "connected" } else { "not-connected" }) -Force
+                    $app | Add-Member -NotePropertyName check_message -NotePropertyValue $res.msg -Force
+                    $arr += $app
+                    $k.apps = $arr
+                    Save-Json $ConnFp $k
+                    Send-Json $ctx $res
+                }
+            }
+            else {
+                Send-Json $ctx @{ err = "not found" } 404
+            }
+        } catch {
+            try { Send-Json $ctx @{ err = "$_" } 500 } catch {}
+        }
+    }
+} finally {
+    $listener.Stop()
+    try { $acpProc.Kill() } catch {}
+}

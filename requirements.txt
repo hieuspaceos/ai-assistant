@@ -1,0 +1,10 @@
+# Python packages the assistant skills need.
+# Windows:  py -m pip install -r requirements.txt
+# macOS/Linux: python3 -m pip install -r requirements.txt
+#
+# Ngoài pip, vài tính năng cần thêm tool hệ thống (cài theo SETUP.md):
+#   ffmpeg                        — render video bài giảng (tools/render-video.py)
+#   ttyd                          — chế độ Terminal nhúng web (không bắt buộc)
+#   ImageMagick (magick) / sips   — nén + resize ảnh trong skill (sips có sẵn trên macOS)
+openpyxl>=3.1.0
+python-docx>=1.1.0

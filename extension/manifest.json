@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Trợ Lý AI",
+  "version": "0.1",
+  "description": "Cánh tay của Trợ Lý AI — giúp trợ lý thao tác trên trang web bạn đang mở (chỉ khi bạn cho phép).",
+  "permissions": ["tabs", "scripting", "activeTab", "alarms", "debugger"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" },
+  "action": {
+    "default_title": "Trợ Lý AI",
+    "default_icon": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" }
+  },
+  "icons": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" }
+}

@@ -1,0 +1,134 @@
+{
+  "description": "Connection status of assistant to external apps/sites.",
+  "apps": [
+    {
+      "id": "trinh-duyet",
+      "name": "Trình duyệt (Trợ Lý AI)",
+      "type": "browser",
+      "note": "Cánh tay của trợ lý trên trình duyệt — đọc và bấm giúp bạn trên các trang đang mở",
+      "probe": {
+        "type": "http",
+        "url": "http://localhost:7683/api/browser/status",
+        "expect_key": "connected",
+        "expect_val": true
+      },
+      "status": "connected",
+      "check_message": "đang hoạt động"
+    },
+    {
+      "id": "zalo",
+      "name": "Zalo Web",
+      "type": "browser",
+      "open_url": "https://chat.zalo.me",
+      "note": "Đọc tin nhắn, lấy ảnh và file — mở Zalo trên trình duyệt rồi đăng nhập là trợ lý dùng được",
+      "probe": {
+        "type": "tabs",
+        "url_contains": "zalo"
+      },
+      "status": "connected",
+      "check_message": "đang mở sẵn — nhờ được ngay"
+    },
+    {
+      "id": "google-sheets",
+      "name": "Google Sheets",
+      "type": "browser",
+      "open_url": "https://sheets.google.com",
+      "note": "Đọc và ghi bảng tính — mở file Sheets trên trình duyệt là trợ lý làm được; muốn nhanh hơn thì nhờ trợ lý cài thêm đường kết nối Google",
+      "probe": {
+        "type": "tabs",
+        "url_contains": "docs.google.com/spreadsheets"
+      },
+      "status": "connected",
+      "check_message": "đang mở sẵn — nhờ được ngay"
+    },
+    {
+      "id": "google-docs",
+      "name": "Google Docs",
+      "type": "browser",
+      "open_url": "https://docs.google.com",
+      "note": "Đọc và viết văn bản — mở file Docs trên trình duyệt là trợ lý làm được",
+      "probe": {
+        "type": "tabs",
+        "url_contains": "docs.google.com/document"
+      },
+      "status": "not-connected",
+      "check_message": "chưa mở — bấm nút Mở trang rồi đăng nhập"
+    },
+    {
+      "id": "outlook",
+      "name": "Outlook Web",
+      "type": "browser",
+      "open_url": "https://outlook.com",
+      "note": "Đọc và lọc thư — mở Outlook trên trình duyệt rồi đăng nhập là trợ lý dùng được",
+      "probe": {
+        "type": "tabs",
+        "url_contains": "outlook"
+      },
+      "status": "connected",
+      "check_message": "đang mở sẵn — nhờ được ngay"
+    },
+    {
+      "id": "canva",
+      "name": "Canva",
+      "type": "browser",
+      "open_url": "https://www.canva.com",
+      "note": "Trợ lý xử lý ảnh/file đã tải về từ Canva — nó không bấm bên trong trang thiết kế",
+      "probe": {
+        "type": "tabs",
+        "url_contains": "canva.com"
+      },
+      "status": "connected",
+      "check_message": "đang mở sẵn — nhờ được ngay"
+    },
+    {
+      "id": "wordpress",
+      "name": "WordPress",
+      "type": "rest",
+      "note": "Đăng bài, tải ảnh, SEO — bấm nút Cài rồi điền thông tin là xong",
+      "setup_hint": "Vào trang quản trị WordPress (wp-admin) → Users → Profile → kéo xuống mục Application Passwords → đặt tên \"ai-assistant\" → bấm Add New → copy chuỗi chữ vừa hiện ra, dán vào ô cuối.",
+      "setup_fields": [
+        {
+          "key": "url",
+          "label": "Địa chỉ trang web",
+          "ph": "https://sitecuaban.com"
+        },
+        {
+          "key": "user",
+          "label": "Tên đăng nhập WordPress",
+          "ph": "tên bạn hay đăng nhập wp-admin"
+        },
+        {
+          "key": "app_password",
+          "label": "Mật khẩu ứng dụng",
+          "ph": "xxxx xxxx xxxx xxxx",
+          "secret": true
+        }
+      ],
+      "probe": {
+        "type": "wp"
+      },
+      "status": "not-connected",
+      "check_message": "chưa có thông tin đăng nhập — nhờ trợ lý cài giúp"
+    },
+    {
+      "id": "zalo-oa",
+      "name": "Zalo OA",
+      "type": "rest",
+      "note": "Gửi thông báo cho người theo dõi OA — bấm nút Cài rồi dán mã vào là xong (cần tài khoản OA doanh nghiệp)",
+      "setup_hint": "Vào oa.zalo.me → chọn OA của bạn → mục Công cụ/Tiện ích → tạo Access Token → copy, dán vào ô dưới.",
+      "setup_fields": [
+        {
+          "key": "access_token",
+          "label": "Mã kết nối OA (Access Token)",
+          "ph": "dán mã vào đây",
+          "secret": true
+        }
+      ],
+      "probe": {
+        "type": "zalo-oa"
+      },
+      "status": "not-connected",
+      "check_message": "chưa có mã kết nối — nhờ trợ lý trong chat cài giúp"
+    }
+  ]
+}

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trợ lý AI: khoá học của riêng bạn</title>
+<meta name="description" content="Khoá học tiếng Việt do trợ lý AI thiết kế riêng cho công việc văn phòng của bạn.">
+<link rel="stylesheet" href="vendor/fonts.css">
+<link rel="icon" type="image/svg+xml" href="logo.svg">
+<link rel="stylesheet" href="styles.css?v=15">
+</head>
+<body>
+<header>
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 38 38" role="img" aria-label="Trợ lý AI" width="38" height="38">
+      <rect width="38" height="38" rx="11" fill="var(--color-accent)"/>
+      <path d="M19 9.5 31.5 15.5 19 21.5 6.5 15.5Z" fill="#fff"/>
+      <path d="M14.5 19.1v5.2c0 1.8 2 2.9 4.5 2.9s4.5-1.1 4.5-2.9v-5.2l-4.5 2.1z" fill="#fff"/>
+      <path d="M30.7 15.5v5.4" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="30.7" cy="23.4" r="1.7" fill="#fff"/>
+      <path d="M19 21.9c.16 1.02.92 1.78 1.95 1.95-1.03.17-1.79.93-1.95 1.95-.16-1.02-.92-1.78-1.95-1.95 1.03-.17 1.79-.93 1.95-1.95z" fill="var(--color-accent)"/>
+    </svg>
+    <div>
+      <div class="brand-name">Trợ lý AI</div>
+      <div class="brand-sub">khoá học của riêng bạn</div>
+    </div>
+  </div>
+  <div id="tabs">
+    <button data-tab="slide" class="tab lesson-tab" hidden>Slide</button>
+    <button data-tab="guide" class="tab lesson-tab" hidden>Hướng dẫn</button>
+    <button data-tab="exercise" class="tab lesson-tab" hidden>Bài tập</button>
+    <button data-tab="chat" class="tab chat-tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5c-1.6 0-3.1-.4-4.4-1.2L3 20l1.2-5.1A8.5 8.5 0 1 1 21 11.5z"/></svg>Hỏi trợ lý</button>
+  </div>
+  <div id="learner-name"></div>
+  <div id="ext-status" title="Trạng thái cánh tay trình duyệt (extension Trợ Lý AI)"><span class="dot"></span><span id="ext-status-text">…</span></div>
+</header>
+
+<div class="layout">
+  <nav id="lesson-list">
+    <div class="nav-title">Bài học</div>
+    <div id="lessons"><p class="loading">Đang tải…</p></div>
+    <div id="recipes" hidden>
+      <div class="nav-title">Công thức nhanh</div>
+      <div id="recipe-list"></div>
+      <p class="recipe-hint">Gõ các lệnh này trong tab “Hỏi trợ lý”</p>
+    </div>
+    <div id="nav-foot">
+      <button id="settings-btn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Cài đặt</button>
+    </div>
+  </nav>
+
+  <main>
+
+    <div id="content" hidden>
+      <div id="pane-slide" class="pane"></div>
+      <div id="pane-guide" class="pane" hidden>
+        <div id="guide-video" hidden></div>
+        <div id="guide-md"></div>
+      </div>
+      <div id="pane-exercise" class="pane" hidden></div>
+      <div id="pane-chat" class="pane" hidden>
+        <div id="chat-modebar">
+          <button id="mode-chat" class="mode-btn active" type="button">Chat</button>
+          <button id="mode-cli" class="mode-btn" type="button">Terminal</button>
+          <span id="terminal-status"></span>
+        </div>
+        <iframe id="chat-frame" title="Chat với trợ lý (kiểu tin nhắn)" hidden></iframe>
+        <iframe id="terminal-frame" title="Terminal Devin" hidden></iframe>
+      </div>
+    </div>
+
+    <div id="welcome">
+      <div class="hero">
+        <h2 id="welcome-title">Chào bạn!</h2>
+        <p class="hero-sub" id="welcome-sub">Đây là khoá học được trợ lý AI thiết kế riêng cho công việc của bạn.</p>
+      </div>
+      <div class="how">
+        <div class="how-item"><span class="how-num">1</span><div><b>Nhờ trợ lý</b> bất cứ việc gì — bấm nút <b>Hỏi trợ lý</b> phía trên.</div></div>
+        <div class="how-item"><span class="how-num">2</span><div><b>Chọn một bài</b> bên trái để xem slide và hướng dẫn.</div></div>
+        <div class="how-item"><span class="how-num">3</span><div><b>Kẹt cứ hỏi</b>: không có câu hỏi nào là “ngốc” cả.</div></div>
+      </div>
+      <p class="hint" id="welcome-hint"></p>
+    </div>
+  </main>
+</div>
+
+<!-- Cài đặt: ít dùng nên gom vào một nút ⚙ — mở ra là panel giữa màn hình -->
+<div id="settings-overlay" hidden>
+  <div id="settings-panel" role="dialog" aria-label="Cài đặt">
+    <div class="settings-head">
+      <span>Cài đặt</span>
+      <button id="settings-close" type="button" title="Đóng">×</button>
+    </div>
+    <div id="settings-body">
+      <div class="nav-title">Kết nối ứng dụng</div>
+      <p class="settings-hint">Chấm xanh = trợ lý dùng được ngay · Chấm xám = cần thêm một bước nhỏ — cứ hỏi trợ lý trong chat, nó dẫn từng bước.</p>
+      <div id="app-list"></div>
+      <div class="nav-title">Folder trợ lý được đọc</div>
+      <p class="settings-hint">Trợ lý chỉ được mở các ngăn trong danh sách này (giống cho phép người giúp việc mở ngăn tủ nào). Thêm folder ở đây, hoặc đồng ý khi trợ lý xin trong chat.</p>
+      <div id="folder-list"></div>
+      <div id="folder-add" hidden>
+        <input id="folder-path" placeholder="dán đường dẫn folder…">
+        <select id="folder-access">
+          <option value="read">chỉ đọc</option>
+          <option value="read-write">đọc + sửa</option>
+        </select>
+        <button id="folder-save">Thêm</button>
+      </div>
+      <button id="folder-add-btn" class="mini-btn">+ thêm folder</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hộp thoại xác nhận/báo lỗi — thay confirm/alert mặc định của trình duyệt -->
+<div id="dlg-overlay" hidden>
+  <div id="dlg-panel" role="alertdialog" aria-modal="true">
+    <div id="dlg-title"></div>
+    <div id="dlg-msg"></div>
+    <div id="dlg-btns">
+      <button id="dlg-cancel" type="button">Huỷ</button>
+      <button id="dlg-ok" type="button">Đồng ý</button>
+    </div>
+  </div>
+</div>
+
+<script src="vendor/marked.min.js"></script>
+<script src="vendor/purify.min.js"></script>
+<script>
+/* Chưa qua onboarding (chưa có config) → đưa sang trang thiết lập đầu tiên */
+const cfgSignal = (window.AbortSignal && AbortSignal.timeout) ? AbortSignal.timeout(2500) : undefined;
+fetch('http://localhost:7682/api/config', { signal: cfgSignal })
+  .then(r => r.json())
+  .then(c => { if (!c.language) location.replace('onboarding.html'); })
+  .catch(() => { /* bridge chưa chạy → cứ hiện portal */ });
+</script>
+<script src="app.js?v=13"></script>
+</body>
+</html>
