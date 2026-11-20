@@ -35,11 +35,20 @@ CSP = ("default-src 'self'; "
        "frame-ancestors 'self'")
 
 class Handler(http.server.SimpleHTTPRequestHandler):
+    # HTTP/1.1 keep-alive: mặc định HTTP/1.0 → mỗi asset (font, vendor js,
+    # manifest...) một TCP connection + một thread mới. Content-Length đã
+    # được gửi trên mọi response file nên keep-alive hợp lệ.
+    protocol_version = "HTTP/1.1"
+
     def log_message(self, *a):
         pass
 
     def end_headers(self):
-        self.send_header("Cache-Control", "no-store")
+        # vendor (font/marked/purify) không đổi theo request → cache 1h;
+        # chỗ khác giữ no-store (manifest/course luôn cần bản mới nhất).
+        # Tính giá trị TRƯỚC — gửi MỘT header duy nhất.
+        cc = "max-age=3600" if self.path.startswith("/web/vendor/") else "no-store"
+        self.send_header("Cache-Control", cc)
         super().end_headers()
 
     def translate_path(self, path):
@@ -78,11 +87,54 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         except OSError:
             self.send_error(404, "Not found")
             return None
+        ctype = EXTRA_MIME.get(os.path.splitext(fp)[1].lower()) \
+            or self.guess_type(fp)
+        size = os.fstat(f.fileno()).st_size
+        # Range cho video bài học — không có thì Chrome phải tải hết mới tua.
+        # Chỉ single-range: multi-range (bytes=a-b,c-d) và chuỗi không parse
+        # được đều bỏ qua → trả 200 trọn file (hợp lệ theo spec); còn range
+        # hợp lệ cú pháp nhưng vượt biên → 416.
+        rng = self.headers.get("Range")
+        parts = None
+        if rng and rng.startswith("bytes=") and "," not in rng:
+            try:
+                s, _, e = rng[6:].partition("-")
+                start = int(s) if s else 0
+                end = int(e) if e else size - 1
+                if start > end or start >= size:
+                    f.close()
+                    self.send_error(416)
+                    return None
+                parts = (start, min(end, size - 1))
+            except ValueError:
+                pass
+        if parts:
+            start, end = parts
+            self.send_response(206)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Content-Length", str(end - start + 1))
+            self.end_headers()
+            # CẠM BẪY: KHÔNG được `return f` — copyfile() của base class sẽ
+            # gửi từ start TỚI EOF, nhiều hơn Content-Length → vỡ keep-alive
+            # HTTP/1.1 (client đọc thừa byte, connection desync). Tự ghi đúng
+            # đoạn rồi đóng file.
+            if self.command == "GET":
+                f.seek(start)
+                remaining = end - start + 1
+                while remaining > 0:
+                    chunk = f.read(min(remaining, 262144))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    remaining -= len(chunk)
+            f.close()
+            return None
         self.send_response(200)
-        self.send_header("Content-Type",
-                         EXTRA_MIME.get(os.path.splitext(fp)[1].lower())
-                         or self.guess_type(fp))
-        self.send_header("Content-Length", str(os.fstat(f.fileno()).st_size))
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(size))
+        self.send_header("Accept-Ranges", "bytes")
         raw_path = urllib.parse.unquote(urllib.parse.urlparse(self.path).path)
         if raw_path.startswith(CSP_PATHS) \
                 and raw_path.lower().endswith((".html", ".htm")):

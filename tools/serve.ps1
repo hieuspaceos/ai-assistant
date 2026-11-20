@@ -57,14 +57,34 @@ while ($listener.IsListening) {
       $bytes = [IO.File]::ReadAllBytes($resolved)
       $ext = [IO.Path]::GetExtension($resolved).ToLower()
       $res.ContentType = $mime[$ext]; if (-not $res.ContentType) { $res.ContentType = 'application/octet-stream' }
-      # portal luôn cần thấy bài mới nhất — không cache
-      $res.Headers.Add('Cache-Control', 'no-store')
+      # vendor khong doi theo request -> cache 1h; cho khac giu no-store
+      $cc = if ($path.StartsWith('/web/vendor/')) { 'max-age=3600' } else { 'no-store' }
+      $res.Headers.Add('Cache-Control', $cc)
       if (($path.StartsWith('/my-course/') -or $path.StartsWith('/intro/')) -and
           ($ext -eq '.html' -or $ext -eq '.htm')) {
         $res.Headers.Add('Content-Security-Policy', $csp)
       }
-      $res.ContentLength64 = $bytes.Length
-      $res.OutputStream.Write($bytes, 0, $bytes.Length)
+      # Range cho video bai hoc — Chrome xin Range khi tua; chi single-range,
+      # multi-range/chuoi la bo qua -> 200 tron file. HttpListener tu keep-alive.
+      $range = [string]$req.Headers['Range']
+      if ($range -match '^bytes=(\d*)-(\d*)$') {
+        $s = if ($Matches[1]) { [long]$Matches[1] } else { 0 }
+        $e = if ($Matches[2]) { [long]$Matches[2] } else { [long]$bytes.Length - 1 }
+        if ($s -le $e -and $s -lt $bytes.Length) {
+          $e = [Math]::Min($e, [long]$bytes.Length - 1)
+          $res.StatusCode = 206
+          $res.Headers.Add('Content-Range', "bytes $s-$e/$($bytes.Length)")
+          $res.Headers.Add('Accept-Ranges', 'bytes')
+          $res.ContentLength64 = $e - $s + 1
+          $res.OutputStream.Write($bytes, [int]$s, [int]($e - $s + 1))
+        } else {
+          $res.StatusCode = 416
+        }
+      } else {
+        $res.Headers.Add('Accept-Ranges', 'bytes')
+        $res.ContentLength64 = $bytes.Length
+        $res.OutputStream.Write($bytes, 0, $bytes.Length)
+      }
     } else {
       $res.StatusCode = 404
       $msg = [Text.Encoding]::UTF8.GetBytes('Khong tim thay file')
