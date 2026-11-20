@@ -20,7 +20,7 @@ việc hoặc đổi ưu tiên.
 | Mobile viewport cho clone | Extension chưa đổi được kích thước cửa sổ — hiện kiểm tĩnh media query. CDP `Emulation.setDeviceMetricsOverride` là đường đi nếu cần ảnh mobile thật |
 | `clone-compare` trên Windows | `shot` cần `sips` (macOS). PowerShell `System.Drawing` đổi BMP tương đương — port khi có học viên Windows cần so ảnh |
 | Backup nhiều mốc | `.bak` giữ 1 bản. Nếu học viên hay sửa hỏng: versioned `.bak-<timestamp>` hoặc git init trong my-course |
-| Skill pack đồng bộ hai chiều | `clone-trang`/`trang-moi` chưa có trong `skill-packs/` — muốn onboard máy mới có sẵn thì copy vào cả `vi/` lẫn `en/` |
+| Skill pack đồng bộ hai chiều | ~~`clone-trang`/`trang-moi` chưa có trong `skill-packs/`~~ — **đã xong** (261120-1635-fix-audit): cả hai pack có đủ + bản en `clone-page`/`new-page`; `test-packs.py` bắt quên đồng bộ sau này |
 | Kiểm tĩnh file clone tự động | Đếm data-cs/section, parse thẻ — có thể thêm mode `check` vào clone-compare.py |
 
 ## Xa — cần quyết định sản phẩm
