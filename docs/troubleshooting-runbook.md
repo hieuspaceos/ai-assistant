@@ -80,3 +80,12 @@ Log: `.logs/{portal,chat-bridge,ext-bridge,ttyd}.log` dưới root.
   lệ theo mẫu trong `codebase-summary.md`.
 - **File clone hỏng không mở được**: về `.bak`; kiểm tĩnh bằng
   `html.parser` đếm thẻ đóng/mở trước khi sửa tiếp.
+
+## 7. Cập nhật
+
+| Triệu chứng | Nguyên nhân | Xử lý |
+|---|---|---|
+| Banner "Có bản mới" trên portal | GitHub Release có tag mới hơn `VERSION` | Bấm banner → tải file `troly` mới → chạy — code đè, `~/TroLyAI` (my-course/brain/secrets) giữ nguyên |
+| Pill vàng "Extension bản cũ" | `extVersion` extension ≠ manifest trong payload | Cập nhật app trước → `brave://extensions` (hoặc `chrome://extensions`) → gỡ "Trợ Lý AI" → Load unpacked lại folder `extension/`; mã kết nối tự ghép lại khi mở portal |
+| Banner không hiện dù có release | portal offline / GitHub API timeout 5s | Bình thường — kiểm lại khi có mạng; không ảnh hưởng việc học |
+| 401 toàn bộ sau khi đổi máy/xoá token | `bridge.token` mới, phiên cũ hết hạn | Extension tự ghép lại khi portal mở bằng file `start`; khẩn cấp: ⚙ Cài đặt → "Mã kết nối" → dán vào options extension |

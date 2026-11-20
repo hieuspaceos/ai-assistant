@@ -6,6 +6,10 @@
 > cần Python, không cần các bước dưới.
 > *(Hiện có bản macOS; bản Windows `TroLyAI.exe` sẽ bổ sung sau.)*
 >
+> **Cập nhật sau này:** portal sẽ tự báo "Có bản mới" — bấm vào là ra
+> trang tải. Tải file mới chạy đè là xong, bài học và cài đặt giữ
+> nguyên. Extension báo "bản cũ" thì xoá và Load unpacked lại.
+>
 > Các bước thủ công bên dưới dành cho máy dev hoặc khi chưa có file `troly`
 > cho nền tảng của bạn.
 

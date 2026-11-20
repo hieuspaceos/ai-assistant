@@ -124,6 +124,12 @@ ai-assistant/
    `tools/build.sh` trên máy Windows).
 2. Xong. Mọi thứ còn lại agent tự lo với học viên.
 
+**Cập nhật:** portal tự kiểm GitHub Releases khi mở — có bản mới hiện
+banner trỏ trang tải; file `troly` mới chỉ đè code, không đụng
+`~/TroLyAI` (my-course, brain, secrets). Extension báo "bản cũ" trong
+pill góc phải → cập nhật app rồi gỡ + Load unpacked lại; auto-update
+thật chỉ có khi extension lên Web Store.
+
 ## Nâng cấp sau này (note)
 
 - Chế độ **Chat** nói ACP chuẩn nên não đổi được (`brain.json` —
