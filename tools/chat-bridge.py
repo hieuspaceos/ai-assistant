@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""chat-bridge.py — cầu nối giữa chat UI trong portal và `devin acp`.
+"""chat-bridge.py — cầu nối giữa chat UI trong portal và "não" AI qua ACP.
 
-Chạy `devin acp` như một process con, nhận prompt từ browser qua HTTP,
-đẩy các event (text stream, tool call, xin phép) về browser bằng polling.
+Chạy một agent CLI nói chuẩn ACP (Agent Client Protocol, JSON-RPC qua
+stdin/stdout) như process con — mặc định `devin acp`, đổi được sang não
+khác qua brain.json ở gốc project hoặc POST /api/brain. Nhận prompt từ
+browser qua HTTP, đẩy event (text stream, tool call, xin phép) về bằng polling.
 
 Endpoints (mặc định port 7682, chỉ localhost):
   GET  /api/poll?since=N -> {"events": [...], "next": M, "reset": bool}
@@ -10,6 +12,9 @@ Endpoints (mặc định port 7682, chỉ localhost):
   POST /api/respond      -> {"id": N, "optionId": "..."} trả lời xin phép
                             ("__cancel__" = học viên từ chối)
   GET  /api/health       -> {"ok": true, "sessionId": ...}
+  GET  /api/brain        -> não hiện tại + danh sách preset (kèm đã cài chưa)
+  POST /api/brain        -> {"id": <preset>} hoặc {"cmd": "...", "args": [...]}
+                            đổi não → ghi brain.json + khởi động lại agent
 
 Event (JSON trong mảng events):
   {"t":"ready","sessionId":...}
@@ -24,7 +29,60 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 7682
 CWD = sys.argv[2] if len(sys.argv) > 2 else "."
-DEVIN = sys.argv[3] if len(sys.argv) > 3 else "devin"
+DEVIN = sys.argv[3] if len(sys.argv) > 3 else "devin"   # tên binary khi không có brain.json
+
+BRAIN_FP = os.path.join(os.path.abspath(CWD), "brain.json")
+
+# Các "não" biết nói ACP mà onboarding gợi ý. requires = binary phải có
+# trên PATH thì preset mới coi là "đã cài" (adapter chạy qua npx nên vẫn
+# cần CLI gốc để đăng nhập — vd codex-acp cần `codex`).
+BRAIN_PRESETS = [
+    {"id": "devin", "label": "Devin",
+     "cmd": "devin", "args": ["acp", "--process-model", "in-process"],
+     "terminal": "devin", "requires": ["devin"],
+     "desc": {"vi": "Não mặc định — đi kèm bộ trợ lý này",
+              "en": "Default brain — ships with this assistant"}},
+    {"id": "gemini", "label": "Gemini CLI (Google)",
+     "cmd": "gemini", "args": ["--acp"],
+     "terminal": "gemini", "requires": ["gemini"],
+     "desc": {"vi": "Nói ACP trực tiếp — cần cài Gemini CLI trước",
+              "en": "Speaks ACP natively — needs Gemini CLI installed"}},
+    {"id": "codex", "label": "Codex CLI (OpenAI)",
+     "cmd": "npx", "args": ["-y", "@agentclientprotocol/codex-acp"],
+     "terminal": "codex", "requires": ["npx", "codex"],
+     "desc": {"vi": "Qua adapter codex-acp — cần cài + đăng nhập Codex CLI",
+              "en": "Via codex-acp adapter — needs Codex CLI installed and signed in"}},
+    {"id": "claude", "label": "Claude Code (Anthropic)",
+     "cmd": "npx", "args": ["-y", "@agentclientprotocol/claude-agent-acp"],
+     "terminal": "claude", "requires": ["npx", "claude"],
+     "desc": {"vi": "Qua adapter claude-agent-acp — cần cài + đăng nhập Claude Code",
+              "en": "Via claude-agent-acp adapter — needs Claude Code installed and signed in"}},
+    {"id": "opencode", "label": "OpenCode",
+     "cmd": "opencode", "args": ["acp"],
+     "terminal": "opencode", "requires": ["opencode"],
+     "desc": {"vi": "Nói ACP trực tiếp — cần cài OpenCode",
+              "en": "Speaks ACP natively — needs OpenCode installed"}},
+    {"id": "goose", "label": "Goose (Block)",
+     "cmd": "goose", "args": ["acp"],
+     "terminal": "goose", "requires": ["goose"],
+     "desc": {"vi": "Nói ACP trực tiếp — cần cài Goose",
+              "en": "Speaks ACP natively — needs Goose installed"}},
+]
+
+def load_brain():
+    """brain.json → dict não đang dùng. id khớp preset thì lấy preset làm
+    nền rồi đè field người dùng sửa; thiếu file/cmd → rơi về preset devin
+    (tên binary vẫn override được bằng argv[3] như trước)."""
+    b = load_json(BRAIN_FP, {})
+    if not isinstance(b, dict):
+        b = {}
+    base = next((dict(p) for p in BRAIN_PRESETS if p["id"] == b.get("id")), {})
+    out = {**base, **{k: v for k, v in b.items() if v not in (None, "", [])}}
+    if not out.get("cmd"):
+        out = {**next(p for p in BRAIN_PRESETS if p["id"] == "devin"), "cmd": DEVIN}
+    out.setdefault("args", [])
+    out.setdefault("terminal", out["cmd"])
+    return out
 
 event_store = []          # các event còn giữ (đầu store có thể đã bị cắt)
 event_base = 0            # số event đã cắt khỏi đầu — cursor poll đếm tuyệt đối
@@ -53,15 +111,25 @@ def broadcast(ev):
             event_base += excess
 
 class Acp:
-    def __init__(self):
-        self.proc = subprocess.Popen(
-            [DEVIN, "acp", "--process-model", "in-process"],
-            cwd=CWD, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL, text=True, bufsize=1)
+    def __init__(self, brain):
         self.next_id = 10
         self.session_id = None
         self.dead = False
         self.lock = threading.Lock()
+        self.proc = None
+        self.brain_id = brain.get("id", brain["cmd"])
+        try:
+            self.proc = subprocess.Popen(
+                [brain["cmd"]] + [str(a) for a in brain.get("args") or []],
+                cwd=CWD, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL, text=True, bufsize=1)
+        except OSError:
+            # binary não chưa cài → báo UI, bridge vẫn sống để học viên đổi não
+            self.dead = True
+            broadcast({"t": "err",
+                       "msg": "không chạy được '" + brain["cmd"] +
+                              "' — não trợ lý chưa cài. Vào mục Cài đặt đổi sang não khác."})
+            return
         threading.Thread(target=self._reader, daemon=True).start()
 
     def _write(self, obj):
@@ -88,7 +156,13 @@ class Acp:
                 m = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            self._dispatch(m)
+            try:
+                self._dispatch(m)
+            except Exception:
+                # send vào não đã chết (BrokenPipe) hoặc lỗi dispatch lạ —
+                # không được để reader chết, nếu không dead không bao giờ
+                # được set và self-heal ở /api/prompt không chạy
+                continue
         # stdout đóng = devin acp chết → báo UI thay vì để chat treo im lặng
         self.dead = True
         broadcast({"t": "err",
@@ -146,12 +220,8 @@ class Acp:
         elif su == "session_info_update":
             pass
 
-acp = Acp()
-acp.call("initialize", {
-    "protocolVersion": 1,
-    "clientCapabilities": {"fs": {"readTextFile": False, "writeTextFile": False},
-                           "terminal": False}})
-acp.call("session/new", {"cwd": CWD, "mcpServers": []})
+acp = None   # spawn_brain() gần cuối file gán instance thật (load_json
+             # cần được định nghĩa trước khi load_brain chạy)
 
 # ---------- permissions.json + connections.json (Phase 0) ----------
 
@@ -285,7 +355,22 @@ class Handler(BaseHTTPRequestHandler):
             return
         path = urllib.parse.urlparse(self.path).path
         if path == "/api/health":
-            self._json({"ok": True, "sessionId": acp.session_id})
+            self._json({"ok": True, "sessionId": acp.session_id if acp else None,
+                        "brain": getattr(acp, "brain_id", None) or load_brain().get("id")})
+        elif path == "/api/brain":
+            cur = load_brain()
+            presets = []
+            for p in BRAIN_PRESETS:
+                presets.append({
+                    "id": p["id"], "label": p["label"],
+                    "desc": p.get("desc", {}),
+                    "cmd_display": " ".join([p["cmd"]] + p["args"]),
+                    "installed": all(shutil.which(r)
+                                     for r in p.get("requires", [p["cmd"]])),
+                })
+            self._json({"current": {k: cur.get(k)
+                                    for k in ("id", "label", "cmd", "args", "terminal")},
+                        "presets": presets})
         elif path == "/api/poll":
             qs = urllib.parse.urlparse(self.path).query
             try:
@@ -326,8 +411,11 @@ class Handler(BaseHTTPRequestHandler):
         except json.JSONDecodeError:
             data = {}
         if path == "/api/prompt":
-            if acp.dead:
-                self._json({"err": "trợ lý đã dừng — chạy lại file start"}, 503); return
+            if acp is None or acp.dead:
+                # não chết (process rớt hoặc chưa cài) → thử bật lại một lần,
+                # học viên không phải tự chạy lại file start
+                spawn_brain()
+                self._json({"err": "đang khởi động lại trợ lý — gửi lại sau vài giây"}, 503); return
             if not acp.session_id:
                 self._json({"err": "chưa có session"}, 503); return
             try:
@@ -340,13 +428,47 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/respond":
             if data.get("optionId") == "__cancel__":
                 # học viên từ chối / card không có nút nào → báo cancel cho agent
-                acp.send({"jsonrpc": "2.0", "id": data.get("id"),
-                          "error": {"code": -32800, "message": "học viên không đồng ý"}})
+                payload = {"jsonrpc": "2.0", "id": data.get("id"),
+                           "error": {"code": -32800, "message": "học viên không đồng ý"}}
             else:
-                acp.send({"jsonrpc": "2.0", "id": data.get("id"),
-                          "result": {"outcome": {"outcome": "selected",
-                                                 "optionId": data.get("optionId")}}})
+                payload = {"jsonrpc": "2.0", "id": data.get("id"),
+                           "result": {"outcome": {"outcome": "selected",
+                                                  "optionId": data.get("optionId")}}}
+            try:
+                if acp and not acp.dead:
+                    acp.send(payload)
+            except (BrokenPipeError, OSError):
+                pass
             self._json({"ok": True})
+        elif path == "/api/brain":
+            # Đổi não: {"id": <preset>} hoặc lệnh tự nhập {"cmd","args","terminal"}.
+            # cmd chỉ cho phép tên lệnh trần (không path) — trang local bị
+            # nhiễm vẫn không trỏ được vào script lạ trên máy.
+            bid = str(data.get("id", "")).strip()
+            preset = next((p for p in BRAIN_PRESETS if p["id"] == bid), None)
+            if preset:
+                b = {"id": preset["id"], "label": preset["label"],
+                     "cmd": preset["cmd"], "args": list(preset["args"]),
+                     "terminal": preset["terminal"]}
+                requires = preset.get("requires", [preset["cmd"]])
+            else:
+                cmd = str(data.get("cmd", "")).strip()
+                if not re.fullmatch(r"[A-Za-z0-9_.-]+", cmd or ""):
+                    self._json({"err": "lệnh não không hợp lệ — chỉ nhận tên lệnh"}, 400); return
+                args = data.get("args")
+                args = [str(a)[:200] for a in args[:20]] if isinstance(args, list) else []
+                b = {"id": bid or "custom",
+                     "label": str(data.get("label", cmd))[:60],
+                     "cmd": cmd, "args": args,
+                     "terminal": str(data.get("terminal", cmd))[:60]}
+                requires = [cmd]
+            missing = [r for r in requires if not shutil.which(r)]
+            if missing:
+                self._json({"err": "chưa cài trên máy: " + ", ".join(missing),
+                            "missing": missing}, 404); return
+            save_json(BRAIN_FP, b)
+            spawn_brain()
+            self._json({"ok": True, "brain": b})
         elif path == "/api/delete-lesson":
             folder = str(data.get("folder", ""))
             if not re.fullmatch(r"[a-zA-Z0-9_-]+", folder):
@@ -383,7 +505,6 @@ class Handler(BaseHTTPRequestHandler):
             # backup bản trước khi ghi đè — học viên sửa hỏng còn về được
             if os.path.exists(target):
                 try:
-                    import shutil
                     shutil.copy2(target, target + ".bak")
                 except OSError:
                     pass
@@ -511,6 +632,26 @@ class Handler(BaseHTTPRequestHandler):
         self._cors(); self.end_headers()
         self.wfile.write(b)
 
+def spawn_brain():
+    """Bật (hoặc đổi) não: giết agent cũ nếu còn sống, spawn theo brain.json
+    rồi bắt tay ACP chuẩn (initialize + session/new)."""
+    global acp
+    old = acp
+    acp = Acp(load_brain())
+    if old and old.proc:
+        try:
+            old.proc.terminate()
+        except Exception:
+            pass
+    if not acp.dead:
+        acp.call("initialize", {
+            "protocolVersion": 1,
+            "clientCapabilities": {"fs": {"readTextFile": False,
+                                          "writeTextFile": False},
+                                   "terminal": False}})
+        acp.call("session/new", {"cwd": CWD, "mcpServers": []})
+
 if __name__ == "__main__":
+    spawn_brain()
     print(f"chat-bridge: http://localhost:{PORT}  (cwd={CWD})")
     ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()

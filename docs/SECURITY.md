@@ -13,6 +13,7 @@ là lớp bảo vệ cuối. Mọi server là loopback; mọi quyền vượt `m
 | Agent/viewer → file hệ thống | `/api/save-page` chỉ ghi `.html` dưới `my-course/`, chặn `..`; `.bak` trước khi ghi đè |
 | Agent → folder ngoài | `permissions.json` — chưa có trong list thì phải hỏi học viên |
 | Agent → app bên ngoài | `connections.json` — chưa kết nối thì dẫn học viên kết nối trước |
+| Trang local → spawn process | `POST /api/brain` spawn "não" mới: `cmd` bị giới hạn ở **tên lệnh trần** `[A-Za-z0-9_.-]+` — không `/`, không path — nên không trỏ được vào script lạ; args cắt 20 mục × 200 ký tự |
 
 ## permissions.json — ngăn tủ được phép
 

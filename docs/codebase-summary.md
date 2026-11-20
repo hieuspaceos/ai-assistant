@@ -10,13 +10,14 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 | `README.md` | Giới thiệu + cấu trúc folder |
 | `SETUP.md` | Hướng dẫn cài cho học viên (Windows Terminal, Devin CLI, ttyd) |
 | `start.bat` / `start.sh` | Launcher: serve :8080 + chat-bridge :7682 + ext-bridge :7684 + ttyd :7681 + mở browser |
+| `brain.json` | "Não" agent đang dùng — `{id,label,cmd,args,terminal}`; mặc định devin, đổi trong onboarding/panel Cài đặt hoặc `POST /api/brain` |
 
 ## tools/ — các bridge và tiện ích
 
 | File | Vai trò |
 |---|---|
 | `serve.py` / `serve.ps1` | Static server, chặn dotfiles |
-| `chat-bridge.py` / `.ps1` | Chat portal ↔ `devin acp`; API config/permissions/connections/secrets/save-page |
+| `chat-bridge.py` / `.ps1` | Chat portal ↔ não ACP (`brain.json` chọn não, `/api/brain` đổi nóng); API config/permissions/connections/secrets/save-page |
 | `chat-terminal.ps1` | Chạy ttyd theme sáng font lớn (Windows) |
 | `ext-bridge.py` | HTTP `/api/browser` ↔ WS extension — lái trình duyệt thật |
 | `clone-compare.py` | So clone vs nguồn: `harvest`/`styles`/`shot` — pha 4 của /clone-trang |

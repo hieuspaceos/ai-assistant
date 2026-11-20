@@ -1,6 +1,8 @@
-﻿# chat-bridge.ps1 — cầu nối giữa chat UI trong portal và `devin acp`.
+﻿# chat-bridge.ps1 — cầu nối giữa chat UI trong portal và "não" AI qua ACP.
 #
-# Chạy `devin acp` như một process con, nhận prompt từ browser qua HTTP,
+# Chạy một agent CLI nói chuẩn ACP (JSON-RPC qua stdin/stdout) như process
+# con — mặc định `devin acp`, đổi được sang não khác qua brain.json ở gốc
+# project hoặc POST /api/brain. Nhận prompt từ browser qua HTTP,
 # đẩy các event (text stream, tool call, xin phép) về browser bằng polling.
 # Bản PowerShell này y hệt tools/chat-bridge.py (dùng cho macOS/Linux).
 #
@@ -9,6 +11,8 @@
 #   POST /api/prompt       -> {"text": "..."} gửi lời nhắn
 #   POST /api/respond      -> {"id": N, "optionId": "..."} trả lời xin phép
 #   GET  /api/health       -> {"ok": true, "sessionId": ...}
+#   GET  /api/brain        -> não hiện tại + danh sách preset (kèm đã cài chưa)
+#   POST /api/brain        -> {"id": <preset>} hoặc {"cmd","args"} đổi não
 
 param(
     [int]$Port = 7682,
@@ -27,45 +31,62 @@ function Test-LocalOrigin($origin) {
     return $h -eq "localhost" -or $h -eq "127.0.0.1" -or $h -eq "::1" -or $h.EndsWith(".localhost")
 }
 
-# ---------- spawn devin acp ----------
-$psi = New-Object System.Diagnostics.ProcessStartInfo
-$psi.FileName = $Devin
-$psi.Arguments = "acp --process-model in-process"
-$psi.WorkingDirectory = $WorkDir
-$psi.RedirectStandardInput = $true
-$psi.RedirectStandardOutput = $true
-# KHÔNG redirect stderr: buffer đầy mà không ai đọc → devin bị khóa chết.
-# (bản .py dùng stderr=DEVNULL tương đương)
-$psi.UseShellExecute = $false
-$psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+# ---------- não AI qua ACP ----------
+$BrainFp = Join-Path $WorkDir "brain.json"
+# Các não biết nói ACP mà onboarding gợi ý. requires = binary phải có trên
+# PATH thì preset mới coi là "đã cài" (adapter qua npx vẫn cần CLI gốc để
+# đăng nhập — vd codex-acp cần `codex`).
+$BrainPresets = @(
+    [pscustomobject]@{ id="devin";   label="Devin";                   cmd="devin";   args=@("acp","--process-model","in-process");        terminal="devin";   requires=@("devin");
+        desc=@{ vi="Não mặc định — đi kèm bộ trợ lý này";                              en="Default brain — ships with this assistant" } }
+    [pscustomobject]@{ id="gemini";  label="Gemini CLI (Google)";     cmd="gemini";  args=@("--acp");                                      terminal="gemini";  requires=@("gemini");
+        desc=@{ vi="Nói ACP trực tiếp — cần cài Gemini CLI trước";                     en="Speaks ACP natively — needs Gemini CLI installed" } }
+    [pscustomobject]@{ id="codex";   label="Codex CLI (OpenAI)";      cmd="npx";     args=@("-y","@agentclientprotocol/codex-acp");        terminal="codex";   requires=@("npx","codex");
+        desc=@{ vi="Qua adapter codex-acp — cần cài + đăng nhập Codex CLI";            en="Via codex-acp adapter — needs Codex CLI installed and signed in" } }
+    [pscustomobject]@{ id="claude";  label="Claude Code (Anthropic)"; cmd="npx";     args=@("-y","@agentclientprotocol/claude-agent-acp"); terminal="claude";  requires=@("npx","claude");
+        desc=@{ vi="Qua adapter claude-agent-acp — cần cài + đăng nhập Claude Code";   en="Via claude-agent-acp adapter — needs Claude Code installed and signed in" } }
+    [pscustomobject]@{ id="opencode"; label="OpenCode";               cmd="opencode"; args=@("acp");                                       terminal="opencode"; requires=@("opencode");
+        desc=@{ vi="Nói ACP trực tiếp — cần cài OpenCode";                             en="Speaks ACP natively — needs OpenCode installed" } }
+    [pscustomobject]@{ id="goose";   label="Goose (Block)";           cmd="goose";   args=@("acp");                                        terminal="goose";   requires=@("goose");
+        desc=@{ vi="Nói ACP trực tiếp — cần cài Goose";                                en="Speaks ACP natively — needs Goose installed" } }
+)
 
-$acpProc = New-Object System.Diagnostics.Process
-$acpProc.StartInfo = $psi
-$null = $acpProc.Start()
-$acpProc.StandardInput.AutoFlush = $true
+function Get-Brain {
+    # brain.json → não đang dùng; id khớp preset thì lấy preset làm nền;
+    # thiếu file/cmd → preset devin (tên binary vẫn override được bằng
+    # tham số -Devin như trước). Y hệt load_brain() trong chat-bridge.py.
+    try { $b = Get-Content $BrainFp -Raw -Encoding UTF8 | ConvertFrom-Json } catch { $b = $null }
+    if ($b -and -not $b.cmd -and $b.id) {
+        $p = $BrainPresets | Where-Object { $_.id -eq $b.id } | Select-Object -First 1
+        if ($p) { $b = $p }
+    }
+    if ($b -and $b.cmd) {
+        if (-not $b.PSObject.Properties["args"]) { $b | Add-Member -NotePropertyName args -NotePropertyValue @() }
+        if (-not $b.PSObject.Properties["terminal"] -or -not $b.terminal) { $b | Add-Member -NotePropertyName terminal -NotePropertyValue $b.cmd -Force }
+        return $b
+    }
+    return [pscustomobject]@{ id="devin"; label="Devin"; cmd=$Devin; args=@("acp","--process-model","in-process"); terminal=$Devin }
+}
 
 $script:SessionId = $null
 $script:NextId = 10
+$script:AcpDead = $false
+$script:AcpProc = $null
+$script:AcpSub = $null
 $script:EventStore = New-Object System.Collections.ArrayList
 $script:EventBase = 0          # số event đã cắt khỏi đầu — cursor poll đếm tuyệt đối
 $MaxEvents = 3000
 
 # Dòng stdout của acp chạy qua event -> queue, main loop xử lý
 $lineQueue = New-Object 'System.Collections.Concurrent.ConcurrentQueue[string]'
-Register-ObjectEvent -InputObject $acpProc -EventName OutputDataReceived -MessageData $lineQueue -Action {
-    if ($null -ne $EventArgs.Data -and $EventArgs.Data.Trim()) {
-        $Event.MessageData.Enqueue($EventArgs.Data.Trim())
-    }
-} | Out-Null
-$acpProc.BeginOutputReadLine()
 
 function Send-Acp($obj) {
     $json = ($obj | ConvertTo-Json -Depth 20 -Compress)
     # Ghi byte UTF-8 thẳng vào stream — không qua WriteLine vì WriteLine
     # dùng Console.InputEncoding (OEM codepage) làm hỏng tiếng Việt có dấu.
     $bytes = [System.Text.Encoding]::UTF8.GetBytes($json + "`n")
-    $acpProc.StandardInput.BaseStream.Write($bytes, 0, $bytes.Length)
-    $acpProc.StandardInput.BaseStream.Flush()
+    $script:AcpProc.StandardInput.BaseStream.Write($bytes, 0, $bytes.Length)
+    $script:AcpProc.StandardInput.BaseStream.Flush()
 }
 
 function Call-Acp($method, $params) {
@@ -81,6 +102,54 @@ function Push-Event($ev) {
         $script:EventStore.RemoveRange(0, $excess)
         $script:EventBase += $excess
     }
+}
+
+function Start-Brain {
+    # Bật (hoặc đổi) não: giết agent cũ nếu còn sống, spawn theo brain.json
+    # rồi bắt tay ACP chuẩn (initialize + session/new).
+    $brain = Get-Brain
+    # HasExited ném lỗi trên process chưa start được (spawn fail lần trước)
+    # → bọc try: giết được thì giết, không thì bỏ qua
+    try { if ($script:AcpProc -and -not $script:AcpProc.HasExited) { $script:AcpProc.Kill() } } catch {}
+    if ($script:AcpSub) {
+        try { Unregister-Event -SourceIdentifier $script:AcpSub.SourceIdentifier } catch {}
+        $script:AcpSub = $null
+    }
+    $script:SessionId = $null
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $brain.cmd
+    $psi.Arguments = [string]::Join(" ", @($brain.args))
+    $psi.WorkingDirectory = $WorkDir
+    $psi.RedirectStandardInput = $true
+    $psi.RedirectStandardOutput = $true
+    # KHÔNG redirect stderr: buffer đầy mà không ai đọc → agent bị khóa chết.
+    # (bản .py dùng stderr=DEVNULL tương đương)
+    $psi.UseShellExecute = $false
+    $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+    $script:AcpProc = New-Object System.Diagnostics.Process
+    $script:AcpProc.StartInfo = $psi
+    try { $null = $script:AcpProc.Start() } catch {
+        # binary não chưa cài → báo UI, bridge vẫn sống để học viên đổi não
+        $script:AcpDead = $true
+        Push-Event ([ordered]@{ t = "err"; msg = "không chạy được '$($brain.cmd)' — não trợ lý chưa cài. Vào mục Cài đặt đổi sang não khác." })
+        return
+    }
+    $script:AcpDead = $false
+    $script:AcpProc.StandardInput.AutoFlush = $true
+    $script:AcpSub = Register-ObjectEvent -InputObject $script:AcpProc -EventName OutputDataReceived -MessageData $lineQueue -Action {
+        if ($null -ne $EventArgs.Data -and $EventArgs.Data.Trim()) {
+            $Event.MessageData.Enqueue($EventArgs.Data.Trim())
+        }
+    }
+    $script:AcpProc.BeginOutputReadLine()
+    Call-Acp "initialize" @{
+        protocolVersion = 1
+        clientCapabilities = @{
+            fs = @{ readTextFile = $false; writeTextFile = $false }
+            terminal = $false
+        }
+    } | Out-Null
+    Call-Acp "session/new" @{ cwd = $WorkDir; mcpServers = @() } | Out-Null
 }
 
 function Drain-Queue {
@@ -249,14 +318,7 @@ function Send-Json($ctx, $obj, [int]$code = 200) {
     $res.OutputStream.Close()
 }
 
-Call-Acp "initialize" @{
-    protocolVersion = 1
-    clientCapabilities = @{
-        fs = @{ readTextFile = $false; writeTextFile = $false }
-        terminal = $false
-    }
-} | Out-Null
-Call-Acp "session/new" @{ cwd = $WorkDir; mcpServers = @() } | Out-Null
+Start-Brain
 
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://127.0.0.1:$Port/")
@@ -290,7 +352,26 @@ try {
                 continue
             }
             if ($ctx.Request.HttpMethod -eq "GET" -and $path -eq "/api/health") {
-                Send-Json $ctx @{ ok = $true; sessionId = $script:SessionId }
+                Send-Json $ctx @{ ok = $true; sessionId = $script:SessionId; brain = (Get-Brain).id }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "GET" -and $path -eq "/api/brain") {
+                $cur = Get-Brain
+                $pres = @()
+                foreach ($p in $BrainPresets) {
+                    $inst = $true
+                    foreach ($r in $p.requires) {
+                        if (-not (Get-Command $r -ErrorAction SilentlyContinue)) { $inst = $false }
+                    }
+                    $pres += [ordered]@{
+                        id = $p.id; label = $p.label; desc = $p.desc
+                        cmd_display = ("$($p.cmd) $($p.args -join ' ')").Trim()
+                        installed = $inst
+                    }
+                }
+                Send-Json $ctx @{
+                    current = @{ id = $cur.id; label = $cur.label; cmd = $cur.cmd; args = @($cur.args); terminal = $cur.terminal }
+                    presets = $pres
+                }
             }
             elseif ($ctx.Request.HttpMethod -eq "GET" -and $path -eq "/api/poll") {
                 $since = 0
@@ -324,14 +405,63 @@ try {
             elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/prompt") {
                 $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
                 $body = $reader.ReadToEnd() | ConvertFrom-Json
-                if (-not $script:SessionId) {
+                if ($script:AcpDead -or -not $script:AcpProc -or $script:AcpProc.HasExited) {
+                    # não chết (process rớt hoặc chưa cài) → thử bật lại một lần
+                    Start-Brain
+                    Send-Json $ctx @{ err = "đang khởi động lại trợ lý — gửi lại sau vài giây" } 503
+                } elseif (-not $script:SessionId) {
                     Send-Json $ctx @{ err = "chưa có session" } 503
                 } else {
-                    Call-Acp "session/prompt" @{
-                        sessionId = $script:SessionId
-                        prompt = @(@{ type = "text"; text = $body.text })
-                    } | Out-Null
-                    Send-Json $ctx @{ ok = $true }
+                    try {
+                        Call-Acp "session/prompt" @{
+                            sessionId = $script:SessionId
+                            prompt = @(@{ type = "text"; text = $body.text })
+                        } | Out-Null
+                        Send-Json $ctx @{ ok = $true }
+                    } catch {
+                        Send-Json $ctx @{ err = "trợ lý đã dừng — chạy lại file start" } 503
+                    }
+                }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/brain") {
+                # Đổi não: {"id": <preset>} hoặc lệnh tự nhập {"cmd","args","terminal"}.
+                # cmd chỉ cho phép tên lệnh trần (không path) — trang local bị
+                # nhiễm vẫn không trỏ được vào script lạ trên máy.
+                $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
+                $body = $reader.ReadToEnd() | ConvertFrom-Json
+                $bid = ([string]$body.id).Trim()
+                $preset = $BrainPresets | Where-Object { $_.id -eq $bid } | Select-Object -First 1
+                if ($preset) {
+                    $b = [ordered]@{ id = $preset.id; label = $preset.label; cmd = $preset.cmd; args = @($preset.args); terminal = $preset.terminal }
+                    $requires = @($preset.requires)
+                } else {
+                    $cmd = ([string]$body.cmd).Trim()
+                    if ($cmd -notmatch '^[A-Za-z0-9_.-]+$') {
+                        Send-Json $ctx @{ err = "lệnh não không hợp lệ — chỉ nhận tên lệnh" } 400
+                        continue
+                    }
+                    $bArgs = @()
+                    if ($body.args) {
+                        $bArgs = @($body.args | Select-Object -First 20 | ForEach-Object {
+                            $a = [string]$_
+                            if ($a.Length -gt 200) { $a = $a.Substring(0, 200) }
+                            $a
+                        })
+                    }
+                    $label = if ($body.label) { [string]$body.label } else { $cmd }
+                    if ($label.Length -gt 60) { $label = $label.Substring(0, 60) }
+                    $term = if ($body.terminal) { [string]$body.terminal } else { $cmd }
+                    if ($term.Length -gt 60) { $term = $term.Substring(0, 60) }
+                    $b = [ordered]@{ id = $(if ($bid) { $bid } else { "custom" }); label = $label; cmd = $cmd; args = $bArgs; terminal = $term }
+                    $requires = @($cmd)
+                }
+                $missing = @($requires | Where-Object { -not (Get-Command $_ -ErrorAction SilentlyContinue) })
+                if ($missing.Count -gt 0) {
+                    Send-Json $ctx @{ err = "chưa cài trên máy: $($missing -join ', ')"; missing = $missing } 404
+                } else {
+                    Save-Json $BrainFp $b
+                    Start-Brain
+                    Send-Json $ctx @{ ok = $true; brain = $b }
                 }
             }
             elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/respond") {
@@ -339,16 +469,17 @@ try {
                 $body = $reader.ReadToEnd() | ConvertFrom-Json
                 if ($body.optionId -eq "__cancel__") {
                     # học viên từ chối / card không có nút nào → báo cancel cho agent
-                    Send-Acp ([ordered]@{
+                    $payload = [ordered]@{
                         jsonrpc = "2.0"; id = $body.id
                         error = @{ code = -32800; message = "học viên không đồng ý" }
-                    })
+                    }
                 } else {
-                    Send-Acp ([ordered]@{
+                    $payload = [ordered]@{
                         jsonrpc = "2.0"; id = $body.id
                         result = @{ outcome = @{ outcome = "selected"; optionId = $body.optionId } }
-                    })
+                    }
                 }
+                try { if (-not $script:AcpDead -and $script:AcpProc -and -not $script:AcpProc.HasExited) { Send-Acp $payload } } catch {}
                 Send-Json $ctx @{ ok = $true }
             }
             elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/delete-lesson") {
@@ -535,5 +666,5 @@ try {
     }
 } finally {
     $listener.Stop()
-    try { $acpProc.Kill() } catch {}
+    try { $script:AcpProc.Kill() } catch {}
 }

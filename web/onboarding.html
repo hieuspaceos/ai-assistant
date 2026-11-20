@@ -42,6 +42,10 @@ button.btn { padding:12px 26px; border:none; border-radius:12px; font-size:15px;
 .note { font-size:13px; color:var(--mut); margin-top:14px; line-height:1.5; }
 .done-check { font-size:44px; text-align:center; margin-bottom:10px; }
 .err { color:#c0392b; font-size:13px; margin-top:10px; }
+.badge { font-size:11px; padding:2px 8px; border-radius:9px; background:#e8f5ee; color:var(--accent-d); font-weight:600; margin-left:6px; vertical-align:1px; }
+.badge.off { background:#f0f1f3; color:var(--mut); }
+.opt.dis { opacity:.55; cursor:default; }
+.opt.dis:hover { border-color:var(--line); }
 </style>
 </head>
 <body>
@@ -80,6 +84,17 @@ const T = {
     errEmpty:'Gõ đường dẫn folder trước đã (ví dụ ~/Documents hoặc D:\\work)',
     errBridge:'Không gọi được trợ lý — kiểm tra bridge :7682 đang chạy chưa',
     saving:'Đang lưu…',
+    brain:'Chọn "bộ não" cho trợ lý',
+    brainLead:'Trợ lý nói chuyện và làm việc nhờ một chương trình AI cài sẵn trên máy — gọi là "não". Não nào có nhãn "đã cài" là dùng được ngay. Không chắc thì cứ giữ mặc định nhé.',
+    brainLoading:'Đang tìm não trên máy…',
+    brainIn:'đã cài', brainOut:'chưa cài',
+    brainNow:'Não đang dùng',
+    brainCustom:'Não khác (nâng cao)',
+    brainCustomSub:'tự nhập lệnh chạy não chế độ ACP',
+    brainCustomNote:'Gõ lệnh đầy đủ để mở não ở chế độ ACP — ví dụ <code>goose acp</code>, <code>kimi acp</code>.',
+    brainCustomPh:'ví dụ: goose acp',
+    brainEmpty:'Gõ lệnh chạy não trước đã',
+    brainErr:'Chưa đổi được não — thử lại hoặc để mặc định',
   },
   en: {
     sub:'first-time setup', welcome:'Hi there! Pick a language first',
@@ -97,6 +112,17 @@ const T = {
     errEmpty:'Type a folder path first (e.g. ~/Documents or D:\\work)',
     errBridge:'Can\'t reach the assistant — check the bridge :7682 is running',
     saving:'Saving…',
+    brain:'Pick the assistant\'s "brain"',
+    brainLead:'The assistant talks and works through an AI program installed on this machine — its "brain". Anything tagged "installed" works right away. Not sure? Keep the default.',
+    brainLoading:'Looking for brains on this machine…',
+    brainIn:'installed', brainOut:'not installed',
+    brainNow:'Current brain',
+    brainCustom:'Another brain (advanced)',
+    brainCustomSub:'type the command that runs the brain in ACP mode',
+    brainCustomNote:'Type the full command that starts the brain in ACP mode — e.g. <code>goose acp</code>, <code>kimi acp</code>.',
+    brainCustomPh:'e.g. goose acp',
+    brainEmpty:'Type the brain command first',
+    brainErr:'Couldn\'t switch brains — retry or keep the default',
   },
 };
 
@@ -116,11 +142,12 @@ const APP_PRESETS = [
 ];
 let selFolders = new Set(['~/Downloads']);
 let selApps = new Set();
+let brainData = null, selBrain = '', customBrain = '';
 
 function t(k){ return T[lang][k]; }
 function el(html){ const d=document.createElement('div'); d.innerHTML=html.trim(); return d.firstChild; }
-function dots(){ const d=document.getElementById('dots'); d.innerHTML=''; for(let i=0;i<5;i++) d.appendChild(el(`<div class="step-dot${i<=stepIdx?' on':''}"></div>`)); }
-function go(i){ stepIdx=i; dots(); [stepLang,stepName,stepFolder,stepApps,stepDone][i](); }
+function dots(){ const d=document.getElementById('dots'); d.innerHTML=''; for(let i=0;i<6;i++) d.appendChild(el(`<div class="step-dot${i<=stepIdx?' on':''}"></div>`)); }
+function go(i){ stepIdx=i; dots(); [stepLang,stepName,stepBrain,stepFolder,stepApps,stepDone][i](); }
 
 function stepLang(){
   const s=document.getElementById('step');
@@ -147,6 +174,66 @@ function stepName(){
   const next=()=>{ learnerName=inp.value.trim(); go(2); };
   s.querySelector('.pri').onclick=next;
   inp.onkeydown=e=>{ if(e.key==='Enter') next(); };
+}
+
+function stepBrain(){
+  const s=document.getElementById('step');
+  s.innerHTML=`<h1>${t('brain')}</h1><p class="lead">${t('brainLead')}</p>
+    <div class="opts" id="bl"><p class="note">${t('brainLoading')}</p></div>
+    <div class="custom-row" id="bcwrap" style="display:none;margin-top:14px"><input type="text" id="bc" placeholder="${t('brainCustomPh')}"></div>
+    <p class="note" id="bcnote" style="display:none">${t('brainCustomNote')}</p>
+    <p class="err" id="be"></p>
+    <div class="row" style="margin-top:22px"><button class="btn ghost">${t('back')}</button><button class="btn pri" id="bn">${t('next')}</button></div>`;
+  const bl=s.querySelector('#bl');
+  const show=d=>{
+    brainData=d;
+    if(!selBrain) selBrain=(d.current&&d.current.id)||'devin';
+    bl.innerHTML='';
+    // não hiện tại không nằm trong preset (custom) → vẫn cho thấy đang dùng
+    // cái gì + đổ sẵn lệnh vào ô custom (não cũ id='custom' thì selBrain
+    // đã là 'custom' từ dòng trên)
+    const cur=d.current||{};
+    if(cur.cmd && !(d.presets||[]).some(p=>p.id===cur.id)){
+      if(selBrain==='custom' && !customBrain)
+        customBrain=(cur.cmd+' '+(cur.args||[]).join(' ')).trim();
+      bl.appendChild(el(`<p class="note" style="margin:0 0 6px">${t('brainNow')}: <code>${cur.cmd} ${(cur.args||[]).join(' ')}</code></p>`));
+    }
+    (d.presets||[]).forEach(p=>{
+      const o=el(`<div class="opt${p.installed?'':' dis'}${selBrain===p.id?' sel':''}">
+        <span class="flag">${p.installed?'🧠':'⚪'}</span>
+        <div><b>${p.label}</b><span class="badge${p.installed?'':' off'}">${p.installed?t('brainIn'):t('brainOut')}</span><small>${(p.desc&&p.desc[lang])||''}</small></div></div>`);
+      o.onclick=()=>{ if(!p.installed) return; selBrain=p.id; show(d); };
+      bl.appendChild(o);
+    });
+    const c=el(`<div class="opt${selBrain==='custom'?' sel':''}"><span class="flag">🛠️</span><div><b>${t('brainCustom')}</b><small>${t('brainCustomSub')}</small></div></div>`);
+    c.onclick=()=>{ selBrain='custom'; show(d); };
+    bl.appendChild(c);
+    const custom=selBrain==='custom';
+    s.querySelector('#bcwrap').style.display=custom?'':'none';
+    s.querySelector('#bcnote').style.display=custom?'':'none';
+    if(custom){ const i=s.querySelector('#bc'); i.value=customBrain; i.oninput=e=>customBrain=e.target.value; i.focus(); }
+  };
+  fetch(BRIDGE+'/api/brain').then(r=>r.json()).then(show)
+    .catch(()=>{ bl.innerHTML=`<p class="note">${t('errBridge')}</p>`; });
+  s.querySelector('.ghost').onclick=()=>go(1);
+  s.querySelector('#bn').onclick=async()=>{
+    const err=s.querySelector('#be'); err.textContent='';
+    let payload=null;
+    if(selBrain==='custom'){
+      const parts=customBrain.trim().split(/\s+/).filter(Boolean);
+      if(!parts.length){ err.textContent=t('brainEmpty'); return; }
+      payload={cmd:parts[0],args:parts.slice(1)};
+    }else if(brainData&&brainData.current&&selBrain!==brainData.current.id){
+      payload={id:selBrain};
+    }
+    if(!payload) return go(3);
+    try{
+      const r=await fetch(BRIDGE+'/api/brain',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok){ err.textContent=d.err||t('brainErr'); return; }
+      go(3);
+    }catch(e){ err.textContent=t('errBridge'); }
+  };
 }
 
 function stepFolder(){
@@ -178,8 +265,8 @@ function stepFolder(){
   };
   s.querySelector('#cfbtn').onclick=addCustom;
   s.querySelector('#cf').onkeydown=e=>{ if(e.key==='Enter') addCustom(); };
-  s.querySelector('.ghost').onclick=()=>go(1);
-  s.querySelector('.row .pri').onclick=()=>go(3);
+  s.querySelector('.ghost').onclick=()=>go(2);
+  s.querySelector('.row .pri').onclick=()=>go(4);
 }
 
 function stepApps(){
@@ -205,7 +292,7 @@ function stepApps(){
       al.appendChild(c);
     });
   }
-  s.querySelector('.ghost').onclick=()=>go(2);
+  s.querySelector('.ghost').onclick=()=>go(3);
   s.querySelector('#fin').onclick=finish;
 }
 
@@ -232,7 +319,7 @@ async function finish(){
       }
     }
   }catch(e){ btn.disabled=false; btn.textContent=t('next'); return; }
-  go(4);
+  go(5);
 }
 
 function stepDone(){
