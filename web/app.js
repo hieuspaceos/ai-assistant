@@ -388,7 +388,7 @@ async function setChatMode(mode) {
 initI18n().finally(loadManifest);
 
 /* ---- trạng thái extension Trợ Lý AI (cánh tay trình duyệt) ---- */
-const EXT_BRIDGE = 'http://localhost:7683';
+const EXT_BRIDGE = 'http://localhost:7684';
 async function pollExtStatus() {
   const el = $('#ext-status'), txt = $('#ext-status-text');
   try {

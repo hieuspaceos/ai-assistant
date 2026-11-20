@@ -1,6 +1,6 @@
 {
   "learner_name": "",
-  "intro": "",
+  "intro": "Khoá học này giúp bạn giao việc lặp đi lặp lại cho trợ lý — bắt đầu từ việc đọc hết tin chưa đọc trên Zalo mỗi sáng.",
   "recipes": [
     {
       "command": "/anh-web",
@@ -17,7 +17,36 @@
     {
       "command": "/gom-file",
       "meaning": "Gom file lộn xộn vào folder gọn gàng"
+    },
+    {
+      "command": "/loc-khach",
+      "meaning": "Tách file khách hàng lớn thành file riêng theo tỉnh — file gốc giữ nguyên"
+    },
+    {
+      "command": "/doc-zalo",
+      "meaning": "Lật hộp thư Zalo Web — liệt kê hội thoại chưa đọc, đọc và tóm tắt một hội thoại"
+    },
+    {
+      "command": "/clone-trang",
+      "meaning": "Dựng trang web giống trang mẫu bạn thích — nội dung của bạn, không copy của người ta"
     }
   ],
-  "lessons": []
+  "lessons": [
+    {
+      "id": "lesson-01",
+      "title": "Mở Zalo cái là biết ngay ai đang chờ — đọc hết tin chưa đọc trong 30 giây",
+      "description": "Không còn bấm từng hội thoại để xem có gì mới — trợ lý lật hết hộp thư Zalo và kể lại ai đang chờ, mỗi người cần gì.",
+      "folder": "lesson-01-doc-tin-chua-doc-zalo",
+      "has_slides": true,
+      "has_video": true
+    },
+    {
+      "id": "lesson-02",
+      "title": "Làm một trang web giống trang mẫu bạn thích — với nội dung của mình",
+      "description": "Thấy landing page đẹp là 'học' được khuôn ngay — trợ lý dựng trang của bạn theo đúng bố cục đó, khỏi thuê người hay vật với Elementor.",
+      "folder": "lesson-02-trang-giong-trang-mau",
+      "has_slides": true,
+      "has_video": true
+    }
+  ]
 }

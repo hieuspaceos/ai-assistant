@@ -1,0 +1,82 @@
+{
+  "title": "Bài 2 · Trang giống trang mẫu, nội dung của mình",
+  "lessons": [
+    {"name": "Làm trang giống trang mẫu", "sub": "Bài 2 · khoảng 15 phút", "active": true}
+  ],
+  "steps": [
+    {
+      "kind": "card",
+      "kicker": "BÀI 2",
+      "heading": "Thấy trang đẹp là \"bắt chước\" được luôn",
+      "text": "Nhờ trợ lý học khuôn một trang mẫu — nội dung là của mình",
+      "sub": "Trang đối thủ đẹp quá? Hôm nay mình cho trợ lý học đúng khuôn đó.",
+      "say": "Thấy landing page đối thủ đẹp mà thèm một trang thế cho sản phẩm của mình không? Hôm nay mình cho trợ lý học đúng khuôn trang đó — còn nội dung thì của mình hết."
+    },
+    {
+      "kind": "files",
+      "title": "sample-files/ — trang mẫu trong bài",
+      "items": [["trang-mau.html", "landing page mỹ phẩm bịa"]],
+      "say": "Đây là trang mẫu đi kèm bài — ảnh to, khẩu hiệu ngắn, ba ô ưu điểm, giá gạch giá, nút mua vàng chóe. Thuê người làm vài triệu; giờ mình nhờ trợ lý bắt chước cái khuôn này."
+    },
+    {
+      "kind": "move",
+      "to": "chat",
+      "say": "Câu nhờ có hai phần: trang mẫu là trang nào — và nội dung của mình là gì. Mình gõ nè."
+    },
+    {
+      "kind": "type",
+      "text": "Đọc trang my-course/lesson-02-trang-giong-trang-mau/sample-files/trang-mau.html rồi dựng cho em một trang web giống về bố cục và phong cách — nội dung của em: sản phẩm \"Trà thảo mộc Thanh Lọc\", khẩu hiệu \"Ngủ ngon mỗi đêm\", ưu điểm: nguyên liệu tự nhiên, không caffeine, túi lọc tiện dụng, giá 149.000đ gạch giá cũ 220.000đ, nút \"ĐẶT NGAY\". Lưu ra my-course/trang-cua-em.html rồi mở cho em xem.",
+      "cps": 18,
+      "say": "Nhìn dài vậy thôi chứ toàn lời thường: chỉ cho nó file trang mẫu, kể tên sản phẩm, khẩu hiệu, ưu điểm, giá, chữ trên nút — rồi bảo lưu ra file mới và mở cho mình xem. Gõ xong bấm gửi."
+    },
+    {"kind": "click", "target": "send"},
+    {"kind": "send"},
+    {
+      "kind": "work",
+      "text": "Đang đọc trang mẫu…",
+      "dur": 2.0
+    },
+    {
+      "kind": "bubble",
+      "who": "agent",
+      "text": "Mình thấy trang mẫu trình bày theo nhịp: **ảnh lớn + khẩu hiệu → 3 ô ưu điểm → giá → nút kêu gọi**. Mình sẽ dựng một trang mới cùng khuôn đó nhưng toàn bộ chữ, tên, giá là của bạn — không mang chữ của trang mẫu sang. Làm nhé?",
+      "reveal": 0.04,
+      "say": "Nghe nè — nó học nhịp của trang mẫu thôi: ảnh lớn, ưu điểm, giá, nút. Chữ với tên là của mình hết, không mang của họ sang. Cái đó gọi là học khuôn chứ không phải chôm bài."
+    },
+    {
+      "kind": "work",
+      "text": "Đang dựng trang mới…",
+      "dur": 2.2
+    },
+    {
+      "kind": "files",
+      "title": "my-course/ — file mới tạo",
+      "items": [["trang-cua-em.html", "1 trang web hoàn chỉnh"]]
+    },
+    {
+      "kind": "bubble",
+      "who": "agent",
+      "text": "Xong — file `my-course/trang-cua-em.html` đã mở trên trình duyệt. Cùng một khuôn với trang mẫu: đầu ấn tượng, ba ưu điểm, giá 149.000đ gạch giá cũ, nút ĐẶT NGAY — nhưng tên là Trà Thanh Lọc, của bạn hết.",
+      "reveal": 0.04,
+      "say": "Đây — trang của mình, cùng một khuôn. Nhưng nhìn kỹ: tên là trà Thanh Lọc, màu khác, chữ khác — của mình hết."
+    },
+    {
+      "kind": "say",
+      "text": "Muốn đổi gì cứ nói tiếp: đổi màu, đổi chữ trên nút, thêm mục cảm nhận — rồi bấm F5 là thấy bản mới.",
+      "say": "Muốn đổi gì cứ nói tiếp bằng lời thường — đổi màu, đổi chữ trên nút, thêm mục cảm nhận khách hàng — rồi bấm ép năm tải lại trang là thấy bản mới."
+    },
+    {
+      "kind": "say",
+      "text": "Từ giờ thấy trang nào đẹp, gõ /clone-trang kèm link và nội dung của bạn — xong.",
+      "say": "Và nhớ công thức nhanh: từ giờ thấy trang nào đẹp, gõ xẹt clone trang kèm link và nội dung của bạn — xong."
+    },
+    {
+      "kind": "card",
+      "kicker": "XONG RỒI",
+      "heading": "Giờ tới lượt bạn",
+      "text": "Mở file exercise.md trong folder bài học — bịa một sản phẩm rồi thử \"bắt chước\" trang mẫu",
+      "sub": "Bài tập đang chờ bạn trong exercise.md",
+      "say": "Bài tập trong exercise.md đang chờ — bịa một sản phẩm rồi cho trợ lý bắt chước trang mẫu đi nhé."
+    }
+  ]
+}

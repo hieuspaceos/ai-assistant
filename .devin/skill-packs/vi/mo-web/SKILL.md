@@ -11,15 +11,15 @@ allowed-tools:
 ---
 
 Trợ Lý AI có một "cánh tay" trong trình duyệt của học viên: extension đã
-cài sẵn, nói chuyện với máy qua `http://localhost:7683`. Dùng nó khi việc
+cài sẵn, nói chuyện với máy qua `http://localhost:7684`. Dùng nó khi việc
 nằm trên một trang web — đặc biệt trang học viên ĐÃ đăng nhập (Zalo,
 Outlook, wp-admin...) vì browser này giữ sẵn phiên đăng nhập của họ.
 
 ## Kiểm tra trước khi dùng (bắt buộc)
 
 ```
-curl -s http://localhost:7683/api/browser/status
-# hoặc PowerShell: Invoke-RestMethod http://localhost:7683/api/browser/status
+curl -s http://localhost:7684/api/browser/status
+# hoặc PowerShell: Invoke-RestMethod http://localhost:7684/api/browser/status
 ```
 
 - `{"connected": true}` → dùng được.
@@ -32,12 +32,12 @@ curl -s http://localhost:7683/api/browser/status
 
 ## Cách ra lệnh
 
-Mọi lệnh là một POST JSON về `http://localhost:7683/api/browser`:
+Mọi lệnh là một POST JSON về `http://localhost:7684/api/browser`:
 
 ```
-curl -s -X POST http://localhost:7683/api/browser -d '{"action":"<action>", ...}'
+curl -s -X POST http://localhost:7684/api/browser -d '{"action":"<action>", ...}'
 # PowerShell:
-# Invoke-RestMethod -Method Post http://localhost:7683/api/browser `
+# Invoke-RestMethod -Method Post http://localhost:7684/api/browser `
 #   -Body '{"action":"tabs"}' -ContentType 'application/json'
 ```
 

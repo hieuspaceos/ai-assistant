@@ -16,7 +16,7 @@ in on their browser.
 
 ## Setup
 
-1. `curl -s http://localhost:7683/api/browser/status` → `connected: true`.
+1. `curl -s http://localhost:7684/api/browser/status` → `connected: true`.
 2. `{"action":"tabs"}` → find the `outlook.office.com` /
    `outlook.live.com` tab; `open` the URL if absent.
 3. Login page → ask the learner to log in by hand, wait for them.

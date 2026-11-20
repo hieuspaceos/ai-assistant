@@ -32,8 +32,8 @@ echo "  portal    : http://localhost:8080/web/"
 # --- 2. chat-bridge (cong 7682): che do Chat kieu tin nhan ---
 python3 tools/chat-bridge.py 7682 "$ROOT" >"$LOGDIR/chat-bridge.log" 2>&1 &
 
-# --- 3. ext-bridge (cong 7683): cau noi extension trong trinh duyet ---
-python3 tools/ext-bridge.py 7683 "$ROOT" >"$LOGDIR/ext-bridge.log" 2>&1 &
+# --- 3. ext-bridge (cong 7684): cau noi extension trong trinh duyet ---
+python3 tools/ext-bridge.py 7684 "$ROOT" >"$LOGDIR/ext-bridge.log" 2>&1 &
 
 # --- 4. ttyd (cong 7681, tuy chon): che do Terminal nhung web ---
 if command -v ttyd >/dev/null 2>&1; then

@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MekongTouch — DMC Vietnam, Cambodge &amp; Laos</title>
+<meta name="description" content="MekongTouch, réceptif Vietnam Cambodge Laos pour les professionnels du voyage.">
+<meta name="theme-color" content="#1f3228">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --cs-font:"Montserrat",system-ui,sans-serif;
+  --cs-ink:#171814; --cs-primary:#1f3228; --cs-primary-soft:#33483b;
+  --cs-bg:#f4efe6; --cs-white:#fffdf8; --cs-sand:#ded1bf;
+  --cs-clay:#ba683c; --cs-accent:#d96f32; --cs-gold:#c49b4d;
+  --cs-muted:#71695e; --cs-line:#17181429; --cs-light-line:#fffdf83d;
+  --cs-radius:8px; --cs-header-h:76px; --cs-gap:34px;
+  --cs-section-y:104px;
+  --cs-ease:cubic-bezier(.22,1,.36,1);
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--cs-bg);min-width:320px;margin:0;color:var(--cs-ink);
+  font:16px/1.65 var(--cs-font);overflow-x:hidden;-webkit-font-smoothing:antialiased}
+img{max-width:100%;display:block}
+h1,h2,h3{margin:0;color:inherit}
+h2{font-size:clamp(2rem,4.4vw,4.35rem);font-weight:750;line-height:1.08;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:800}
+p{margin:0 0 1rem}
+a{color:inherit}
+a:focus-visible,button:focus-visible{outline:3px solid var(--cs-gold);outline-offset:3px}
+section[id]{scroll-margin-top:calc(var(--cs-header-h) + 8px)}
+.cs-wrap{width:min(100% - 32px,1180px);margin:0 auto}
+.eyebrow{color:var(--cs-accent);letter-spacing:0;text-transform:uppercase;
+  font-size:.78rem;font-weight:800;line-height:1.2;margin-bottom:.5rem}
+.lead{font-size:1.18rem}
+/* buttons */
+.btn{border-radius:var(--cs-radius);text-align:center;justify-content:center;
+  align-items:center;min-height:48px;padding:12px 18px;font:.9rem/1.1 var(--cs-font);
+  font-weight:800;text-decoration:none;display:inline-flex;cursor:pointer;
+  border:1px solid transparent;transition:transform .16s,background .16s,color .16s,border-color .16s}
+.btn:hover{transform:translateY(-2px)}
+.btn--primary{border-color:var(--cs-accent);background:var(--cs-accent);color:var(--cs-white)}
+.btn--ghost{border-color:rgba(255,253,248,.55);color:var(--cs-white);background:transparent}
+.btn--ghost:hover{border-color:var(--cs-white);background:rgba(255,253,248,.12)}
+.btn--light{background:rgba(255,253,248,.12);border-color:rgba(255,253,248,.4);color:var(--cs-white)}
+.btn--light:hover{background:rgba(255,253,248,.24);border-color:var(--cs-white)}
+.btn--outline{border-color:var(--cs-line);color:var(--cs-ink);background:transparent}
+.btn--outline:hover{border-color:var(--cs-ink)}
+/* header */
+.site-header{position:fixed;inset:0 0 auto;z-index:20;min-height:var(--cs-header-h);
+  color:var(--cs-white);background:linear-gradient(rgba(14,18,13,.48),rgba(14,18,13,.02));
+  align-items:center;gap:14px;padding:12px 16px;display:grid;
+  grid-template-columns:auto 1fr auto;transition:background .18s,color .18s,border-color .18s}
+.site-header.is-scrolled,.site-header.is-menu-open{color:var(--cs-ink);
+  background:rgba(255,253,248,.96);border-bottom:1px solid rgba(31,50,40,.14)}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none}
+.brand-mark{width:44px;height:44px;flex:0 0 auto}
+.brand-name{font-weight:800;font-size:1.25rem;letter-spacing:-.01em}
+.brand-tag{display:block;font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;opacity:.72}
+.site-nav{display:flex;justify-content:center;gap:4px}
+.site-nav a{border-radius:6px;min-height:44px;padding:10px 12px;font-size:.88rem;
+  font-weight:700;text-decoration:none;white-space:nowrap}
+.site-nav a:hover{background:rgba(255,253,248,.14)}
+.site-header.is-scrolled .site-nav a:hover,.site-header.is-menu-open .site-nav a:hover{background:rgba(23,24,20,.07)}
+.header-actions{display:flex;align-items:center;gap:10px}
+.header-social{font-size:.68rem;font-weight:800;letter-spacing:.08em;text-decoration:none}
+.header-social:hover{text-decoration:underline}
+.lang{display:flex;gap:4px}
+.lang a{border:1px solid currentColor;border-radius:6px;padding:6px 10px;
+  font-size:.75rem;font-weight:800;text-decoration:none;opacity:.85}
+.lang a.is-active{background:var(--cs-primary);border-color:var(--cs-primary);color:var(--cs-white);opacity:1}
+.header-cta{border:1px solid currentColor;border-radius:var(--cs-radius);padding:9px 16px;
+  font-size:.82rem;font-weight:800;text-decoration:none}
+.header-cta:hover{background:var(--cs-accent);border-color:var(--cs-accent);color:#fff}
+.mobile-menu-toggle{display:none;border:1px solid currentColor;border-radius:6px;
+  background:transparent;color:inherit;cursor:pointer;font:.85rem/1 var(--cs-font);
+  font-weight:800;padding:11px 14px}
+/* hero */
+.hero{background:var(--cs-primary);min-height:100dvh;color:var(--cs-white);
+  position:relative;overflow:hidden}
+.hero-media{position:absolute;inset:0}
+.hero-media img{object-fit:cover;object-position:60% 50%;width:100%;height:100%}
+.hero-shade{position:absolute;inset:0;background:
+  linear-gradient(90deg,rgba(11,14,10,.82),rgba(11,14,10,.38) 78%,rgba(11,14,10,.18)),
+  linear-gradient(rgba(11,14,10,.4),rgba(11,14,10,.12) 58%,rgba(11,14,10,.38))}
+.hero-inner{position:relative;z-index:1;min-height:100dvh;align-items:start;
+  padding:clamp(180px,23svh,260px) 0 72px;display:grid}
+.hero-copy{display:grid;gap:16px;max-width:610px;transform:translate(clamp(0px,6.2vw,92px))}
+.hero-eyebrow{color:var(--cs-gold);letter-spacing:0;text-transform:uppercase;
+  font-size:.78rem;font-weight:800;line-height:1.2}
+.hero h1{color:var(--cs-gold);font-size:clamp(2.6rem,6.2vw,4.8rem);font-weight:800;line-height:1.02}
+.hero-actions{display:flex;flex-wrap:wrap;gap:12px}
+/* shared section layout */
+.section-pad{padding:72px 0}
+@media (width>=1180px){.section-pad{padding:104px 0}}
+.split{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);align-items:center;gap:34px}
+.copy>p:not(.eyebrow):not(.lead){font-size:1rem}
+/* media placeholder: khối ảnh có caption — sửa được qua data-cs-img trên img thật */
+figure{margin:0}
+.ph{border-radius:var(--cs-radius);position:relative;overflow:hidden;
+  background:linear-gradient(150deg,var(--cs-primary-soft),#172a21)}
+.ph img{object-fit:cover;width:100%;height:100%;position:absolute;inset:0}
+.ph .cap{position:absolute;left:10px;bottom:10px;z-index:2;background:rgba(255,253,248,.9);
+  color:var(--cs-ink);border-radius:999px;padding:5px 12px;font-size:.72rem;font-weight:700}
+/* reveal */
+[data-reveal]{opacity:0;transform:translateY(18px);transition:opacity .6s var(--cs-ease),transform .6s var(--cs-ease)}
+[data-reveal].is-visible{opacity:1;transform:none}
+/* about — cụm nền dusk bọc nous + sensations (theo .about-story của nguồn) */
+.about-story{background-color:var(--cs-primary);position:relative;overflow:hidden}
+.about-story::before{content:"";position:absolute;inset:0;
+  background-image:linear-gradient(90deg,rgba(5,13,14,.44),rgba(5,13,14,.16) 50%,rgba(5,13,14,.42)),
+  linear-gradient(180deg,rgba(5,13,14,.12),rgba(5,13,14,.28)),
+  url("https://picsum.photos/seed/mekong-dusk/2000/1300");
+  background-size:cover;background-position:56% center}
+.about-story>*{position:relative;z-index:1}
+.about{color:var(--cs-white);min-height:100svh;padding:88px 0 54px;
+  display:grid;align-content:center;position:relative}
+.about-copy{border-radius:var(--cs-radius);background:rgba(12,25,23,.31);
+  border:1px solid rgba(255,253,248,.28);max-width:590px;padding:30px;
+  box-shadow:0 28px 80px rgba(4,10,9,.24)}
+.about-copy .eyebrow{color:#e0b96d}
+.about-copy h2{color:var(--cs-white);margin:8px 0 22px;font-size:clamp(2.2rem,4.2vw,3.35rem)}
+.about-copy p:not(.eyebrow){color:rgba(255,253,248,.82);text-align:justify;hyphens:auto;margin-bottom:16px}
+.about-copy p:last-child{color:var(--cs-white);font-weight:700;margin-bottom:0}
+.sensations{color:var(--cs-white);min-height:100svh;padding:96px 0 56px;
+  display:grid;align-content:center;position:relative}
+.sensations-copy{border-radius:var(--cs-radius);background:rgba(12,25,23,.31);
+  border:1px solid rgba(255,253,248,.28);padding:30px;
+  box-shadow:0 28px 80px rgba(4,10,9,.24)}
+.sensations-copy h2{color:var(--cs-white);font-size:clamp(2.2rem,3vw,2.85rem)}
+.sensations-copy p:not(.eyebrow){color:rgba(255,253,248,.82);text-align:justify;hyphens:auto}
+.large-photo{border-radius:var(--cs-radius);border:1px solid rgba(255,253,248,.32);
+  background:rgba(12,25,23,.34);box-shadow:0 18px 44px rgba(4,10,9,.24);
+  overflow:hidden;margin:0;aspect-ratio:4/3}
+.large-photo img{object-fit:cover;width:100%;height:100%}
+.about-layout{display:grid;align-items:center;gap:clamp(48px,5vw,96px);
+  grid-template-columns:minmax(400px,480px) minmax(0,1fr);width:min(100% - 32px,1840px);
+  margin:0 auto;justify-content:space-between;min-height:700px}
+.about-gallery{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.about-thumb{aspect-ratio:4/5;border-radius:var(--cs-radius);border:1px solid rgba(255,253,248,.32);
+  box-shadow:0 18px 44px rgba(4,10,9,.2);position:relative;overflow:hidden}
+/* destinations */
+.destinations-intro{background:var(--cs-primary);color:var(--cs-white);position:relative;overflow:hidden}
+.bg-media{position:absolute;inset:0;z-index:0}
+.bg-media img{object-fit:cover;width:100%;height:100%}
+.bg-overlay{position:absolute;inset:0;z-index:0}
+.destinations-intro .bg-overlay{background:linear-gradient(rgba(13,23,19,.55),rgba(13,23,19,.35))}
+.dest-inner{position:relative;z-index:1;padding:clamp(120px,16vw,190px) 0 clamp(48px,7vw,90px)}
+.pill-actions{display:flex;flex-wrap:wrap;gap:10px}
+.marquee{overflow:hidden;position:relative;z-index:1;padding:0 0 34px}
+.marquee-track{display:flex;width:max-content;animation:mq 46s linear infinite}
+.marquee-track figure{border-radius:var(--cs-radius);aspect-ratio:13/9;flex:0 0 auto;
+  width:min(360px,72vw);margin:0 8px;overflow:hidden;border:1px solid rgba(255,253,248,.22);position:relative}
+.marquee-track img{object-fit:cover;width:100%;height:100%}
+@keyframes mq{to{transform:translateX(-50%)}}
+@media (prefers-reduced-motion:reduce){.marquee-track{animation:none}}
+/* country */
+.country{color:var(--cs-white);position:relative;overflow:hidden;min-height:100svh;
+  display:grid;align-content:center}
+.country .bg-overlay{background:linear-gradient(rgba(13,20,16,.62),rgba(13,20,16,.5))}
+.country-inner{position:relative;z-index:1}
+.country-split{display:grid;grid-template-columns:minmax(0,.82fr) minmax(0,1fr);gap:48px;align-items:center}
+.country-frame{border-radius:var(--cs-radius);aspect-ratio:4/3;position:relative;overflow:hidden;
+  background:rgba(12,25,23,.38);border:1px solid rgba(255,253,248,.28);box-shadow:0 24px 70px rgba(3,9,7,.28)}
+.country-frame img{object-fit:cover;opacity:0;width:100%;height:100%;position:absolute;inset:0;
+  transform:scale(1.018);transition:opacity .42s,transform .72s var(--cs-ease)}
+.country-frame img.is-active{z-index:1;opacity:1;transform:scale(1)}
+.country-copy{border-radius:var(--cs-radius);background:rgba(12,25,23,.46);
+  border:1px solid rgba(255,253,248,.24);padding:clamp(22px,3vw,34px);
+  display:grid;align-content:center;gap:16px}
+.country-copy h2{color:#fff}
+.country-copy>p:not(.eyebrow):not(.lead){color:rgba(255,253,248,.84);text-align:justify}
+.country-copy .lead{color:rgba(255,253,248,.94)}
+.country-gallery{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:8px}
+.country-nav{display:flex;justify-content:flex-end;gap:8px;padding-top:24px;position:relative;z-index:1}
+.country-nav a{color:rgba(255,253,248,.84);background:rgba(12,25,23,.28);
+  border:1px solid rgba(255,253,248,.42);border-radius:100px;min-height:36px;
+  align-items:center;display:inline-flex;padding:8px 14px;font-size:.72rem;
+  font-weight:800;letter-spacing:.08em;text-decoration:none;transition:.18s}
+.country-nav a.is-active{border-color:var(--cs-gold);color:var(--cs-gold)}
+.country-nav a:hover{border-color:var(--cs-gold);transform:translateY(-2px)}
+.thumb{appearance:none;border:1px solid transparent;border-radius:var(--cs-radius);
+  aspect-ratio:4/3;cursor:pointer;margin:0;padding:0;background:var(--cs-sand);
+  overflow:hidden;position:relative;transition:border-color .18s,transform .18s}
+.thumb img{object-fit:cover;width:100%;height:100%}
+.thumb:hover{transform:translateY(-2px)}
+.thumb[aria-pressed="true"]{border-color:var(--cs-gold)}
+/* expertise */
+.expertise{color:var(--cs-white);position:relative;overflow:hidden}
+.expertise .bg-overlay{background:linear-gradient(rgba(13,20,16,.6),rgba(13,20,16,.42))}
+.expertise-inner{position:relative;z-index:1;text-align:center}
+.expertise-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:34px}
+.opt{border-radius:calc(var(--cs-radius) + 6px);min-height:360px;color:var(--cs-white);
+  border:1px solid rgba(255,255,255,.22);text-decoration:none;position:relative;overflow:hidden;
+  backdrop-filter:blur(8px);transition:transform .22s,border-color .22s;display:block}
+.opt:hover{transform:translateY(-4px);border-color:rgba(255,253,248,.6)}
+.opt img{object-fit:cover;width:100%;height:100%;position:absolute;inset:0;opacity:.8}
+.opt span{z-index:1;text-align:center;letter-spacing:.04em;font-size:1.3rem;font-weight:800;
+  display:block;position:absolute;inset:auto 18px 16px}
+/* services (incentive/fit/groupes) */
+.service{color:var(--cs-white);position:relative;overflow:hidden}
+.service .bg-overlay{background:linear-gradient(rgba(12,20,15,.72),rgba(12,20,15,.5))}
+.service-inner{position:relative;z-index:1}
+.service-split{display:grid;grid-template-columns:minmax(340px,.84fr) minmax(0,1fr);gap:clamp(42px,4vw,72px);align-items:center}
+.stack{display:grid;gap:14px}
+.stack figure{border-radius:var(--cs-radius);aspect-ratio:16/9;overflow:hidden;position:relative;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.18);
+  transition:transform .22s,border-color .22s}
+.stack figure:hover{transform:translateX(4px);border-color:rgba(255,253,248,.5)}
+.stack img{object-fit:cover;width:100%;height:100%}
+.stack figure>span{position:absolute;top:8px;left:10px;z-index:1;background:rgba(255,253,248,.9);
+  border-radius:4px;padding:1px 7px;font-size:.68rem;font-weight:800;color:var(--cs-ink)}
+.copy-card{max-width:760px}
+.copy-card h2{margin-bottom:.4rem}
+.copy-card .lead{color:rgba(255,253,248,.9);font-weight:700;margin-bottom:1rem}
+.copy-card p{color:rgba(255,253,248,.88)}
+.copy-card--accent{margin-top:34px}
+.copy-card--accent h3{color:var(--cs-gold);font-size:1.05rem;margin-bottom:.4rem}
+/* video */
+.video-trigger{border-radius:var(--cs-radius);cursor:pointer;aspect-ratio:16/9;width:100%;
+  padding:0;border:0;background:#0e1411;position:relative;overflow:hidden;display:block}
+.video-trigger img{object-fit:cover;width:100%;height:100%;opacity:.75}
+.video-trigger .play{position:absolute;inset:0;display:grid;place-items:center;font-size:2.2rem;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.5)}
+.video-trigger .vlabel{position:absolute;left:14px;bottom:12px;color:#fff;font-size:.8rem;font-weight:700}
+dialog.video-dialog{border:0;border-radius:var(--cs-radius);padding:0;width:min(100% - 32px,1040px);background:#0a0f0c}
+dialog.video-dialog::backdrop{background:rgba(8,12,9,.72)}
+dialog.video-dialog video{width:100%;display:block}
+.dialog-close{position:absolute;top:12px;right:12px;z-index:1;border-radius:var(--cs-radius);
+  color:var(--cs-white);cursor:pointer;background:rgba(23,24,20,.78);border:1px solid rgba(255,253,248,.48);
+  padding:8px 12px;font:.8rem var(--cs-font);font-weight:700}
+/* rse */
+.rse-hero{color:var(--cs-white);background:var(--cs-primary);position:relative;overflow:hidden;
+  min-height:92svh;display:grid;align-items:center}
+.rse-hero .bg-overlay{background:linear-gradient(90deg,rgba(11,16,12,.8),rgba(11,16,12,.4) 60%,rgba(11,16,12,.2))}
+.rse-hero-inner{position:relative;z-index:1;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(280px,.7fr);gap:48px;align-items:center}
+.rse-hero-copy{padding:132px 0 clamp(70px,10vw,120px)}
+.rse-hero-copy h2{max-width:11ch;color:var(--cs-white)}
+.rse-hero-copy .eyebrow{color:var(--cs-gold)}
+.rse-hero-copy p:not(.eyebrow){color:rgba(255,253,248,.88);max-width:620px}
+.rse-hero-photo{aspect-ratio:2/3;max-height:520px}
+.rse-story{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1fr);gap:48px;align-items:center}
+.rse-story-imgs{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.rse-story-imgs figure{aspect-ratio:3/2}
+.rse-story-imgs figure:last-child{transform:translateY(24px)}
+.rse{background:rgb(16,32,25);color:var(--cs-white)}
+.rse-block{margin-top:64px}
+.rse-block h3{margin-bottom:18px;font-size:1.3rem;color:var(--cs-white)}
+.rse-block>p{color:rgba(255,253,248,.8)}
+.rse .copy{border-radius:var(--cs-radius);background:rgba(8,24,18,.42);
+  border:1px solid rgba(255,253,248,.2);padding:28px}
+.rse .copy h3{color:var(--cs-white)}
+.rse .copy p:not(.eyebrow){color:rgba(255,253,248,.84);text-align:justify}
+.rse .copy .eyebrow{color:var(--cs-gold)}
+#contact{background:var(--cs-primary);color:var(--cs-white)}
+#contact h2{color:var(--cs-white)}
+#contact .copy>p:not(.eyebrow){color:rgba(255,253,248,.82);text-align:justify;max-width:560px}
+.contact-visual{border-radius:var(--cs-radius);overflow:hidden}
+.collab-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+.collab{border:1px solid var(--cs-line);border-radius:var(--cs-radius);background:var(--cs-white);
+  aspect-ratio:2/1;display:grid;place-items:center;padding:14px;font-weight:800;font-size:.95rem;
+  color:var(--cs-primary);text-align:center}
+.res-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+.res-card{border:1px solid var(--cs-line);border-radius:var(--cs-radius);overflow:hidden;
+  background:var(--cs-white);color:var(--cs-ink);text-decoration:none;transition:transform .18s,border-color .18s}
+.res-card:hover{transform:translateY(-3px);border-color:var(--cs-accent)}
+.res-card .thumb-ph{aspect-ratio:10/7;background:linear-gradient(140deg,var(--cs-sand),#cbb89f);display:grid;place-items:center;font-size:1.6rem}
+.res-card strong{display:block;padding:12px 14px;font-size:.92rem}
+.action-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.action-card{border:1px solid var(--cs-line);border-radius:var(--cs-radius);background:var(--cs-white);color:var(--cs-ink);padding:18px}
+.action-card .num{color:var(--cs-accent);font-size:.8rem;font-weight:800}
+.action-card h4{margin:.3rem 0 .5rem;font-size:1rem}
+.action-card p{color:var(--cs-muted);font-size:.9rem;margin:0}
+.refuse{border:1px solid rgba(255,253,248,.22);border-radius:var(--cs-radius);
+  background:var(--cs-primary);color:var(--cs-white);padding:20px}
+.refuse p{color:rgba(255,253,248,.84)}
+.refuse ul{margin:.75rem 0 0;padding:0;list-style:none;columns:2;column-gap:28px}
+.refuse li{display:flex;gap:8px;align-items:baseline;margin-bottom:.45rem}
+.refuse li::before{content:"×";color:var(--cs-clay);font-weight:800}
+.goals{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+.goal{border:1px solid var(--cs-line);border-radius:var(--cs-radius);background:var(--cs-white);color:var(--cs-ink);padding:16px}
+.goal span{color:var(--cs-gold);font-weight:800;font-size:.85rem}
+.goal p{margin:.4rem 0 0;font-size:.92rem}
+.milestones{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:20px}
+.mile{border-left:3px solid var(--cs-accent);padding:10px 16px;background:rgba(255,253,248,.6);border-radius:0 var(--cs-radius) var(--cs-radius) 0;color:var(--cs-ink)}
+.mile b{display:block;font-size:.9rem}
+.mile span{color:var(--cs-muted);font-size:.88rem}
+/* partners */
+.partners-grid{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:34px;align-items:start}
+.partner-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.partner{border:1px solid var(--cs-line);border-radius:var(--cs-radius);background:var(--cs-white);
+  padding:18px;text-align:center;text-decoration:none;transition:border-color .18s}
+.partner:hover{border-color:var(--cs-accent)}
+.partner .plogo{height:64px;display:grid;place-items:center;border-radius:6px;
+  background:linear-gradient(140deg,var(--cs-bg),#e9e0d0);font-weight:800;color:var(--cs-primary);font-size:.9rem;margin-bottom:10px}
+.partner h3{font-size:.95rem}
+.rep-office{margin-top:.6rem;padding:10px 14px;border-left:3px solid var(--cs-accent);
+  background:rgba(255,253,248,.6);border-radius:0 var(--cs-radius) var(--cs-radius) 0;font-weight:700}
+/* client logos */
+.client-logos{background:var(--cs-primary);color:var(--cs-white);padding:42px 0}
+.logo-marquee{overflow:hidden;margin-top:18px}
+.logo-track{display:flex;width:max-content;animation:mq 46s linear infinite}
+.logo-ph{border:1px solid var(--cs-light-line);border-radius:var(--cs-radius);background:rgba(255,253,248,.96);
+  place-items:center;min-width:190px;min-height:86px;margin-right:10px;padding:14px;display:grid;
+  color:var(--cs-primary);font-weight:800;font-size:.9rem}
+/* team */
+.team-layout{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(380px,.82fr);gap:clamp(58px,6vw,92px);align-items:center}
+.team-member{display:grid;grid-template-columns:156px minmax(0,1fr);align-items:center;gap:clamp(16px,4vw,34px);padding:14px 0}
+.team-member+.team-member{border-top:1px solid var(--cs-line)}
+.team-member figure{aspect-ratio:8/11;border-radius:var(--cs-radius);overflow:hidden}
+.team-member h3{font-size:1.1rem}
+.role{font-weight:700;font-size:.92rem;margin:.15rem 0}
+.dept{color:var(--cs-muted);font-size:.86rem;margin-bottom:.4rem}
+.team-member a{display:block;font-size:.85rem;color:var(--cs-primary);text-decoration:none}
+.team-member a:hover{text-decoration:underline}
+/* contact */
+.contact-grid{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:34px;align-items:start}
+.contact-visual{aspect-ratio:14/9;margin-top:16px}
+.contact-direct{display:grid;gap:4px;margin-top:16px}
+.contact-direct a{color:var(--cs-white);font-weight:700;text-decoration:none}
+.contact-direct a:hover{text-decoration:underline;color:var(--cs-gold)}
+.contact-direct span{color:rgba(255,253,248,.66);font-size:.9rem}
+.form-card{border:1px solid var(--cs-line);border-radius:var(--cs-radius);background:var(--cs-white);color:var(--cs-ink);
+  padding:22px;box-shadow:0 18px 48px rgba(0,0,0,.18)}
+.form-card label{display:block;font-size:.82rem;font-weight:700;margin:12px 0 4px}
+.form-card input,.form-card select,.form-card textarea{width:100%;font:inherit;border:1px solid var(--cs-line);
+  border-radius:6px;padding:10px 12px;background:#fff}
+.form-card textarea{min-height:96px;resize:vertical}
+.form-card .btn{margin-top:16px;width:100%}
+/* footer */
+.site-footer{color:var(--cs-white);background:rgb(17,22,17);padding:42px 0;font-size:.85rem}
+.footer-grid{display:grid;grid-template-columns:1fr auto;gap:18px}
+.footer-grid p{margin:0 0 6px;color:rgba(255,253,248,.82)}
+.footer-brand{font-size:1.2rem;font-weight:800;margin-bottom:14px}
+.footer-links{display:flex;gap:10px;align-items:start}
+.footer-links a{width:44px;height:44px;border:1px solid rgba(255,253,248,.42);border-radius:50%;
+  place-items:center;text-decoration:none;display:inline-grid;transition:border-color .18s,background .18s}
+.footer-links a:hover{border-color:var(--cs-white);background:rgba(255,253,248,.1)}
+.footer-links svg{width:18px;height:18px;fill:currentColor}
+/* responsive */
+@media (width<=979px){
+  .site-nav{display:none;position:absolute;top:100%;left:16px;right:16px;flex-direction:column;
+    border:1px solid var(--cs-line);border-radius:var(--cs-radius);background:var(--cs-white);
+    color:var(--cs-ink);padding:10px;box-shadow:0 18px 48px rgba(23,24,20,.16)}
+  .site-header.is-menu-open .site-nav{display:flex}
+  .mobile-menu-toggle{display:inline-block}
+  .split,.country-split,.service-split,.rse-story,.rse-hero-inner,
+  .partners-grid,.contact-grid,.about-layout,.team-layout{grid-template-columns:1fr;gap:28px}
+  .country-gallery{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .expertise-options{grid-template-columns:1fr}
+  .opt{min-height:200px}
+  .refuse ul{columns:1}
+  .milestones,.partner-list{grid-template-columns:1fr}
+  .hero-copy{transform:none;max-width:min(100%,480px)}
+  .footer-grid{grid-template-columns:1fr}
+}
+@media (width<=719px){
+  h2{font-size:2rem}
+  .hero h1{font-size:clamp(1.95rem,9vw,2.3rem)}
+  .btn{width:100%}
+  .marquee-track figure{width:260px}
+}
+</style></head>
+<body>
+<header class="site-header" data-cs-ref="header.site-header.is-scrolled" data-cs="Menu trên" data-cs-type="nav">
+  <a class="brand" href="#accueil" data-cs-link>
+    <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none"><rect width="48" height="48" rx="10" fill="#1f3228"/><path d="M8 32c6-3 10-9 16-9s10 6 16 9" stroke="#c49b4d" stroke-width="2.4" stroke-linecap="round"/><path d="M18 21c0-5 3-9 6-9s6 4 6 9" stroke="#fffdf8" stroke-width="2.4" stroke-linecap="round"/></svg></span>
+    <span><span class="brand-name" data-cs-text>MekongTouch</span>
+    <span class="brand-tag" data-cs-text>DMC Vietnam Laos &amp; Cambodia</span></span>
+  </a>
+  <nav class="site-nav" id="site-navigation" data-cs-ref="nav#site-navigation.site-nav" aria-label="Navigation"><a href="#nous" data-cs-link>Nous</a><a href="#destinations" data-cs-link>Destinations</a><a href="#savoir-faire" data-cs-link>Savoir-faire</a><a href="#incentive" data-cs-link>MICE</a><a href="#rse" data-cs-link>RSE</a><a href="#partenaires" data-cs-link>Partenaires</a><a href="#bureau-italie" data-cs-link>Bureau de représentation</a><a href="#contact" data-cs-link>Contact</a></nav>
+  <div class="header-actions">
+    <a class="header-social" href="https://www.instagram.com/" target="_blank" rel="noreferrer" data-cs-link>INSTAGRAM</a>
+    <a class="header-social" href="https://www.linkedin.com/" target="_blank" rel="noreferrer" data-cs-link>LINKEDIN</a>
+    <div class="lang"><a href="#" class="is-active" data-cs-link>FR</a><a href="#" data-cs-link>EN</a><a href="#" data-cs-link>IT</a></div>
+    <a class="header-cta" href="#contact" data-cs-link>Contact</a>
+    <button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="site-navigation" data-cs-text>Menu</button>
+  </div>
+</header>
+<main id="main" data-cs-ref="main#main">
+<section class="hero" id="accueil" data-cs-ref="section#accueil.hero" data-cs="Khối đầu — hero" data-cs-type="hero" data-cs-bg>
+  <div class="hero-media"><img data-cs-img src="https://picsum.photos/seed/mekong-hero/2400/1400" alt="" fetchpriority="high"></div>
+  <div class="hero-shade" aria-hidden="true"></div>
+  <div class="cs-wrap hero-inner"><div class="hero-copy is-visible">
+    <p class="hero-eyebrow" data-cs-text>DMC VIETNAM, CAMBODGE &amp; LAOS</p>
+    <h1 data-cs-text>MekongTouch</h1>
+    <div class="hero-actions">
+      <a class="btn btn--primary" href="#contact" data-cs-link>Nous contacter</a>
+      <a class="btn btn--ghost" href="#destinations" data-cs-link>Découvrir nos destinations</a>
+    </div></div></div>
+</section>
+<div class="about-story">
+<section class="about" id="nous" data-cs-ref="section#nous.about" data-cs="Giới thiệu" data-cs-type="content">
+  <div class="about-layout">
+    <div class="about-copy" data-reveal>
+      <p class="eyebrow" data-cs-text>Nous</p><h2 data-cs-text>Là où l’expérience rencontre l’émotion</h2>
+      <p data-cs-text>Notre équipe plurilingue : française, italienne, vietnamienne et anglaise, relie les exigences des marchés européens à une connaissance fine du terrain en Asie du Sud-Est. Basés à Hanoï et Siem Reap, avec un bureau commercial en Europe, nous répondons avec la réactivité d’un partenaire local et la lisibilité d’un interlocuteur européen.</p>
+      <p data-cs-text>L’Incentive est au cœur de notre savoir-faire, enrichi par une solide expertise du voyage Leisure sur mesure. Une expérience construite au fil de 18 années de projets réalisés, d’hôtels négociés, de soirées organisées et d’histoires écrites.</p>
+      <p data-cs-text><strong>MekongTouch s'adresse exclusivement aux professionnels du tourisme.</strong></p>
+    </div>
+    <div class="about-gallery" data-reveal>
+      <figure class="about-thumb" style=""><img data-cs-img src="https://picsum.photos/seed/mekong-about1/700/875" alt="Bateaux sur une rivière entourée de reliefs karstiques" loading="lazy"></figure>
+      <figure class="about-thumb" style=""><img data-cs-img src="https://picsum.photos/seed/mekong-about2/700/875" alt="Moine gravissant les marches d’un temple sous un arbre ancien" loading="lazy"></figure>
+      <figure class="about-thumb" style=""><img data-cs-img src="https://picsum.photos/seed/mekong-about3/700/875" alt="Tuk-tuk devant une porte monumentale d’Angkor" loading="lazy"></figure>
+    </div>
+  </div>
+</section>
+<section class="sensations section-pad" id="sensations" data-cs-ref="section#sensations.sensations.section-pad" data-cs="Sensations" data-cs-type="content">
+  <div class="cs-wrap split" style="grid-template-columns:minmax(0,1fr) minmax(400px,504px)">
+    <figure class="large-photo"><img data-cs-img src="https://picsum.photos/seed/mekong-sensations/1200/900" alt="Scène de voyage sensible en Asie du Sud-Est" loading="lazy"></figure>
+    <div class="sensations-copy" data-reveal><p class="eyebrow" data-cs-text>Expérience</p>
+      <h2 data-cs-text>Non seulement des voyages, des sensations.</h2>
+      <p data-cs-text>Derrière chaque itinéraire, il y a une façon de ressentir un pays : ses rythmes, ses contrastes, ses rencontres, ses saveurs, ses silences aussi.</p>
+      <p data-cs-text>À taille humaine, nous privilégions le contact direct, les échanges simples et le suivi attentif de chaque demande. Cette proximité permet de comprendre rapidement les attentes, d’ajuster les propositions avec précision et de rester pleinement impliqués à chaque étape.</p>
+      <p data-cs-text>Du premier échange à l’exécution sur place, chaque détail compte : le choix d’un lieu, le rythme d’une journée, la qualité d’un guide, la justesse d’une expérience ou la fluidité de la logistique.</p>
+      <p data-cs-text>Une approche souple, réactive et profondément ancrée dans le terrain, pour créer des programmes cohérents, sensibles et réellement adaptés à chaque projet.</p>
+    </div>
+  </div>
+</section>
+</div>
+
+<section class="destinations-intro" id="destinations" data-cs-ref="section#destinations.destinations-intro" data-cs="Destinations" data-cs-type="content" data-cs-bg>
+  <div class="bg-media"><img src="https://picsum.photos/seed/mekong-dest-bg/1800/1200" alt=""></div><div class="bg-overlay"></div>
+  <div class="cs-wrap dest-inner" data-reveal>
+    <p class="eyebrow" data-cs-text>Destinations</p><h2 data-cs-text>Vietnam, Cambodge &amp; Laos</h2>
+    <p class="lead" style="max-width:560px" data-cs-text>À travers des circuits privilégiant les rencontres et l'authenticité, les voyageurs découvrent des lieux d'exception riches d'un passé fascinant et en constante évolution.</p>
+    <div class="pill-actions" style="margin-top:22px">
+      <a class="btn btn--light" href="#vietnam" data-cs-link>VIETNAM</a>
+      <a class="btn btn--light" href="#cambodge" data-cs-link>CAMBODGE</a>
+      <a class="btn btn--light" href="#laos" data-cs-link>LAOS</a>
+    </div>
+  </div>
+  <div class="marquee"><div class="marquee-track"><figure><img data-cs-img src="https://picsum.photos/seed/mekong-dest1/520/340" alt="" loading="lazy"></figure><figure><img data-cs-img src="https://picsum.photos/seed/mekong-dest2/520/340" alt="" loading="lazy"></figure><figure><img data-cs-img src="https://picsum.photos/seed/mekong-dest3/520/340" alt="" loading="lazy"></figure><figure><img data-cs-img src="https://picsum.photos/seed/mekong-dest4/520/340" alt="" loading="lazy"></figure><figure><img data-cs-img src="https://picsum.photos/seed/mekong-dest5/520/340" alt="" loading="lazy"></figure><figure><img data-cs-img src="https://picsum.photos/seed/mekong-dest6/520/340" alt="" loading="lazy"></figure><figure><img data-cs-img src="https://picsum.photos/seed/mekong-dest7/520/340" alt="" loading="lazy"></figure><figure><img data-cs-img src="https://picsum.photos/seed/mekong-dest8/520/340" alt="" loading="lazy"></figure></div></div>
+</section>
+<section class="country" id="vietnam" data-cs-ref="section#vietnam.country.section-pad" data-cs="Vietnam" data-cs-type="content" data-cs-bg>
+  <div class="bg-media"><img src="https://picsum.photos/seed/mekong-vietnam-bg/1800/1200" alt=""></div><div class="bg-overlay"></div>
+  <div class="cs-wrap country-inner section-pad">
+    <div class="country-split">
+      <div class="country-frame"><img class="is-active" src="https://picsum.photos/seed/mekong-vietnam0/1200/900" alt="Rizières du Vietnam" data-cs-img></div>
+      <article class="country-copy"><p class="eyebrow" data-cs-text>Intensité · Contraste · Authenticité</p><h2 data-cs-text>Vietnam</h2>
+        <p class="lead" data-cs-text>L'énergie d'un pays en mouvement, la profondeur d'une culture millénaire.</p><p data-cs-text>Le Vietnam ne se laisse pas résumer. Hanoï vibre, Hô Chi Minh-Ville déborde, et entre les deux s'étire un pays d'une diversité saisissante, baies karstiques, rizières en terrasse, villages préservés, delta infini. Pour un groupe incentive, c'est une destination qui ne laisse personne indifférent : elle surprend, elle stimule, elle connecte les gens entre eux.</p><p data-cs-text>La baie d'Halong pour une nuit en jonque privatisée. Hoi An pour une soirée dans la vieille ville aux lanternes. Les rizières de Mu Cang Chai pour un dîner hors du monde. Hanoï pour sentir le pouls d'une capitale asiatique qui n'a rien perdu de son authenticité.</p><div class="country-gallery"><button class="thumb" type="button" aria-pressed="true" data-src="https://picsum.photos/seed/mekong-vietnam0/700/520"><img src="https://picsum.photos/seed/mekong-vietnam0/700/520" alt="Rizières du Vietnam"></button><button class="thumb" type="button" aria-pressed="false" data-src="https://picsum.photos/seed/mekong-vietnam1/700/520"><img src="https://picsum.photos/seed/mekong-vietnam1/700/520" alt="Paysage vietnamien"></button><button class="thumb" type="button" aria-pressed="false" data-src="https://picsum.photos/seed/mekong-vietnam2/700/520"><img src="https://picsum.photos/seed/mekong-vietnam2/700/520" alt="Hoi An illuminée au bord de la rivière à la tombée du jour"></button><button class="thumb" type="button" aria-pressed="false" data-src="https://picsum.photos/seed/mekong-vietnam3/700/520"><img src="https://picsum.photos/seed/mekong-vietnam3/700/520" alt="Expérience au Vietnam"></button></div></article>
+      
+    </div>
+  </div>
+<div class="country-nav" aria-label="Navigation destinations"><a href="#vietnam" class="is-active" data-cs-link>01 VIETNAM</a><a href="#cambodge" data-cs-link>02 CAMBODGE</a><a href="#laos" data-cs-link>03 LAOS</a></div>
+</section>
+<section class="country" id="cambodge" data-cs-ref="section#cambodge.country.section-pad" data-cs="Cambodge" data-cs-type="content" data-cs-bg>
+  <div class="bg-media"><img src="https://picsum.photos/seed/mekong-cambodge-bg/1800/1200" alt=""></div><div class="bg-overlay"></div>
+  <div class="cs-wrap country-inner section-pad">
+    <div class="country-split">
+      <div class="country-frame"><img class="is-active" src="https://picsum.photos/seed/mekong-cambodge0/1200/900" alt="Temple au Cambodge" data-cs-img></div>
+      <article class="country-copy"><p class="eyebrow" data-cs-text>Puissance · Émotion · Chaleur humaine</p><h2 data-cs-text>Cambodge</h2>
+        <p class="lead" data-cs-text>L'impact visuel le plus fort d'Asie du Sud-Est. Point.</p><p data-cs-text>Il y a des endroits qui s'imposent. Angkor en est un. Quand un groupe découvre les temples au lever du soleil, ou accède à un site après la fermeture au public pour un cocktail dînatoire dans les pierres millénaires, quelque chose se passe. Une émotion collective, une référence partagée, un souvenir commun.</p><p data-cs-text>Le Cambodge, c'est ça : une puissance évocatrice hors norme, portée par un peuple d'une chaleur et d'une résilience qui touchent. Phnom Penh monte en puissance comme destination urbaine, Siem Reap reste le cœur battant du pays pour les groupes incentive. Et partout, la générosité du terrain compense les infrastructures encore frustes.</p><div class="country-gallery"><button class="thumb" type="button" aria-pressed="true" data-src="https://picsum.photos/seed/mekong-cambodge0/700/520"><img src="https://picsum.photos/seed/mekong-cambodge0/700/520" alt="Temple au Cambodge"></button><button class="thumb" type="button" aria-pressed="false" data-src="https://picsum.photos/seed/mekong-cambodge1/700/520"><img src="https://picsum.photos/seed/mekong-cambodge1/700/520" alt="Detail de temple cambodgien"></button><button class="thumb" type="button" aria-pressed="false" data-src="https://picsum.photos/seed/mekong-cambodge2/700/520"><img src="https://picsum.photos/seed/mekong-cambodge2/700/520" alt="Site patrimonial au Cambodge"></button><button class="thumb" type="button" aria-pressed="false" data-src="https://picsum.photos/seed/mekong-cambodge3/700/520"><img src="https://picsum.photos/seed/mekong-cambodge3/700/520" alt="Ambiance cambodgienne"></button></div></article>
+      
+    </div>
+  </div>
+<div class="country-nav" aria-label="Navigation destinations"><a href="#vietnam" data-cs-link>01 VIETNAM</a><a href="#cambodge" class="is-active" data-cs-link>02 CAMBODGE</a><a href="#laos" data-cs-link>03 LAOS</a></div>
+</section>
+<section class="country" id="laos" data-cs-ref="section#laos.country.section-pad" data-cs="Laos" data-cs-type="content" data-cs-bg>
+  <div class="bg-media"><img src="https://picsum.photos/seed/mekong-laos-bg/1800/1200" alt=""></div><div class="bg-overlay"></div>
+  <div class="cs-wrap country-inner section-pad">
+    <div class="country-split">
+      <div class="country-frame"><img class="is-active" src="https://picsum.photos/seed/mekong-laos0/1200/900" alt="Matinée brumeuse sur le Mékong" data-cs-img></div>
+      <article class="country-copy"><p class="eyebrow" data-cs-text>Sérénité · Préservation · Intimité</p><h2 data-cs-text>Laos</h2>
+        <p class="lead" data-cs-text>Le pays qui fait décrocher. Vraiment.</p><p data-cs-text>Le Laos est rare. Rare dans le sens où il reste l'un des seuls pays d'Asie du Sud-Est à ne pas s'être précipité dans la modernité. Ici, le temps ralentit. Les temples sont silencieux, le Mékong est large, les matins sentent l'encens et la rivière. Pour des équipes habituées à courir, c'est un choc — le bon.</p><p data-cs-text>Luang Prabang, classée au patrimoine mondial de l'UNESCO, est la destination incentive la plus confidentielle de notre portefeuille. Petite, préservée, intimiste. Elle crée entre les participants une proximité qu'aucune salle de séminaire ne peut fabriquer. On y vit au même rythme, on partage les mêmes instants.</p><div class="country-gallery"><button class="thumb" type="button" aria-pressed="true" data-src="https://picsum.photos/seed/mekong-laos0/700/520"><img src="https://picsum.photos/seed/mekong-laos0/700/520" alt="Matinée brumeuse sur le Mékong"></button><button class="thumb" type="button" aria-pressed="false" data-src="https://picsum.photos/seed/mekong-laos1/700/520"><img src="https://picsum.photos/seed/mekong-laos1/700/520" alt="Paysage du Laos"></button><button class="thumb" type="button" aria-pressed="false" data-src="https://picsum.photos/seed/mekong-laos2/700/520"><img src="https://picsum.photos/seed/mekong-laos2/700/520" alt="Expérience au Laos"></button><button class="thumb" type="button" aria-pressed="false" data-src="https://picsum.photos/seed/mekong-laos3/700/520"><img src="https://picsum.photos/seed/mekong-laos3/700/520" alt="Lieu patrimonial au Laos"></button></div></article>
+      
+    </div>
+  </div>
+<div class="country-nav" aria-label="Navigation destinations"><a href="#vietnam" data-cs-link>01 VIETNAM</a><a href="#cambodge" data-cs-link>02 CAMBODGE</a><a href="#laos" class="is-active" data-cs-link>03 LAOS</a></div>
+</section>
+<section class="expertise section-pad" id="savoir-faire" data-cs-ref="section#savoir-faire.expertise-chooser" data-cs="Savoir-faire" data-cs-type="features" data-cs-bg>
+  <div class="bg-media"><img src="https://picsum.photos/seed/mekong-expertise-bg/1800/1200" alt=""></div><div class="bg-overlay"></div>
+  <div class="cs-wrap expertise-inner" data-reveal>
+    <p class="eyebrow" data-cs-text>Savoir-faire</p><h2 data-cs-text>Notre savoir-faire</h2>
+    <p data-cs-text>Trois entrées opérationnelles, chacune pensée comme une section complète et non comme une simple carte.</p>
+    <nav class="expertise-options">
+      <a class="opt" href="#incentive" data-cs-link><img src="https://picsum.photos/seed/mekong-opt-incentive/700/520" alt=""><span data-cs-text>Incentive</span></a>
+      <a class="opt" href="#fit" data-cs-link><img src="https://picsum.photos/seed/mekong-opt-fit/700/520" alt=""><span data-cs-text>FIT</span></a>
+      <a class="opt" href="#groupes" data-cs-link><img src="https://picsum.photos/seed/mekong-opt-groupes/700/520" alt=""><span data-cs-text>Groupes</span></a>
+    </nav>
+  </div>
+</section>
+<section class="service section-pad" id="incentive" data-cs-ref="section#incentive.incentive.section-pad" data-cs="Incentive / MICE" data-cs-type="content" data-cs-bg>
+  <div class="bg-media"><img src="https://picsum.photos/seed/mekong-incentive-bg/1800/1200" alt=""></div><div class="bg-overlay"></div>
+  <div class="cs-wrap service-inner">
+    <div class="service-split">
+      <div class="stack" data-reveal><figure><img data-cs-img src="https://picsum.photos/seed/mekong-incentive0/720/540" alt="Programme incentive" loading="lazy"></figure><figure><img data-cs-img src="https://picsum.photos/seed/mekong-incentive1/720/540" alt="Moment MICE en Asie du Sud-Est" loading="lazy"></figure><figure><img data-cs-img src="https://picsum.photos/seed/mekong-incentive2/720/540" alt="Expérience incentive de groupe" loading="lazy"></figure></div>
+      <article class="copy copy-card" data-reveal><p class="eyebrow" data-cs-text>Incentive / MICE</p><h2 data-cs-text>Notre cœur de métier : l’Incentive</h2>
+        <p data-cs-text>Un voyage Incentive réussi ne se résume pas à une belle destination. Il se construit autour d’une intention : concevoir une expérience en accord avec l’identité de l’entreprise, les objectifs du projet et le profil du groupe.</p><p data-cs-text>Nous concevons chaque programme avec une attention particulière portée aux cultures, aux rythmes locaux et aux communautés, afin que l’expérience soit aussi juste pour ceux qui accueillent que mémorable pour ceux qui la vivent.</p></article>
+    </div><button class="video-trigger" type="button" data-video-open data-cs-link>
+          <img src="https://picsum.photos/seed/mekong-video-thumb/1920/1080" alt="" loading="lazy">
+          <span class="play" aria-hidden="true">▶</span>
+          <span class="vlabel" data-cs-text>Cliquer pour voir la vidéo</span></button>
+        <div class="copy-card copy-card--accent"><h3 data-cs-text>Des expériences qui fédèrent, dans le respect de ceux qui accueillent</h3>
+        <p data-cs-text>Nous concevons chaque programme avec une attention particulière portée aux cultures, aux rythmes locaux et aux communautés, afin que l’expérience soit aussi juste pour ceux qui accueillent que mémorable pour ceux qui la vivent.</p></div>
+  </div>
+</section>
+<section class="service section-pad" id="fit" data-cs-ref="section#fit.service-section.fit" data-cs="FIT" data-cs-type="content" data-cs-bg>
+  <div class="bg-media"><img src="https://picsum.photos/seed/mekong-fit-bg/1800/1200" alt=""></div><div class="bg-overlay"></div>
+  <div class="cs-wrap service-inner">
+    <div class="service-split">
+      <div class="stack" data-reveal><figure><img data-cs-img src="https://picsum.photos/seed/mekong-fit0/720/540" alt="Voyage privé FIT" loading="lazy"><span data-cs-text>P28</span></figure><figure><img data-cs-img src="https://picsum.photos/seed/mekong-fit1/720/540" alt="Itinéraire FIT sur mesure" loading="lazy"><span data-cs-text>P29</span></figure><figure><img data-cs-img src="https://picsum.photos/seed/mekong-fit2/720/540" alt="Expérience individuelle accompagnée" loading="lazy"><span data-cs-text>P30</span></figure></div>
+      <article class="copy copy-card" data-reveal><p class="eyebrow" data-cs-text>FIT</p><h2 data-cs-text>FIT</h2>
+        <p class="lead" data-cs-text>Itinéraires privés et entièrement adaptés</p><p data-cs-text>Pour les clients individuels, chaque programme est pensé comme une expérience fluide, confortable et parfaitement maîtrisée.</p><p data-cs-text>Guide dédié, chauffeur privé, rythme adapté, sélection soignée des hébergements et des étapes : chaque détail est ajusté au profil des clients, à leurs envies et à leur manière de découvrir la destination.</p><p data-cs-text>L'objectif est de proposer des itinéraires élégants, souples et cohérents, où le confort d'organisation laisse toute la place à l'émotion, aux rencontres et à la découverte du pays dans les meilleures conditions.</p></article>
+    </div>
+  </div>
+</section>
+<section class="service section-pad" id="groupes" data-cs-ref="section#groupes.service-section.groups" data-cs="Groupes" data-cs-type="content" data-cs-bg>
+  <div class="bg-media"><img src="https://picsum.photos/seed/mekong-groupes-bg/1800/1200" alt=""></div><div class="bg-overlay"></div>
+  <div class="cs-wrap service-inner">
+    <div class="service-split">
+      <div class="stack" data-reveal><figure><img data-cs-img src="https://picsum.photos/seed/mekong-groupes0/720/540" alt="Groupe culturel en Asie du Sud-Est" loading="lazy"><span data-cs-text>P31</span></figure><figure><img data-cs-img src="https://picsum.photos/seed/mekong-groupes1/720/540" alt="Rencontre locale pour groupes" loading="lazy"><span data-cs-text>P32</span></figure><figure><img data-cs-img src="https://picsum.photos/seed/mekong-groupes2/720/540" alt="Parcours thématique de groupe" loading="lazy"><span data-cs-text>P33</span></figure></div>
+      <article class="copy copy-card" data-reveal><p class="eyebrow" data-cs-text>Groupes</p><h2 data-cs-text>Groupes</h2>
+        <p class="lead" data-cs-text>Circuits culturels et rencontres</p><p data-cs-text>Circuits culturels, parcours thématiques, expériences solidaires et rencontres locales : chaque programme est conçu pour offrir aux groupes une découverte authentique, équilibrée et ancrée dans le territoire.</p><p data-cs-text>À travers les villages, les savoir-faire, les initiatives locales et les échanges avec les communautés, l’itinéraire prend une dimension plus humaine, plus vivante et plus proche du pays.</p></article>
+    </div>
+  </div>
+</section>
+<dialog class="video-dialog" aria-label="Vidéo"><button class="dialog-close" type="button" data-cs-text>Fermer</button><video controls playsinline poster="https://picsum.photos/seed/mekong-video-thumb/1920/1080"><source src="" type="video/mp4"></video></dialog>
+<section class="rse" id="rse" data-cs-ref="section#rse.rse" data-cs="RSE — trách nhiệm" data-cs-type="content">
+  <div class="rse-hero" data-cs-bg>
+    <div class="bg-media"><img src="https://picsum.photos/seed/mekong-rse-hero/1800/1200" alt=""></div><div class="bg-overlay"></div>
+    <div class="cs-wrap rse-hero-inner">
+      <div class="rse-hero-copy" data-reveal>
+        <p class="eyebrow" data-cs-text>RSE</p><h2 data-cs-text>Une responsabilité ancrée dans le terrain</h2>
+        <p data-cs-text>Nous travaillons en Asie du Sud-Est depuis plus de 18 ans. Ce terrain, nous le connaissons, ses richesses, ses fragilités, ses communautés. Cette proximité crée une responsabilité que nous prenons au sérieux, sans la mettre en scène.</p>
+        <p data-cs-text>Notre démarche RSE n'est pas un argument marketing. C'est une façon de travailler, construite progressivement, ancrée dans le quotidien de nos opérations.</p>
+      </div>
+      <figure class="ph rse-hero-photo" style=""><img data-cs-img src="https://picsum.photos/seed/mekong-rse-photo/1000/1500" alt="Le Mékong au soleil couchant" loading="lazy"></figure>
+    </div>
+  </div>
+  <div class="cs-wrap section-pad">
+    <div class="rse-story" data-reveal>
+      <div class="copy"><p class="eyebrow" data-cs-text>RSE</p><h3 data-cs-text>Parce qu’un voyage ne se résume pas à un itinéraire</h3>
+        <p data-cs-text>Il se construit aussi dans la conversation : avec celles et ceux qui accueillent, transmettent un savoir-faire et donnent à chaque lieu sa profondeur.</p>
+        <p data-cs-text>Nous imaginons des expériences qui favorisent les rencontres, respectent les rythmes locaux et laissent une place juste aux communautés comme aux voyageurs.</p></div>
+      <div class="rse-story-imgs">
+        <figure class="ph " style=""><img data-cs-img src="https://picsum.photos/seed/mekong-rse1/1200/800" alt="Échange au fil du Mékong" loading="lazy"></figure>
+        <figure class="ph " style=""><img data-cs-img src="https://picsum.photos/seed/mekong-rse2/1200/800" alt="Artisane préparant des bâtons d’encens" loading="lazy"></figure>
+      </div>
+    </div>
+    <div class="rse-block" data-reveal><h3 data-cs-text>Nous collaborons régulièrement avec</h3>
+      <div class="collab-grid"><div class="collab" data-cs-text>GreenViet</div><div class="collab" data-cs-text>Mekong Quilts</div><div class="collab" data-cs-text>KOTO</div><div class="collab" data-cs-text>École Paul Dubrule</div><div class="collab" data-cs-text>Sala Baï</div><div class="collab" data-cs-text>Refill not Landfill</div><div class="collab" data-cs-text>APOPO</div></div></div>
+    <div class="rse-block" data-reveal><h3 data-cs-text>Nos engagements en documents</h3>
+      <div class="res-grid"><a class="res-card" href="#" data-cs-link><div class="thumb-ph">📄</div><strong data-cs-text>Politique de durabilité</strong></a><a class="res-card" href="#" data-cs-link><div class="thumb-ph">📄</div><strong data-cs-text>Rapport 2026</strong></a><a class="res-card" href="#" data-cs-link><div class="thumb-ph">📄</div><strong data-cs-text>Code de conduite</strong></a><a class="res-card" href="#" data-cs-link><div class="thumb-ph">📄</div><strong data-cs-text>Do &amp; Don’ts</strong></a></div></div>
+    <div class="rse-block" data-reveal><h3 data-cs-text>Ce que nous mettons déjà en place</h3>
+      <div class="action-grid"><article class="action-card"><span class="num" data-cs-text>01</span><h4 data-cs-text>Actions internes</h4><p data-cs-text>Réduction progressive des impressions, documents davantage digitalisés et gourdes réutilisables proposées ou encouragées dans les équipes.</p></article><article class="action-card"><span class="num" data-cs-text>02</span><h4 data-cs-text>Programmes plus responsables</h4><p data-cs-text>Marche, vélo, sampan et rencontres locales sont privilégiés quand le programme le permet, avec une attention portée aux distances et au rythme.</p></article><article class="action-card"><span class="num" data-cs-text>03</span><h4 data-cs-text>Impact local</h4><p data-cs-text>Ateliers artisanaux, rencontres avec les communautés, repas chez l’habitant et valorisation des savoir-faire traditionnels.</p></article><article class="action-card"><span class="num" data-cs-text>04</span><h4 data-cs-text>Chaîne de valeur</h4><p data-cs-text>Renforcement progressif des critères de sélection des hébergements, restaurants, guides et prestataires respectueux des communautés.</p></article></div></div>
+    <div class="rse-block" data-reveal><h3 data-cs-text>Activités que nous refusons</h3>
+      <div class="refuse"><p data-cs-text>Quelle que soit la demande, nous écartons les expériences qui portent atteinte au bien-être animal, à la dignité humaine ou aux cultures locales.</p>
+      <ul><li data-cs-text>Balades à dos d’éléphant</li><li data-cs-text>Spectacles avec animaux</li><li data-cs-text>Fermes de crocodiles touristiques</li><li data-cs-text>Visites d’orphelinats</li><li data-cs-text>Activités irrespectueuses des communautés</li><li data-cs-text>Expériences portant atteinte à la dignité humaine</li></ul></div></div>
+    <div class="rse-block" data-reveal><h3 data-cs-text>Objectifs 2026–2028</h3>
+      <p data-cs-text>Une feuille de route progressive, transparente et cohérente avec la réalité de l’entreprise.</p>
+      <ol class="goals"><li class="goal"><span data-cs-text>01</span><p data-cs-text>Publier un rapport public au moins tous les deux ans</p></li><li class="goal"><span data-cs-text>02</span><p data-cs-text>Formaliser une checklist fournisseurs</p></li><li class="goal"><span data-cs-text>03</span><p data-cs-text>Renforcer les briefings auprès des guides</p></li><li class="goal"><span data-cs-text>04</span><p data-cs-text>Développer les alternatives à faible impact</p></li><li class="goal"><span data-cs-text>05</span><p data-cs-text>Poursuivre la réduction du plastique et du papier</p></li><li class="goal"><span data-cs-text>06</span><p data-cs-text>Structurer les partenariats avec les acteurs locaux</p></li><li class="goal"><span data-cs-text>07</span><p data-cs-text>Améliorer le suivi des preuves et indicateurs Travelife</p></li><li class="goal"><span data-cs-text>08</span><p data-cs-text>Organiser une action terrain tous les six mois, si réaliste</p></li></ol>
+      <div class="milestones"><div class="mile"><b data-cs-text>2026</b><span data-cs-text>Premier rapport, critères formalisés et site mis à jour.</span></div><div class="mile"><b data-cs-text>2027</b><span data-cs-text>Suivi fournisseurs, briefings guides et partenariats locaux.</span></div><div class="mile"><b data-cs-text>2028</b><span data-cs-text>Mise à jour publique du rapport de durabilité.</span></div></div>
+      <p style="margin-top:20px;color:var(--cs-muted)" data-cs-text><em>Une étape, pas un aboutissement.</em></p></div>
+  </div>
+</section>
+<section class="section-pad" id="partenaires" data-cs-ref="section#partenaires.partners.section-pad" data-cs="Đối tác" data-cs-type="partners">
+  <div class="cs-wrap partners-grid">
+    <div class="copy" data-reveal><h2 class="eyebrow" data-cs-text style="font-size:2rem">PARTENAIRES</h2>
+      <p data-cs-text>Un réseau de confiance qui prolonge notre expertise terrain et nous relie aux professionnels du voyage.</p>
+      <p class="rep-office" id="bureau-italie" data-cs-text>Bureau de représentation Italie</p></div>
+    <div class="partner-list" data-reveal><a class="partner" href="http://www.dmctouch.com/" target="_blank" rel="noreferrer" data-cs-link><div class="plogo" data-cs-text>DMC Touch</div><h3 data-cs-text>DMC Touch</h3></a><a class="partner" href="https://www.receptifsleaders.com/" target="_blank" rel="noreferrer" data-cs-link><div class="plogo" data-cs-text>Réceptifs Leaders</div><h3 data-cs-text>Réceptifs Leaders</h3></a><a class="partner" href="https://www.destinations-hub.com/" target="_blank" rel="noreferrer" data-cs-link><div class="plogo" data-cs-text>Destinations Hub</div><h3 data-cs-text>Destinations Hub</h3></a></div>
+  </div>
+</section>
+<section class="client-logos" data-cs-ref="section.client-logos" data-cs="Logo khách hàng" data-cs-type="partners" data-cs-bg>
+  <div class="cs-wrap"><p class="eyebrow" data-cs-text>Ils nous ont fait confiance</p></div>
+  <div class="logo-marquee"><div class="logo-track"><div class="logo-ph" data-cs-text>EssilorLuxottica</div><div class="logo-ph" data-cs-text>Richardson</div><div class="logo-ph" data-cs-text>Samse</div><div class="logo-ph" data-cs-text>BigMat</div><div class="logo-ph" data-cs-text>Shiseido</div><div class="logo-ph" data-cs-text>Diot PGM</div><div class="logo-ph" data-cs-text>Quadient</div><div class="logo-ph" data-cs-text>Crédit Agricole</div><div class="logo-ph" data-cs-text>EssilorLuxottica</div><div class="logo-ph" data-cs-text>Richardson</div><div class="logo-ph" data-cs-text>Samse</div><div class="logo-ph" data-cs-text>BigMat</div><div class="logo-ph" data-cs-text>Shiseido</div><div class="logo-ph" data-cs-text>Diot PGM</div><div class="logo-ph" data-cs-text>Quadient</div><div class="logo-ph" data-cs-text>Crédit Agricole</div></div></div>
+</section>
+<section class="section-pad" id="equipe" data-cs-ref="section#equipe.team.section-pad" data-cs="Đội ngũ" data-cs-type="team">
+  <div class="cs-wrap">
+    <header data-reveal style="margin-bottom:34px"><p class="eyebrow" data-cs-text>L’équipe</p>
+      <h2 data-cs-text>Les visages derrière MekongTouch</h2>
+      <p class="lead" style="max-width:560px" data-cs-text>Une équipe multiculturelle, présente en Europe et au Vietnam, qui relie vision commerciale et maîtrise du terrain.</p></header>
+    <div class="team-layout"><div data-reveal><article class="team-member">
+  <figure class="ph " style=""><img data-cs-img src="https://picsum.photos/seed/mekong-team-catia/400/550" alt="Catia Cristao" loading="lazy"></figure>
+  <div><h3 data-cs-text>Catia Cristao</h3><p class="role" data-cs-text>Co-fondatrice · Responsable bureau européen</p><p class="dept" data-cs-text>Direction commerciale &amp; marketing</p>
+  <a href="tel:+33(0)631279719" data-cs-link>Mobile : +33 (0) 6 31 27 97 19</a><a href="mailto:catia@mekongtouch.com" data-cs-link>catia@mekongtouch.com</a></div></article><article class="team-member">
+  <figure class="ph " style=""><img data-cs-img src="https://picsum.photos/seed/mekong-team-do/400/550" alt="Do Ngoc Anh" loading="lazy"></figure>
+  <div><h3 data-cs-text>Do Ngoc Anh</h3><p class="role" data-cs-text>Co-fondatrice · Responsable bureau Hanoi</p><p class="dept" data-cs-text>Direction des opérations</p>
+  <a href="tel:+84903210580" data-cs-link>Mobile : +84 903210580</a><a href="mailto:anh.do@mekongtouch.com" data-cs-link>anh.do@mekongtouch.com</a></div></article><article class="team-member">
+  <figure class="ph " style=""><img data-cs-img src="https://picsum.photos/seed/mekong-team-viet/400/550" alt="Viet Lê Quoc" loading="lazy"></figure>
+  <div><h3 data-cs-text>Viet Lê Quoc</h3><p class="role" data-cs-text>Directeur des opérations terrain</p><p class="dept" data-cs-text>Opérations locales</p>
+  <a href="tel:+84912125656" data-cs-link>Mobile : +84 912125656</a><a href="mailto:viet.le@mekongtouch.com" data-cs-link>viet.le@mekongtouch.com</a></div></article></div>
+      <figure class="ph " style=""><img data-cs-img src="https://picsum.photos/seed/mekong-team-photo/800/1000" alt="L’équipe MekongTouch au bureau de Hanoï" loading="lazy"></figure>
+    </div>
+  </div>
+</section>
+<section class="section-pad" id="contact" data-cs-ref="section#contact.contact.section-pad" data-cs="Liên hệ" data-cs-type="contact">
+  <div class="cs-wrap contact-grid">
+    <div class="copy" data-reveal><p class="eyebrow" data-cs-text>Contact</p>
+      <h2 data-cs-text>Parlez-nous de votre projet</h2>
+      <p data-cs-text>Partagez votre destination, le profil du groupe et vos contraintes opérationnelles. L'équipe vous répondra avec une approche adaptée au terrain.</p>
+      <figure class="ph contact-visual" style=""><img data-cs-img src="https://picsum.photos/seed/mekong-contact-img/1400/900" alt="Hanoï Train Street au crépuscule" loading="lazy"></figure>
+      <div class="contact-direct">
+        <a href="mailto:info@mekongtouch.com" data-cs-link>info@mekongtouch.com</a>
+        <a href="tel:+842438489311" data-cs-link>(+84.24) 38489311 / 39941441</a>
+        <a href="tel:+33631279719" data-cs-link>+33 (0) 6 31 27 97 19</a>
+        <span data-cs-text>Hanoi, Vietnam</span>
+      </div></div>
+    <div class="form-card" data-reveal data-cs="Form liên hệ">
+      <form data-cs-form>
+        <label data-cs-text>Nom complet</label><input required>
+        <label data-cs-text>Email professionnel</label><input type="email" required>
+        <label data-cs-text>Société</label><input>
+        <label data-cs-text>Destination envisagée</label>
+        <select><option data-cs-text>Vietnam</option><option data-cs-text>Cambodge</option><option data-cs-text>Laos</option><option data-cs-text>Multi-pays</option></select>
+        <label data-cs-text>Votre projet</label><textarea></textarea>
+        <button class="btn btn--primary" type="submit" data-cs-text>Envoyer la demande</button>
+      </form>
+    </div>
+  </div>
+</section>
+</main>
+<footer class="site-footer" data-cs-ref="footer.site-footer" data-cs="Chân trang" data-cs-type="footer" data-cs-bg>
+  <div class="cs-wrap footer-grid">
+    <div>
+      <div class="footer-brand" data-cs-text>MekongTouch</div>
+      <p><strong data-cs-text>Adresses :</strong></p>
+      <p data-cs-text>Long Thanh Building, ngách 31, ngõ 135 Doi Can, Ngoc Ha ward, Hanoi, Vietnam</p>
+      <p data-cs-text>8F, alley 118/111, Ngoc Ha street, Ngoc Ha ward, Hanoi, Vietnam</p>
+      <p data-cs-text>Tel: (+84.24) 38489311 / 39941441</p>
+      <p><strong data-cs-text>Bureau Europe :</strong></p>
+      <p data-cs-text>6, Rue de Toulouse – 13005 Marseille, France</p>
+      <p data-cs-text>Tél : +33 (0) 6 31 27 97 19</p>
+      <p style="margin-top:14px" data-cs-text>Public Liability Insurance : BAO Viet Insurances No. TCT.D06.PPL.25.HD750(7530197)</p>
+      <p data-cs-text>International Tour Operator Licence Number: 01-828/2022 / CDLQGVN-GP LHQT</p>
+    </div>
+    <div class="footer-links">
+      <a href="https://www.facebook.com/" target="_blank" rel="noreferrer" aria-label="Facebook" data-cs-link><svg viewBox="0 0 24 24"><path d="M13.6 21v-8h2.7l.4-3.1h-3.1v-2c0-.9.3-1.5 1.6-1.5h1.7V3.6c-.8-.1-1.7-.2-2.5-.2-2.5 0-4.2 1.5-4.2 4.3v2.2H7.4V13h2.8v8h3.4Z"/></svg></a>
+      <a href="https://www.instagram.com/" target="_blank" rel="noreferrer" aria-label="Instagram" data-cs-link><svg viewBox="0 0 24 24"><path d="M12 4.2c2.6 0 2.9 0 3.9.1 2.6.1 3.8 1.3 3.9 3.9.1 1 .1 1.3.1 3.9s0 2.9-.1 3.9c-.1 2.6-1.3 3.8-3.9 3.9-1 .1-1.3.1-3.9.1s-2.9 0-3.9-.1c-2.6-.1-3.8-1.3-3.9-3.9-.1-1-.1-1.3-.1-3.9s0-2.9.1-3.9c.1-2.6 1.3-3.8 3.9-3.9 1-.1 1.3-.1 3.9-.1Zm0 3.4a4.4 4.4 0 1 0 0 8.8 4.4 4.4 0 0 0 0-8.8Zm5.7-.3a1 1 0 1 1 0-2.1 1 1 0 0 1 0 2.1ZM12 9.8a2.2 2.2 0 1 1 0 4.4 2.2 2.2 0 0 1 0-4.4Z"/></svg></a>
+      <a href="https://www.linkedin.com/" target="_blank" rel="noreferrer" aria-label="LinkedIn" data-cs-link><svg viewBox="0 0 24 24"><path d="M4.5 8.8h3.4V20H4.5zM6.2 3.4a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm4.2 5.4h3.3v1.6c.5-.9 1.7-1.9 3.4-1.9 2.5 0 4.2 1.6 4.2 4.9V20h-3.4v-5.5c0-1.6-.6-2.6-2-2.6-1.5 0-2.4 1-2.4 2.6V20h-3.1z"/></svg></a>
+    </div>
+  </div>
+</footer>
+<script>
+// header đổi nền khi cuộn
+var hdr = document.querySelector('.site-header');
+function onScroll(){ hdr.classList.toggle('is-scrolled', scrollY > 40); }
+addEventListener('scroll', onScroll, {passive:true}); onScroll();
+// menu mobile
+var tgl = document.querySelector('.mobile-menu-toggle');
+tgl && tgl.addEventListener('click', function(){
+  var open = hdr.classList.toggle('is-menu-open');
+  tgl.setAttribute('aria-expanded', open);
+});
+document.querySelectorAll('.site-nav a').forEach(function(a){
+  a.addEventListener('click', function(){ hdr.classList.remove('is-menu-open'); tgl.setAttribute('aria-expanded','false'); });
+});
+// gallery quốc gia: bấm thumbnail → crossfade ảnh chính
+document.querySelectorAll('.country').forEach(function(sec){
+  var frame = sec.querySelector('.country-frame');
+  sec.querySelectorAll('.thumb').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      sec.querySelectorAll('.thumb').forEach(function(b){ b.setAttribute('aria-pressed', b===btn); });
+      var src = btn.getAttribute('data-src'), cur = frame.querySelector('img.is-active');
+      var next = document.createElement('img');
+      next.src = src; next.alt = btn.querySelector('img').alt;
+      frame.appendChild(next);
+      requestAnimationFrame(function(){ requestAnimationFrame(function(){
+        next.classList.add('is-active');
+        setTimeout(function(){ if(cur!==next) cur.remove(); }, 750);
+      });});
+    });
+  });
+});
+// video dialog
+var dlg = document.querySelector('dialog.video-dialog');
+document.querySelectorAll('[data-video-open]').forEach(function(b){
+  b.addEventListener('click', function(){ dlg && dlg.showModal(); });
+});
+if (dlg) {
+  dlg.querySelector('.dialog-close').addEventListener('click', function(){ dlg.close(); });
+  dlg.addEventListener('click', function(e){ if (e.target === dlg) dlg.close(); });
+}
+// reveal on scroll
+var io = new IntersectionObserver(function(es){
+  es.forEach(function(e){ if (e.isIntersecting) { e.target.classList.add('is-visible'); io.unobserve(e.target); } });
+}, {threshold:.12});
+document.querySelectorAll('[data-reveal]').forEach(function(el){ io.observe(el); });
+// form trưng
+document.querySelector('form[data-cs-form]').addEventListener('submit', function(e){
+  e.preventDefault(); alert('Demande envoyée ! (version démo — le formulaire n’envoie rien pour l’instant)');
+});
+// link trưng
+document.querySelectorAll('a[href="#"]').forEach(function(a){
+  a.addEventListener('click', function(e){ e.preventDefault(); });
+});
+</script>
+</body></html>

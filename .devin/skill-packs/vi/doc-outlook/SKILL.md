@@ -15,7 +15,7 @@ giống `/doc-zalo`. Học viên đã đăng nhập sẵn trên browser.
 
 ## Chuẩn bị
 
-1. `curl -s http://localhost:7683/api/browser/status` → `connected: true`.
+1. `curl -s http://localhost:7684/api/browser/status` → `connected: true`.
 2. `{"action":"tabs"}` → tìm tab `outlook.office.com` /
    `outlook.live.com`. Chưa có → `open` URL.
 3. Trang đòi đăng nhập → nhờ học viên đăng nhập tay, đợi báo xong.

@@ -1,9 +1,9 @@
 // Trợ Lý AI — service worker.
-// Giữ một kết nối WebSocket về ext-bridge trên máy (localhost:7683),
+// Giữ một kết nối WebSocket về ext-bridge trên máy (localhost:7684),
 // nhận lệnh từ trợ lý, thực hiện trong browser thật của học viên,
 // rồi trả kết quả về. Không gửi gì ra internet — chỉ nói với localhost.
 
-const WS_URL = 'ws://127.0.0.1:7683/ext';
+const WS_URL = 'ws://127.0.0.1:7684/ext';
 let ws = null;
 let reconnectTimer = null;
 
@@ -274,6 +274,7 @@ async function handle(action, p) {
       case 'snapshot': case 'click': case 'type': case 'query':
       case 'scroll': case 'scrollables': case 'read': case 'wait':
       case 'fetch': case 'key': case 'paste': case 'rect':
+      case 'dom': case 'styles': case 'assets': case 'css':
         return await inTab(p.tabId, action, p);
       default:
         return { ok: false, err: 'action lạ: ' + action };

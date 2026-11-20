@@ -8,12 +8,12 @@
       "note": "Cánh tay của trợ lý trên trình duyệt — đọc và bấm giúp bạn trên các trang đang mở",
       "probe": {
         "type": "http",
-        "url": "http://localhost:7683/api/browser/status",
+        "url": "http://localhost:7684/api/browser/status",
         "expect_key": "connected",
         "expect_val": true
       },
-      "status": "not-connected",
-      "check_message": "chưa nối — mở trình duyệt rồi bật tiện ích Trợ Lý AI"
+      "status": "connected",
+      "check_message": "đang hoạt động"
     },
     {
       "id": "zalo",
@@ -25,8 +25,8 @@
         "type": "tabs",
         "url_contains": "zalo"
       },
-      "status": "not-connected",
-      "check_message": "chưa mở — bấm nút Mở trang rồi đăng nhập"
+      "status": "connected",
+      "check_message": "đang mở sẵn — nhờ được ngay"
     },
     {
       "id": "google-sheets",
@@ -128,7 +128,7 @@
         "type": "zalo-oa"
       },
       "status": "not-connected",
-      "check_message": "chưa có thông tin đăng nhập — nhờ trợ lý cài giúp"
+      "check_message": "chưa có mã kết nối — nhờ trợ lý trong chat cài giúp"
     }
   ]
 }

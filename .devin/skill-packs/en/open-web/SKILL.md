@@ -11,7 +11,7 @@ allowed-tools:
 ---
 
 AI Assistant has an "arm" inside the learner's browser: an installed
-extension that talks to this machine over `http://localhost:7683`. Use it
+extension that talks to this machine over `http://localhost:7684`. Use it
 whenever the work is on a web page — especially pages the learner is
 ALREADY logged into (Zalo, Outlook, wp-admin...), since this browser
 keeps their sessions.
@@ -19,8 +19,8 @@ keeps their sessions.
 ## Check before use (mandatory)
 
 ```
-curl -s http://localhost:7683/api/browser/status
-# or PowerShell: Invoke-RestMethod http://localhost:7683/api/browser/status
+curl -s http://localhost:7684/api/browser/status
+# or PowerShell: Invoke-RestMethod http://localhost:7684/api/browser/status
 ```
 
 - `{"connected": true}` → good to go.
@@ -33,12 +33,12 @@ curl -s http://localhost:7683/api/browser/status
 
 ## Issuing commands
 
-Every command is a JSON POST to `http://localhost:7683/api/browser`:
+Every command is a JSON POST to `http://localhost:7684/api/browser`:
 
 ```
-curl -s -X POST http://localhost:7683/api/browser -d '{"action":"<action>", ...}'
+curl -s -X POST http://localhost:7684/api/browser -d '{"action":"<action>", ...}'
 # PowerShell:
-# Invoke-RestMethod -Method Post http://localhost:7683/api/browser `
+# Invoke-RestMethod -Method Post http://localhost:7684/api/browser `
 #   -Body '{"action":"tabs"}' -ContentType 'application/json'
 ```
 

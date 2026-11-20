@@ -41,7 +41,7 @@ if not errorlevel 1 (
   echo      Ban cung co the mo Windows Terminal va go "devin" de hoc.
 )
 
-rem --- Cau noi cho extension "Tro Ly AI" trong trinh duyet (cong 7683) ---
+rem --- Cau noi cho extension "Tro Ly AI" trong trinh duyet (cong 7684) ---
 rem Cho phep tro ly thao tac tren trang web hoc vien dang mo (Zalo, Outlook...).
 rem Can Python that su chay duoc - "python" cua Microsoft Store chi la cai
 rem stub mo Store nen phai chay thu, khong duoc chi kiem "where".
@@ -49,7 +49,7 @@ set PY=
 python --version >nul 2>nul && set PY=python
 if not defined PY (py -3 --version >nul 2>nul && set PY=py -3)
 if defined PY (
-  start "Tro ly AI browser - dung dong cua so nay" /min %PY% "%~dp0tools\ext-bridge.py" 7683 "%~dp0."
+  start "Tro ly AI browser - dung dong cua so nay" /min %PY% "%~dp0tools\ext-bridge.py" 7684 "%~dp0."
 ) else (
   echo  [!] Chua co Python that - cau noi extension se khong chay.
   echo      Cai bang: winget install --id Python.Python.3.12 -e

@@ -24,7 +24,7 @@ curl -sL "https://docs.google.com/spreadsheets/d/<SHEET_ID>/export?format=csv&gi
 **Sheet private (đa số — sheet công ty)** → đọc qua tab trình duyệt đang
 đăng nhập Google của học viên, không cần share link:
 
-1. `{"action":"tabs"}` qua ext-bridge :7683 → tìm tab `docs.google.com`;
+1. `{"action":"tabs"}` qua ext-bridge :7684 → tìm tab `docs.google.com`;
    chưa có thì `{"action":"open","url":"https://docs.google.com/spreadsheets/"}`
    (học viên đăng nhập sẵn rồi, chỉ đợi trang nạp).
 2. Tải CSV của sheet bằng phiên trong tab đó:

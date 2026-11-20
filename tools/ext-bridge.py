@@ -2,9 +2,9 @@
 """ext-bridge.py — cầu nối giữa trợ lý AI (agent) và extension "Trợ Lý AI"
 trong trình duyệt thật của học viên.
 
-Một cổng duy nhất (mặc định 7683, chỉ localhost):
-  Agent     →  POST http://localhost:7683/api/browser   {"action": "...", ...}
-  Extension →  ws://localhost:7683/ext                  (giữ kết nối mở)
+Một cổng duy nhất (mặc định 7684, chỉ localhost):
+  Agent     →  POST http://localhost:7684/api/browser   {"action": "...", ...}
+  Extension →  ws://localhost:7684/ext                  (giữ kết nối mở)
 
 Agent gọi HTTP bằng curl/Invoke-RestMethod — không cần MCP, không cần
 cài thêm thư viện (file này chỉ dùng Python chuẩn).
@@ -41,7 +41,7 @@ Các action v1:
 """
 import base64, hashlib, json, os, re, socket, struct, sys, threading, time
 
-PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 7683
+PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 7684
 CWD = sys.argv[2] if len(sys.argv) > 2 else "."
 WS_MAGIC = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
