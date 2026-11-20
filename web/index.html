@@ -95,6 +95,9 @@
       <div class="nav-title" data-i18n="brainTitle">Bộ não của trợ lý</div>
       <p class="settings-hint" data-i18n="brainHint">Trợ lý nghĩ và làm việc bằng chương trình AI này — chỉ đổi khi máy bạn có sẵn chương trình khác (đổi xong trợ lý khởi động lại trong vài giây).</p>
       <div id="brain-row"></div>
+      <div class="nav-title" data-i18n="connCodeTitle">Mã kết nối</div>
+      <p class="settings-hint" data-i18n="connCodeHint">Khi extension Trợ Lý AI hỏi mã, dán mã này vào — giống đưa chìa khoá nhà cho nó, chỉ cần một lần.</p>
+      <div id="conn-row"></div>
       <div class="nav-title" data-i18n="appsTitle">Kết nối ứng dụng</div>
       <p class="settings-hint" data-i18n="appsHint">Chấm xanh = trợ lý dùng được ngay · Chấm xám = cần thêm một bước nhỏ — cứ hỏi trợ lý trong chat, nó dẫn từng bước.</p>
       <div id="app-list"></div>
@@ -128,14 +131,15 @@
 
 <script src="vendor/marked.min.js"></script>
 <script src="vendor/purify.min.js"></script>
+<script src="bridge-token.js"></script>
 <script>
 /* Chưa qua onboarding (chưa có config) → đưa sang trang thiết lập đầu tiên */
 const cfgSignal = (window.AbortSignal && AbortSignal.timeout) ? AbortSignal.timeout(2500) : undefined;
-fetch('http://localhost:7682/api/config', { signal: cfgSignal })
+bfetch('http://localhost:7682/api/config', { signal: cfgSignal })
   .then(r => r.json())
   .then(c => { if (!c.language) location.replace('onboarding.html'); })
   .catch(() => { /* bridge chưa chạy → cứ hiện portal */ });
 </script>
-<script src="app.js?v=13"></script>
+<script src="app.js?v=14"></script>
 </body>
 </html>

@@ -39,6 +39,7 @@ body{display:flex;flex-direction:column}
 <iframe id="frame"></iframe>
 <div id="toast"></div>
 
+<script src="bridge-token.js"></script>
 <script>
 const qs = new URLSearchParams(location.search);
 // chỉ cho phép xem file cùng origin trong my-course/ (chặn mở URL lạ)
@@ -372,7 +373,7 @@ document.getElementById('btn-theme').onclick = () => {
 
 document.getElementById('btn-save').onclick = async () => {
   try {
-    const r = await fetch(BRIDGE + '/api/save-page', { method: 'POST',
+    const r = await bfetch(BRIDGE + '/api/save-page', { method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ file: SRC, html: serialize() }) });
     const d = await r.json();

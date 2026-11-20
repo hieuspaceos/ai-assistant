@@ -35,6 +35,9 @@ const I18N = {
     brainHint: 'Trợ lý nghĩ và làm việc bằng chương trình AI này — chỉ đổi khi máy bạn có sẵn chương trình khác (đổi xong trợ lý khởi động lại trong vài giây).',
     brainCurrent: 'đang dùng', brainSwitching: 'Đang đổi…',
     brainDone: 'Đã đổi xong', brainFail: 'Chưa đổi được',
+    connCodeTitle: 'Mã kết nối',
+    connCodeHint: 'Khi extension Trợ Lý AI hỏi mã, dán mã này vào — giống đưa chìa khoá nhà cho nó, chỉ cần một lần.',
+    connCopy: 'Sao chép', connCopied: 'Đã sao chép ✓',
     appsTitle: 'Kết nối ứng dụng',
     appsHint: 'Chấm xanh = trợ lý dùng được ngay · Chấm xám = cần thêm một bước nhỏ — cứ hỏi trợ lý trong chat, nó dẫn từng bước.',
     foldersTitle: 'Folder trợ lý được đọc',
@@ -86,6 +89,9 @@ const I18N = {
     brainHint: 'The assistant thinks and works through this AI program — only change it if another one is already installed (it restarts in a few seconds).',
     brainCurrent: 'in use', brainSwitching: 'Switching…',
     brainDone: 'Switched', brainFail: 'Couldn\'t switch',
+    connCodeTitle: 'Connection code',
+    connCodeHint: 'If the Trợ Lý AI extension asks for a code, paste this in — like handing it the house key, once is enough.',
+    connCopy: 'Copy', connCopied: 'Copied ✓',
     appsTitle: 'App connections',
     appsHint: 'Green dot = ready to use · Gray dot = needs one small step — just ask the assistant in chat, it will walk you through.',
     foldersTitle: 'Folders the assistant may read',
@@ -125,7 +131,7 @@ function applyI18n() {
 }
 async function initI18n() {
   try {
-    const r = await fetch(BRIDGE_URL + '/api/config', { signal: cfgSig() });
+    const r = await bfetch(BRIDGE_URL + '/api/config', { signal: cfgSig() });
     const c = await r.json();
     if (c && c.language) LANG = c.language;
   } catch { /* bridge chưa chạy → giữ mặc định vi */ }
@@ -165,7 +171,7 @@ const uiAlert = (title, msg) => uiDlg({title, msg, okText: t('dlgOkShort'), canC
 
 async function loadManifest() {
   try {
-    const res = await fetch('/my-course/manifest.json?_=' + Date.now());
+    const res = await bfetch('/my-course/manifest.json?_=' + Date.now());
     if (!res.ok) throw new Error('no manifest');
     manifest = await res.json();
   } catch {
@@ -185,7 +191,7 @@ async function renderWelcome() {
 
   let cfg = null;
   try {
-    const r = await fetch(BRIDGE_URL + '/api/config', { signal: cfgSig() });
+    const r = await bfetch(BRIDGE_URL + '/api/config', { signal: cfgSig() });
     cfg = await r.json();
   } catch { /* bridge chết */ }
 
@@ -244,7 +250,7 @@ async function deleteLesson(b) {
     t('delOk'));
   if (!ok) return;
   try {
-    const res = await fetch(BRIDGE_URL + '/api/delete-lesson', {
+    const res = await bfetch(BRIDGE_URL + '/api/delete-lesson', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({folder: b.folder})});
     const data = await res.json();
@@ -304,7 +310,7 @@ function loadLesson(lesson) {
 
 async function loadMdInto(pane, url, fallbackTitle) {
   try {
-    const res = await fetch(url + '?_=' + Date.now());
+    const res = await bfetch(url + '?_=' + Date.now());
     if (!res.ok) throw 0;
     const md = await res.text();
     const html = (window.marked && window.DOMPurify)
@@ -354,7 +360,7 @@ async function ping(url, path, cors) {
   try {
     // cors=true: server phải trả ACAO đúng origin portal — dịch vụ lạ chiếm
     // port sẽ bị coi là "chết" thay vì false-positive như no-cors
-    const r = await fetch(url + (path || ''), { signal: ctrl.signal, ...(cors ? {} : { mode: 'no-cors' }) });
+    const r = await bfetch(url + (path || ''), { signal: ctrl.signal, ...(cors ? {} : { mode: 'no-cors' }) });
     return cors ? r.ok : true;
   } catch { return false; }
 }
@@ -364,7 +370,7 @@ async function initChat() {
   chatChecked = true;
   $('#mode-chat').onclick = () => setChatMode('chat');
   $('#mode-cli').onclick = () => setChatMode('cli');
-  fetch(BRIDGE_URL + '/api/brain').then(r => r.json())
+  bfetch(BRIDGE_URL + '/api/brain').then(r => r.json())
     .then(d => { brainTerminal = (d.current && d.current.terminal) || 'devin'; })
     .catch(() => {});
   setChatMode('chat');
@@ -401,11 +407,22 @@ initI18n().finally(loadManifest);
 
 /* ---- trạng thái extension Trợ Lý AI (cánh tay trình duyệt) ---- */
 const EXT_BRIDGE = 'http://localhost:7684';
+// ID cố định nhờ "key" trong manifest — gửi mã kết nối cho extension
+// mỗi lần portal mở (idempotent); trang options có ô dán dự phòng.
+const EXT_ID = 'mdalidmkajiinlpdefjchbgcejjjmpeh';
+function tryPairExt() {
+  try {
+    if (!window.chrome || !chrome.runtime || !chrome.runtime.sendMessage) return;
+    chrome.runtime.sendMessage(EXT_ID,
+      { t: 'set-token', token: window.BRIDGE_TOKEN }, () => void chrome.runtime.lastError);
+  } catch (e) { /* chưa cài extension */ }
+}
+tryPairExt();
 async function pollExtStatus() {
   const el = $('#ext-status'), txt = $('#ext-status-text');
   try {
     const sig = (window.AbortSignal && AbortSignal.timeout) ? AbortSignal.timeout(3000) : undefined;
-    const r = await fetch(EXT_BRIDGE + '/api/browser/status', { signal: sig });
+    const r = await bfetch(EXT_BRIDGE + '/api/browser/status', { signal: sig });
     const d = await r.json();
     el.classList.toggle('on', !!d.connected);
     txt.textContent = d.connected ? t('extOn') : t('extOff');
@@ -423,13 +440,14 @@ const settingsOverlay = $('#settings-overlay');
 $('#settings-btn').onclick = async () => {
   settingsOverlay.hidden = false;
   renderBrain();
+  renderConnCode();
   renderFolders();
   const apps = await renderApps();
   // kiểm tra lại trạng thái THẬT của từng app ngầm — panel cập nhật dần,
   // không hiện số liệu cũ đã lưu từ lần trước
   if (apps && apps.length) {
     apps.forEach(a => {
-      fetch(BRIDGE_URL + '/api/check-connection', {
+      bfetch(BRIDGE_URL + '/api/check-connection', {
         method: 'POST', body: JSON.stringify({ id: a.id })
       }).then(() => renderApps()).catch(() => {});
     });
@@ -445,7 +463,7 @@ document.addEventListener('keydown', e => {
 // não lạ do nhập tay ở onboarding vẫn hiện dòng "đang dùng" để không mất chọn)
 async function renderBrain() {
   try {
-    const d = await (await fetch(BRIDGE_URL + '/api/brain')).json();
+    const d = await (await bfetch(BRIDGE_URL + '/api/brain')).json();
     const row = $('#brain-row');
     const opts = (d.presets || []).filter(p => p.installed);
     const have = new Set(opts.map(o => o.id));
@@ -469,7 +487,7 @@ async function renderBrain() {
     sel.onchange = async () => {
       sel.disabled = true; msg.textContent = t('brainSwitching');
       try {
-        const r = await (await fetch(BRIDGE_URL + '/api/brain', {
+        const r = await (await bfetch(BRIDGE_URL + '/api/brain', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: sel.value })
         })).json();
@@ -483,6 +501,27 @@ async function renderBrain() {
   } catch { /* bridge chưa chạy — giấu mục này */ }
 }
 
+// "Mã kết nối" — để học viên copy dán vào extension khi nó hỏi (đường dự
+// phòng; đường chính là auto-pair từ onboarding)
+function renderConnCode() {
+  const row = $('#conn-row');
+  row.innerHTML = '';
+  const code = document.createElement('code');
+  code.className = 'conn-code';
+  code.textContent = window.BRIDGE_TOKEN || '—';
+  const btn = document.createElement('button');
+  btn.className = 'mini-btn';
+  btn.textContent = t('connCopy');
+  btn.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(window.BRIDGE_TOKEN || '');
+      btn.textContent = t('connCopied');
+    } catch { btn.textContent = t('connCodeTitle'); }
+    setTimeout(() => { btn.textContent = t('connCopy'); }, 3000);
+  };
+  row.appendChild(code); row.appendChild(btn);
+}
+
 async function renderApps() {
   let apps = [];
   try {
@@ -490,7 +529,7 @@ async function renderApps() {
     // một form "Cài" đang mở → không rebuild (rebuild = mất trắng chữ đang
     // gõ). auto-refresh 15s + mỗi check-connection đều gọi hàm này → phải bỏ qua.
     if (list.querySelector('.app-setup:not([hidden])')) return null;
-    const d = await (await fetch(BRIDGE_URL + '/api/connections')).json();
+    const d = await (await bfetch(BRIDGE_URL + '/api/connections')).json();
     apps = d.apps || [];
     list.innerHTML = '';
     if (!apps.length) {
@@ -523,7 +562,7 @@ async function renderApps() {
       if (openBtn) openBtn.onclick = () => { window.open(a.open_url, '_blank'); };
       row.querySelector('.app-check').onclick = async () => {
         row.querySelector('.app-check').textContent = '…';
-        const r = await (await fetch(BRIDGE_URL + '/api/check-connection', {
+        const r = await (await bfetch(BRIDGE_URL + '/api/check-connection', {
           method: 'POST', body: JSON.stringify({ id: a.id })
         })).json();
         renderApps();
@@ -562,11 +601,11 @@ async function renderApps() {
           if (!Object.keys(fields).length) return;
           const btn = form.querySelector('.app-save');
           btn.textContent = '…';
-          const res = await (await fetch(BRIDGE_URL + '/api/secrets', {
+          const res = await (await bfetch(BRIDGE_URL + '/api/secrets', {
             method: 'POST', body: JSON.stringify({ app: a.id, fields })
           })).json();
           if (res.err) { btn.textContent = res.err; return; }
-          await fetch(BRIDGE_URL + '/api/check-connection', {
+          await bfetch(BRIDGE_URL + '/api/check-connection', {
             method: 'POST', body: JSON.stringify({ id: a.id })
           });
           form.hidden = true;   // đóng form trước khi render — không bị skip
@@ -582,7 +621,7 @@ async function renderApps() {
 
 async function renderFolders() {
   try {
-    const d = await (await fetch(BRIDGE_URL + '/api/permissions')).json();
+    const d = await (await bfetch(BRIDGE_URL + '/api/permissions')).json();
     const fs = d.folders || [];
     $('#folder-list').innerHTML = '';
     for (const f of fs) {
@@ -593,7 +632,7 @@ async function renderFolders() {
         `<span class="folder-lv">${f.access === 'read-write' ? t('readWrite') : t('readOnly')}</span>` +
         `<button class="folder-del" title="${escapeHtml(t('delPermTitle'))}">×</button>`;
       row.querySelector('.folder-del').onclick = async () => {
-        await fetch(BRIDGE_URL + '/api/remove-permission', {
+        await bfetch(BRIDGE_URL + '/api/remove-permission', {
           method: 'POST', body: JSON.stringify({ path: f.path })
         });
         renderFolders();
@@ -611,7 +650,7 @@ $('#folder-add-btn').onclick = () => {
 $('#folder-save').onclick = async () => {
   const p = $('#folder-path').value.trim();
   if (!p) return;
-  const r = await (await fetch(BRIDGE_URL + '/api/permissions', {
+  const r = await (await bfetch(BRIDGE_URL + '/api/permissions', {
     method: 'POST',
     body: JSON.stringify({ path: p, access: $('#folder-access').value })
   })).json();

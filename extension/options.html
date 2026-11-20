@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Trợ Lý AI — mã kết nối</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; padding: 16px;
+         min-width: 300px; color: #1d2129; }
+  h1 { font-size: 15px; margin: 0 0 6px; }
+  p { font-size: 12.5px; color: #6b7280; line-height: 1.55; margin: 0 0 10px; }
+  input { width: 100%; box-sizing: border-box; padding: 9px 10px; font-size: 13px;
+          border: 1.5px solid #dfe5e1; border-radius: 8px; font-family: monospace; }
+  input:focus { outline: none; border-color: #147a4f; }
+  button { margin-top: 10px; width: 100%; padding: 9px; border: 0; border-radius: 8px;
+           background: #147a4f; color: #fff; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+  button:hover { background: #0f6440; }
+  #ok { color: #147a4f; font-size: 12.5px; margin-top: 8px; min-height: 16px; }
+</style>
+</head>
+<body>
+  <h1>Mã kết nối</h1>
+  <p>Dán mã kết nối vào đây — lấy trong portal Trợ Lý AI, mục <b>⚙ Cài đặt → Mã kết nối</b>.
+     Thường thì extension tự nhận mã rồi, chỉ cần bước này khi nó vẫn báo <b>!</b>.</p>
+  <input id="tok" placeholder="dán mã kết nối…" autocomplete="off" spellcheck="false">
+  <button id="save">Lưu mã</button>
+  <div id="ok"></div>
+<script>
+  const inp = document.getElementById('tok'), ok = document.getElementById('ok');
+  chrome.storage.local.get('bridge_token', d => { inp.value = d.bridge_token || ''; });
+  document.getElementById('save').onclick = () => {
+    const t = inp.value.trim();
+    if (!t) { ok.textContent = 'Chưa dán mã nào — mở ⚙ Cài đặt trong portal để lấy.'; return; }
+    chrome.storage.local.set({ bridge_token: t }, () => {
+      chrome.runtime.sendMessage({ t: 'set-token', token: t });
+      ok.textContent = 'Đã lưu ✓ — extension đang nối lại…';
+    });
+  };
+</script>
+</body>
+</html>

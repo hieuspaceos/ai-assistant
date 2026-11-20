@@ -39,15 +39,51 @@ Các action v1:
   wait {tabId?, ms}      — chờ trang (tối đa 5s)
   reload                 — nạp lại extension (sau khi sửa code)
 """
-import base64, hashlib, json, os, re, socket, struct, sys, threading, time
+import base64, hashlib, hmac, json, os, re, secrets, socket, struct, sys, threading, time
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 7684
 CWD = sys.argv[2] if len(sys.argv) > 2 else "."
 WS_MAGIC = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
+TOKEN_FP = os.path.join(os.path.abspath(CWD), ".devin", "bridge.token")
+
+def load_token():
+    # cùng "chìa khoá nhà" với chat-bridge — start script sinh trước;
+    # fallback atomic O_EXCL chống race (thua thì đọc token của thằng thắng)
+    try:
+        with open(TOKEN_FP, encoding="utf-8") as f:
+            t = f.read().strip()
+            if t:
+                return t
+    except OSError:
+        pass
+    t = secrets.token_hex(24)
+    try:
+        os.makedirs(os.path.dirname(TOKEN_FP), exist_ok=True)
+        fd = os.open(TOKEN_FP, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        os.write(fd, t.encode())
+        os.close(fd)
+        return t
+    except FileExistsError:
+        # Thua race → chờ thằng thắng ghi xong rồi đọc; file tồn tại mà
+        # rỗng (ai đó tạo file trống) → ghi thẳng, không có gì để mất.
+        time.sleep(0.05)
+        try:
+            with open(TOKEN_FP, encoding="utf-8") as f:
+                t2 = f.read().strip()
+                if t2:
+                    return t2
+        except OSError:
+            pass
+        with open(TOKEN_FP, "w", encoding="utf-8") as f:
+            f.write(t)
+        return t
+
+BRIDGE_TOKEN = load_token()
+
 # Chỉ trang local (host loopback, mọi port) được gọi HTTP API từ browser;
 # extension (WS) xài origin chrome-extension://… Request không có Origin
-# (curl từ agent) vẫn cho qua.
+# (curl từ agent) vẫn cho qua — NHƯNG phải kèm mã kết nối (xem serve_conn).
 import urllib.parse
 def is_local_origin(origin):
     try:
@@ -208,7 +244,7 @@ def send_json(sock, obj, code=200, origin=None):
         cors = f"Access-Control-Allow-Origin: {origin}\r\nVary: Origin\r\n"
     sock.sendall((
         f"HTTP/1.1 {code} OK\r\nContent-Type: application/json; charset=utf-8\r\n"
-        f"{cors}Access-Control-Allow-Headers: Content-Type\r\n"
+        f"{cors}Access-Control-Allow-Headers: Content-Type, X-Bridge-Token\r\n"
         f"Content-Length: {len(b)}\r\n\r\n").encode() + b)
 
 def handle_api(method, path, body):
@@ -254,7 +290,21 @@ def serve_conn(sock):
         first = head.split("\r\n", 1)[0]
         parts = first.split(" ")
         method, path = parts[0], parts[1] if len(parts) > 1 else "/"
-        if method == "GET" and path == "/ext" and "upgrade: websocket" in head.lower():
+        pu = urllib.parse.urlparse(path)
+        # Mã kết nối: header X-Bridge-Token hoặc ?token= — bắt buộc cho mọi
+        # cửa vào (HTTP api + WS). Vá lỗ hổng no-Origin: process local trước
+        # đây chiếm được slot /ext và đọc trộm mọi lệnh agent gửi extension.
+        mo_t = re.search(r"^x-bridge-token:\s*(\S+)", head, re.I | re.M)
+        tok = (mo_t.group(1).strip() if mo_t else None) or \
+              (urllib.parse.parse_qs(pu.query).get("token") or [""])[0]
+        # so trên bytes: compare_digest(str) raise TypeError với ký tự
+        # non-ASCII → kết nối chết thay vì trả 401 gọn
+        authed = hmac.compare_digest(
+            (tok or "").encode("utf-8", "replace"), BRIDGE_TOKEN.encode())
+        if method == "GET" and pu.path == "/ext" and "upgrade: websocket" in head.lower():
+            if not authed:
+                sock.sendall(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n")
+                return
             if ws_handshake(sock, head):
                 # read_http đặt timeout 15s để đọc header — phải gỡ ra, nếu
                 # không WS rớt sau 15s im lặng (extension flap liên tục)
@@ -294,9 +344,12 @@ def serve_conn(sock):
                     if origin and is_local_origin(origin) else b"")
             sock.sendall(b"HTTP/1.1 204 No Content\r\n" + cors +
                          b"Access-Control-Allow-Methods: GET,POST\r\n"
-                         b"Access-Control-Allow-Headers: Content-Type\r\n\r\n")
+                         b"Access-Control-Allow-Headers: Content-Type, X-Bridge-Token\r\n\r\n")
             sock.close(); return
-        out = handle_api(method, path, body)
+        if pu.path.startswith("/api") and not authed:
+            send_json(sock, {"err": "thiếu hoặc sai mã kết nối"}, 401, origin)
+            return
+        out = handle_api(method, pu.path, body)
         if isinstance(out, tuple):
             send_json(sock, out[0], out[1], origin)
         else:

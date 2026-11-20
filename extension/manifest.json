@@ -1,10 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Trợ Lý AI",
-  "version": "0.1",
+  "version": "0.2",
   "description": "Cánh tay của Trợ Lý AI — giúp trợ lý thao tác trên trang web bạn đang mở (chỉ khi bạn cho phép).",
-  "permissions": ["tabs", "scripting", "activeTab", "alarms", "debugger"],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvfWGyYUrQmmVE0nVpymJWiCQAto9hZiT3kH6YZ8Y96lDCxJWgEM8PKpfopG/3Dp+8AFlo1uea3N+TQsHTDZI3jNONgBaI0v/qZzBWlaMv/WfDVFmPK2nB6KbYhpTboatLrGN63rdVNfkEWOAFVPgnUvr/byAaj29aJ3MTCvgHaKla8DiQ8783m5vOUEE45YH8qrar9B7Aj11aGJqY5vTec2kVMUYcp9Z/Izwq2QEs+BrDnWTRm8zVkqRf2QjGQwq1CJLBldFoFCruACHdGAZQn54CpH40oiQ2HxOsTjWS9Xcv2V7I3MuI7/ZmzpU/K06H71Rknt4mzysv5uXpdMB9wIDAQAB",
+  "permissions": ["tabs", "scripting", "activeTab", "alarms", "debugger", "storage"],
   "host_permissions": ["<all_urls>"],
+  "externally_connectable": {
+    "matches": ["*://localhost:*/*", "*://127.0.0.1:*/*"]
+  },
+  "options_ui": { "page": "options.html", "open_in_tab": false },
   "background": { "service_worker": "background.js" },
   "action": {
     "default_title": "Trợ Lý AI",

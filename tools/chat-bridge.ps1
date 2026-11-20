@@ -33,6 +33,47 @@ function Test-LocalOrigin($origin) {
 
 # ---------- não AI qua ACP ----------
 $BrainFp = Join-Path $WorkDir "brain.json"
+
+# "Chìa khoá nhà" dùng chung cho mọi bridge — start.bat sinh trước; đây
+# chỉ là fallback (ghi atomic bằng .NET để không race với bridge khác)
+$TokenFp = Join-Path $WorkDir ".devin\bridge.token"
+function Get-BridgeToken {
+    if (Test-Path $TokenFp) {
+        $t = (Get-Content $TokenFp -Raw -Encoding UTF8).Trim()
+        if ($t) { return $t }
+    }
+    $t = -join ((1..48) | ForEach-Object { '{0:x}' -f (Get-Random -Max 16) })
+    New-Item -ItemType Directory -Force -Path (Split-Path $TokenFp) | Out-Null
+    try {
+        $fs = [IO.File]::Open($TokenFp, [IO.FileMode]::CreateNew)
+        $b = [Text.Encoding]::UTF8.GetBytes($t)
+        $fs.Write($b, 0, $b.Length); $fs.Close()
+        return $t
+    } catch [IO.IOException] {
+        # Thua race → chờ thằng thắng ghi xong rồi đọc; file tồn tại mà
+        # rỗng (ai đó tạo file trống) → ghi thẳng, không có gì để mất.
+        Start-Sleep -Milliseconds 50
+        $t2 = (Get-Content $TokenFp -Raw -Encoding UTF8).Trim()
+        if ($t2) { return $t2 }
+        [IO.File]::WriteAllText($TokenFp, $t)
+        return $t
+    }
+}
+$BridgeToken = Get-BridgeToken
+$env:BRIDGE_TOKEN = $BridgeToken   # não + ttyd kế thừa khi spawn
+
+function Test-Authed($req) {
+    # Mọi API ngoại trừ /api/health + OPTIONS phải trình "chìa khoá nhà":
+    # header X-Bridge-Token (fetch/curl) hoặc ?token= (một dòng lệnh)
+    $tok = $req.Headers["X-Bridge-Token"]
+    if (-not $tok) { $tok = $req.QueryString["token"] }
+    return [string]$tok -ceq $BridgeToken
+}
+function Get-AppVersion {
+    $vf = Join-Path $WorkDir "VERSION"
+    if (Test-Path $vf) { $v = (Get-Content $vf -Raw -Encoding UTF8).Trim(); if ($v) { return $v } }
+    return "0"
+}
 # Các não biết nói ACP mà onboarding gợi ý. requires = binary phải có trên
 # PATH thì preset mới coi là "đã cài" (adapter qua npx vẫn cần CLI gốc để
 # đăng nhập — vd codex-acp cần `codex`).
@@ -247,7 +288,8 @@ function Run-Probe($probe) {
         if ($probe.type -eq "tabs") {
             # Có trang web đang mở khớp URL — vd: đã mở Zalo/Outlook trong browser
             $d = Invoke-RestMethod -Uri "http://127.0.0.1:7684/api/browser" -Method Post `
-                 -ContentType "application/json" -Body '{"action":"tabs"}' -TimeoutSec 6
+                 -ContentType "application/json" -Headers @{ "X-Bridge-Token" = $BridgeToken } `
+                 -Body '{"action":"tabs"}' -TimeoutSec 6
             if (-not $d.ok) {
                 return @{ ok = $false; msg = "trình duyệt chưa nối — mở Chrome/Edge lên trước" }
             }
@@ -312,7 +354,7 @@ function Send-Json($ctx, $obj, [int]$code = 200) {
         $res.Headers.Add("Vary", "Origin")
     }
     $res.Headers.Add("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-    $res.Headers.Add("Access-Control-Allow-Headers", "Content-Type")
+    $res.Headers.Add("Access-Control-Allow-Headers", "Content-Type, X-Bridge-Token")
     $res.ContentLength64 = $body.Length
     $res.OutputStream.Write($body, 0, $body.Length)
     $res.OutputStream.Close()
@@ -347,12 +389,19 @@ try {
                     $ctx.Response.Headers.Add("Vary", "Origin")
                 }
                 $ctx.Response.Headers.Add("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-                $ctx.Response.Headers.Add("Access-Control-Allow-Headers", "Content-Type")
+                $ctx.Response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, X-Bridge-Token")
                 $ctx.Response.OutputStream.Close()
                 continue
             }
+            # Mọi endpoint trừ /api/health phải có mã kết nối — process
+            # local lạ không ra lệnh được cho trợ lý nữa.
+            if (-not ($ctx.Request.HttpMethod -eq "GET" -and $path -eq "/api/health") -and
+                -not (Test-Authed $ctx.Request)) {
+                Send-Json $ctx @{ err = "thiếu hoặc sai mã kết nối" } 401
+                continue
+            }
             if ($ctx.Request.HttpMethod -eq "GET" -and $path -eq "/api/health") {
-                Send-Json $ctx @{ ok = $true; sessionId = $script:SessionId; brain = (Get-Brain).id }
+                Send-Json $ctx @{ ok = $true; sessionId = $script:SessionId; brain = (Get-Brain).id; version = (Get-AppVersion) }
             }
             elseif ($ctx.Request.HttpMethod -eq "GET" -and $path -eq "/api/brain") {
                 $cur = Get-Brain

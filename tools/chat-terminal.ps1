@@ -23,6 +23,12 @@ try {
     $b = Get-Content (Join-Path (Split-Path -Parent $PSScriptRoot) "brain.json") -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($b.terminal) { $brain = [string]$b.terminal }
 } catch {}
+
+# "Chìa khoá nhà" cho agent chạy trong chế độ Terminal — ttyd spawn shell
+# kế thừa env này nên skill gọi bridge có sẵn $env:BRIDGE_TOKEN.
+$tokFile = Join-Path (Split-Path -Parent $PSScriptRoot) ".devin\bridge.token"
+if (Test-Path $tokFile) { $env:BRIDGE_TOKEN = (Get-Content $tokFile -Raw -Encoding UTF8).Trim() }
+
 ttyd -p 7681 -i 127.0.0.1 -W `
   -t $theme `
   -t fontSize=17 `

@@ -79,6 +79,16 @@ Cần Python (đã cài ở Bước 4). Cài một lần:
 Kiểm tra: mở portal, hỏi trợ lý "bạn thấy trình duyệt của tôi không?" —
 nếu icon hiện chữ **ON** màu xanh là đã kết nối.
 
+**Icon hiện dấu `!`?** Extension đang chờ "mã kết nối". Thường thì chỉ
+cần mở portal lên (bằng file `start`) là nó tự nhận mã. Không được thì
+vào portal → ⚙ Cài đặt → mục **Mã kết nối** → bấm Sao chép → mở trang
+options của extension (chuột phải vào icon → Options) rồi dán vào.
+
+**Đã cài extension từ bản cũ (trước bản có "mã kết nối")?** Extension
+giờ có ID cố định nên Chrome coi nó là tiện ích mới — vào
+`chrome://extensions`, gỡ bản cũ, rồi "Load unpacked" lại folder
+`extension` như trên.
+
 *(Không cài thì trợ lý vẫn làm việc với file và folder bình thường —
 chỉ là không chạm được vào trang web đang mở.)*
 
