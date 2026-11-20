@@ -10,7 +10,10 @@ if (window.__troLyAI_handler) {
 const ATTR = 'data-tlai';
 
 function scrollableEls() {
-  return [...document.querySelectorAll('body *')]
+  // Chỉ quét container có khả năng cuộn — leaf (span/a/img...) không bao
+  // giờ là vùng cuộn; 'body *' trước đây quét cả cây (nghìn node, ép reflow).
+  return [...document.querySelectorAll('main,section,article,aside,nav,div,ul,ol')]
+    .slice(0, 4000)
     .filter(el => el.scrollHeight - el.clientHeight > 50 && el.clientHeight > 60);
 }
 
@@ -76,15 +79,21 @@ function actClick(p) {
     // Ưu tiên khớp chính xác; không có thì lấy phần tử NHỎ NHẤT chứa chữ
     // (vd tên hội thoại nằm chung hàng với giờ + xem trước).
     const want = String(p.text).trim().toLowerCase();
+    // Đọc innerText MỘT lần mỗi ứng viên (một layout flush) — trước đây đọc
+    // lại trong filter rồi lại trong sort comparator → hàng chục nghìn reflow
+    // trên trang nặng (Zalo/Sheets). Giữ nguyên ưu tiên: khớp chính xác
+    // (children<=3, chuỗi ngắn nhất) → chứa chữ (chuỗi ngắn nhất).
     const cands = [...document.querySelectorAll('a,button,div,span,li,[role]')]
-      .filter(e => visible(e));
-    el = cands.filter(e => (e.innerText || '').trim().toLowerCase() === want &&
-                           e.children.length <= 3)
-              .sort((a, b) => a.innerText.length - b.innerText.length)[0];
-    if (!el) {
-      el = cands.filter(e => (e.innerText || '').toLowerCase().includes(want))
-                .sort((a, b) => a.innerText.length - b.innerText.length)[0];
+      .slice(0, 6000)                        // trần chống trang khổng lồ
+      .filter(visible)
+      .map(e => ({ e, t: (e.innerText || '').toLowerCase() }));
+    let hit = cands.filter(c => c.t.trim() === want && c.e.children.length <= 3)
+                   .sort((a, b) => a.t.length - b.t.length)[0];
+    if (!hit) {
+      hit = cands.filter(c => c.t.includes(want))
+                 .sort((a, b) => a.t.length - b.t.length)[0];
     }
+    el = hit && hit.e;
     if (!el) return { ok: false, err: 'không thấy phần tử chữ "' + p.text + '"' };
   } else if (p.sel) {
     el = document.querySelector(p.sel);
@@ -333,7 +342,9 @@ const ACTIONS = {
     const fonts = new Set();
     try { document.fonts.forEach(f => fonts.add(`${f.family} ${f.weight}`)); } catch (e) {}
     const bgs = new Set();
-    for (const el of document.querySelectorAll('body *')) {
+    // cap scan nền — getComputedStyle mỗi node là một layout read; trang
+    // khổng lồ trước đây quét hết dù 40 bg đầu thường nằm trong vài trăm node
+    for (const el of [...document.querySelectorAll('body *')].slice(0, 5000)) {
       if (bgs.size >= 40) break;
       const b = getComputedStyle(el).backgroundImage;
       if (b && b !== 'none')

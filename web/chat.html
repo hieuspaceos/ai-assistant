@@ -230,13 +230,31 @@ function agentBubble() {
   msgs.scrollTop = msgs.scrollHeight;
   return curBubble;
 }
-function addText(t) {
-  if (!curBubble) agentBubble();
-  curBubble.dataset.raw = (curBubble.dataset.raw || '') + t;
-  curBubble.innerHTML = md(curBubble.dataset.raw);
+// Stream render: trước đây marked.parse TOÀN VĂN mỗi chunk → O(n²) trên
+// câu dài. Giờ tích raw + parse tối đa 1 lần/frame (rAF); replay history
+// thì gom nguyên bubble rồi parse một lần khi đóng.
+let rafId = 0;
+let replaying = false;
+function flushBubble() {
+  // render ngay bubble đang dở — gọi trước khi curBubble bị đổi/null
+  if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+  if (curBubble && curBubble.dataset.raw)
+    curBubble.innerHTML = md(curBubble.dataset.raw);
   msgs.scrollTop = msgs.scrollHeight;
 }
+function addText(t) {
+  if (!curBubble) agentBubble();
+  const b = curBubble;   // BẮT BUỘC capture — 'done'/'tool'/'addUser' có thể
+  b.dataset.raw = (b.dataset.raw || '') + t;   // null hoá curBubble giữa chừng
+  if (replaying) return; // replay: chỉ tích raw, flushBubble lo phần render
+  if (!rafId) rafId = requestAnimationFrame(() => {
+    rafId = 0;
+    b.innerHTML = md(b.dataset.raw);   // đọc b đã capture, KHÔNG đọc curBubble
+    msgs.scrollTop = msgs.scrollHeight;
+  });
+}
 function addUser(t) {
+  flushBubble();
   curBubble = null;
   const d = document.createElement('div');
   d.className = 'msg user'; d.textContent = t;
@@ -267,6 +285,7 @@ function startBusyClock() {
   busyTimer = setInterval(() => { statusEl.textContent = fmtBusy(); }, 1000);
 }
 function addTool(title, status) {
+  flushBubble();
   curBubble = null;   // tool call = ranh giới tin nhắn → text sau mở bubble mới
   removeTyping();
   if (status === 'in_progress' && title) {
@@ -359,9 +378,9 @@ function handleEvent(ev) {
   }
   else if (ev.t === 'text') { removeTyping(); addText(ev.text); }
   else if (ev.t === 'tool') addTool(ev.title, ev.status);
-  else if (ev.t === 'perm') { removeTyping(); addPerm(ev); }
-  else if (ev.t === 'done') { setBusy(false); curBubble = null; }
-  else if (ev.t === 'err') { addErr(ev.msg); setBusy(false); }
+  else if (ev.t === 'perm') { removeTyping(); flushBubble(); addPerm(ev); }
+  else if (ev.t === 'done') { flushBubble(); setBusy(false); curBubble = null; }
+  else if (ev.t === 'err') { flushBubble(); addErr(ev.msg); setBusy(false); }
 }
 
 let since = 0;
@@ -383,7 +402,12 @@ async function poll() {
       handleEvent({t: 'ready'});
     }
     since = data.next;
+    // replay sau reset: addText chỉ tích raw (replaying), mỗi bubble đóng
+    // mới parse 1 lần — tránh O(n²) y hệt chỗ stream khi lịch sử dài
+    replaying = !!data.reset;
     (data.events || []).forEach(handleEvent);
+    replaying = false;
+    flushBubble();        // bubble cuối replay có thể đang mở dở
     setTimeout(poll, 900);
   } catch (e) {
     connected = false;
