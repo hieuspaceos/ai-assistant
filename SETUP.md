@@ -1,5 +1,14 @@
 # Cài đặt một lần — xong dùng mãi
 
+> **Cách nhanh nhất (khuyến nghị):** tải file `TroLyAI.exe` (Windows) hoặc
+> `troly` (macOS) → double-click → xong. File tự dựng mọi thứ trong
+> `~/TroLyAI` rồi mở portal — không cần Python, không cần các bước dưới.
+>
+> Các bước thủ công bên dưới dành cho máy dev hoặc khi chưa có file `troly`
+> cho nền tảng của bạn.
+
+
+
 File này hướng dẫn cài những thứ cần có trên máy Windows để học.
 Chỉ làm **một lần duy nhất**. Kẹt bước nào cứ hỏi người phụ trách
 hoặc chụp màn hình gửi họ.

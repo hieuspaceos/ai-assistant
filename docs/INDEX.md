@@ -35,6 +35,7 @@ Entry gốc: [`README.md`](../README.md) · Quy tắc session: [`AGENTS.md`](../
 | `decision-log.md` | Các quyết định kiến trúc và lý do (stateful) |
 | `project-roadmap.md` | Hướng phát triển (stateful) |
 | `troubleshooting-runbook.md` | Sự cố đã gặp + cách xử lý (stateful) |
+| `extension-store-listing.md` | Hồ sơ submit Chrome Web Store cho extension |
 
 ---
 

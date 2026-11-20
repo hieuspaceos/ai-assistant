@@ -3,6 +3,24 @@
 Các quyết định kiến trúc và **tại sao** — để sau này không gỡ ngược lại
 vì quên lý do. Mới nhất lên đầu.
 
+## 2026 — `troly` single-binary + self-install
+
+**Một binary nhiều vai qua argv, payload tự bung ra `~/TroLyAI`.** Vì:
+PyInstaller không đóng được nhiều "chương trình" — một exe dispatch
+`serve|chat-bridge|ext-bridge` cho ta supervisor + watchdog miễn phí.
+User dir giữ đúng layout project nên không phải đổi một dòng code bridge
+nào. Update = exe mới thấy VERSION khác → chỉ đè CODE_DIRS/CODE_FILES,
+không đụng my-course/brain/secrets — "update = tải file mới mở lại".
+
+**Child chạy qua `runpy` trong frozen exe + hidden-imports.** Vì: không
+có Python trên máy học viên nên không spawn `python tools/x.py` được.
+runpy cần module của tools nằm trong bundle — PyInstaller chỉ thấy
+import tĩnh của launcher nên `http.server`… phải khai trong build.sh.
+
+**Brain auto-install = nút mở trang hãng, không chạy lệnh hộ.** Vì: cài
+CLI hãng thường cần quyền/UAC/đăng nhập — dẫn đúng trang an toàn hơn là
+script cài hộ hỏng giữa chừng. "Kiểm tra lại" re-fetch `/api/brain`.
+
 ## 2026 — Bridge token + chống prompt injection (đợt siết bảo mật)
 
 **Một `bridge.token` dùng chung cho mọi bridge, hai cách trình.** Vì:
