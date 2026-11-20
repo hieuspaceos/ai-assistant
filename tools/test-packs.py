@@ -20,35 +20,23 @@ PACK_EN = os.path.join(PACKS, "en")
 MANIFEST = os.path.join(ROOT, "my-course", "manifest.json")
 
 # skill vi -> skill en: ánh xạ TƯỜNG MINH (tên lệnh theo ngôn ngữ).
-# Thêm một dòng khi có skill mới — thiếu dòng = test fail, đúng chủ đích.
-VI_TO_EN = {
-    "anh-web": "web-images",
-    "cap-nhat-sheet": "update-sheet",
-    "clone-trang": "clone-page",
-    "dang-bai": "publish-post",
-    "doc-outlook": "read-outlook",
-    "doc-zalo": "read-zalo",
-    "gom-file": "gather-files",
-    "gom-skill": "pack-skill",
-    "hoc-bai": "tutor",
-    "lam-excel": "work-excel",
-    "lam-word": "work-word",
-    "loc-khach": "split-customers",
-    "mo-web": "open-web",
-    "nen-anh": "compress-images",
-    "phong-van": "interview",
-    "seo-meta": "seo-meta",
-    "tom-tat-file": "summarize-file",
-    "trang-moi": "new-page",
-    "xuat-canva": "export-canva",
-    "zalo-oa": "zalo-oa",
-}
+# Nguồn chung: skill-packs/skill-map.json — chat-bridge cũng đọc file này
+# khi activate bot cho học viên en. Thêm skill mới → thêm một dòng vào
+# file đó — thiếu dòng = test fail, đúng chủ đích.
+try:
+    VI_TO_EN = json.load(open(os.path.join(PACKS, "skill-map.json"),
+                              encoding="utf-8"))
+except Exception as e:
+    VI_TO_EN = {}
+    _map_err = e
 
 def skill_dirs(base):
     return {d for d in os.listdir(base)
             if os.path.isdir(os.path.join(base, d))} if os.path.isdir(base) else set()
 
 fails = []
+if not VI_TO_EN:
+    fails.append(f"skill-map.json không đọc được: {_map_err}")
 
 def check(ok, msg):
     if not ok:
@@ -117,6 +105,32 @@ for lang, pack in (("vi", vi), ("en", en)):
             check(n in pack, f"recipes/{lang}.json trỏ /{n} — không có trong pack")
     except Exception as e:
         fails.append(f"recipes/{lang}.json không đọc được: {e}")
+
+# 6. roles/*.json — mọi skill tham chiếu phải tồn tại (trong pack vi, hoặc
+#    map được sang en); mọi need phải khớp id app trong connections.json
+ROLES = os.path.join(PACKS, "roles")
+try:
+    conn = json.load(open(os.path.join(ROOT, "my-course", "connections.json"),
+                          encoding="utf-8"))
+    conn_ids = {a.get("id") for a in conn.get("apps", [])}
+except Exception as e:
+    conn_ids = set()
+    fails.append(f"connections.json không đọc được: {e}")
+if os.path.isdir(ROLES):
+    for f in sorted(os.listdir(ROLES)):
+        if not f.endswith(".json"):
+            continue
+        try:
+            t = json.load(open(os.path.join(ROLES, f), encoding="utf-8"))
+        except Exception as e:
+            fails.append(f"roles/{f} không đọc được: {e}")
+            continue
+        for s in t.get("skills") or []:
+            ok = s in vi or s in en or VI_TO_EN.get(s) in en
+            check(ok, f"roles/{f}: skill '{s}' không có trong pack nào")
+        for n in t.get("needs") or []:
+            check(n in conn_ids,
+                  f"roles/{f}: need '{n}' không khớp id nào trong connections.json")
 
 if fails:
     print(f"FAIL — {len(fails)} lỗi:")

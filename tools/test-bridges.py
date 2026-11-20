@@ -206,6 +206,42 @@ def main():
         s, b, _ = http("GET", b3 + f"/api/poll?since=0&token={TOKEN}")
         check("18b. replay sau rotate",
               any(e.get("text") == "dòng cuối" for e in b.get("events", [])))
+
+        # ---- bots: list → create → activate → delete ----
+        s, b, _ = http("GET", b3 + "/api/bots", token=TOKEN)
+        check("19. /api/bots → active null + 4 template",
+              s == 200 and b.get("active") is None
+              and b.get("bots") == []
+              and len(b.get("templates") or []) == 4, str(b)[:80])
+
+        tpl = next(t for t in b["templates"] if t["id"] == "marketing")
+        s, b, _ = http("POST", b3 + f"/api/bot?token={TOKEN}", {
+            "action": "create", "name": "Hằng", "role": "marketing",
+            "avatar": tpl["avatar"], "skills": tpl["skills"],
+            "needs": tpl["needs"], "recipes": tpl["recipes"],
+            "instructions": tpl["instructions"]["vi"]})
+        check("19a. create bot marketing",
+              s == 200 and b.get("bot", {}).get("id"), str(b)[:80])
+        bid = b.get("bot", {}).get("id", "")
+
+        s, b, _ = http("POST", b3 + f"/api/bot?token={TOKEN}",
+                       {"action": "activate", "id": bid})
+        bot_md = os.path.join(wd, "my-course", "bot.md")
+        ok = (s == 200 and b.get("active") == bid
+              and os.path.isfile(bot_md)
+              and "Hằng" in open(bot_md, encoding="utf-8").read())
+        mf = json.load(open(os.path.join(wd, "my-course", "manifest.json")))
+        ok = ok and any(r.get("command") == "/doc-zalo"
+                        for r in mf.get("recipes", []))
+        check("19b. activate → bot.md + recipes gộp", ok, str(b)[:80])
+
+        s, b, _ = http("POST", b3 + f"/api/bot?token={TOKEN}",
+                       {"action": "delete", "id": bid})
+        s2, b2_, _ = http("GET", b3 + "/api/bots", token=TOKEN)
+        check("19c. delete → active null + bot.md mất",
+              s == 200 and b2_.get("active") is None
+              and not os.path.exists(bot_md)
+              and not any(x.get("id") == bid for x in b2_.get("bots", [])))
     finally:
         for p in procs:
             try:
