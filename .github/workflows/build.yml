@@ -21,11 +21,12 @@ jobs:
     strategy:
       matrix:
         include:
-          - { os: macos-latest,    name: troly,       shell: bash }
-          - { os: windows-latest,  name: TroLyAI.exe, shell: bash }
+          - { os: macos-latest,    name: troly }
+          - { os: windows-latest,  name: TroLyAI.exe }
     runs-on: ${{ matrix.os }}
     defaults:
-      run: { shell: ${{ matrix.shell }} }
+      run:
+        shell: bash   # Git Bash có sẵn trên windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
