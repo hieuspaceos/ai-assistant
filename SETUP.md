@@ -4,7 +4,7 @@
 > → https://github.com/hieuspaceos/ai-assistant/releases/latest → chạy
 > là xong. File tự dựng mọi thứ trong `~/TroLyAI` rồi mở portal — không
 > cần Python, không cần các bước dưới.
-> *(Hiện có bản macOS; bản Windows `TroLyAI.exe` sẽ bổ sung sau.)*
+> *(macOS: file `troly` · Windows: file `TroLyAI.exe` — lấy đúng file cho máy mình.)*
 >
 > **Cập nhật sau này:** portal sẽ tự báo "Có bản mới" — bấm vào là ra
 > trang tải. Tải file mới chạy đè là xong, bài học và cài đặt giữ
@@ -31,18 +31,33 @@ hoặc chụp màn hình gửi họ.
 3. Hoặc nếu có `winget`: mở PowerShell, chạy
    `winget install Microsoft.WindowsTerminal`.
 
-## Bước 2 — Cài "người giúp việc" (Devin CLI)
+## Bước 2 — Cài "não" cho trợ lý (chọn MỘT trong hai đường)
 
-1. Bấm phím **Windows**, gõ `powershell`, Enter — một cửa sổ xanh/đen hiện ra.
-2. Dán đúng dòng này vào rồi Enter:
+Trợ lý cần một chương trình AI để suy nghĩ — gọi là "não". Chọn đường
+phù hợp với bạn:
 
-   ```powershell
-   irm https://cli.devin.ai/install.ps1 | iex
-   ```
+### Đường A — Miễn phí: Gemini CLI (gợi ý cho người mới)
 
-3. Chờ nó chạy xong, **đóng PowerShell, mở lại**.
-4. Gõ `devin` → Enter. Trình duyệt sẽ mở trang đăng nhập — đăng nhập
-   bằng tài khoản công ty cấp.
+Dùng được với tài khoản Google cá nhân, không tốn tiền (theo chính
+sách hiện tại của Google — có thể đổi sau này).
+
+1. Cần Node.js trước — mở PowerShell (phím Windows, gõ `powershell`,
+   Enter), dán: `winget install OpenJS.NodeJS` → Enter.
+2. Đóng PowerShell, mở lại, dán: `npm install -g @google/gemini-cli`
+   → Enter.
+3. Gõ `gemini` → Enter — trình duyệt mở trang đăng nhập Google, đăng
+   nhập bằng tài khoản cá nhân là xong.
+4. Vào portal → ⚙ Cài đặt → Bộ não → chọn **Gemini CLI**.
+
+### Đường B — Đã có sẵn tài khoản AI trả phí (Devin, Claude, Codex…)
+
+Ví dụ với Devin:
+
+1. Mở PowerShell, dán `irm https://cli.devin.ai/install.ps1 | iex` → Enter.
+2. Đóng PowerShell, mở lại, gõ `devin` → Enter — đăng nhập tài khoản
+   của bạn.
+3. Não khác (Claude Code, Codex, OpenCode, Goose) cài tương tự theo
+   trang của hãng, rồi chọn trong ⚙ Cài đặt → Bộ não.
 
 ## Bước 3 — Cài thêm cho chế độ "Terminal" (ttyd, không bắt buộc)
 

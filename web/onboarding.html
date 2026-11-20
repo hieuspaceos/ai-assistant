@@ -111,6 +111,9 @@ const T = {
     brainCustomPh:'ví dụ: goose acp',
     brainEmpty:'Gõ lệnh chạy não trước đã',
     brainErr:'Chưa đổi được não — thử lại hoặc để mặc định',
+    brainCostFree:'miễn phí', brainCostByok:'app miễn phí', brainCostPaid:'trả phí',
+    brainRec:'gợi ý',
+    brainNeedInstall:'Não này chưa cài — bấm "Cài não này" bên dưới nó, xong bấm kiểm tra lại',
   },
   en: {
     sub:'first-time setup', welcome:'Hi there! Pick a language first',
@@ -141,6 +144,9 @@ const T = {
     brainCustomPh:'e.g. goose acp',
     brainEmpty:'Type the brain command first',
     brainErr:'Couldn\'t switch brains — retry or keep the default',
+    brainCostFree:'free', brainCostByok:'free app', brainCostPaid:'paid',
+    brainRec:'suggested',
+    brainNeedInstall:'This brain isn\'t installed — use "Install this brain" below it, then check again',
   },
 };
 
@@ -211,15 +217,27 @@ function stepBrain(){
     // cái gì + đổ sẵn lệnh vào ô custom (não cũ id='custom' thì selBrain
     // đã là 'custom' từ dòng trên)
     const cur=d.current||{};
+    // sort: đã cài lên đầu → miễn phí → byok → trả phí; trong nhóm giữ thứ
+    // tự preset. Không não nào installed → preselect gemini (free tier) để
+    // card nó sáng lên kèm hint cài — next bị chặn bởi guard phía dưới
+    const rank={free:0,byok:1,paid:2};
+    const sorted=(d.presets||[]).slice().sort((a,b)=>
+      (b.installed-a.installed)||((rank[a.cost]??2)-(rank[b.cost]??2)));
+    if(!sorted.some(p=>p.installed)&&sorted.some(p=>p.id==='gemini'&&p.cost==='free'))
+      selBrain='gemini';
     if(cur.cmd && !(d.presets||[]).some(p=>p.id===cur.id)){
       if(selBrain==='custom' && !customBrain)
         customBrain=(cur.cmd+' '+(cur.args||[]).join(' ')).trim();
       bl.appendChild(el(`<p class="note" style="margin:0 0 6px">${t('brainNow')}: <code>${cur.cmd} ${(cur.args||[]).join(' ')}</code></p>`));
     }
-    (d.presets||[]).forEach(p=>{
+    sorted.forEach(p=>{
+      const costBadge=p.cost==='free'?` <span class="badge" style="background:#e8f5e9;color:#2e7d32">${t('brainCostFree')}</span>`
+        :p.cost==='byok'?` <span class="badge off">${t('brainCostByok')}</span>`
+        :` <span class="badge off">${t('brainCostPaid')}</span>`;
+      const recBadge=(selBrain===p.id&&!p.installed)?` <span class="badge" style="background:#fff3e0;color:#e65100">${t('brainRec')}</span>`:'';
       const o=el(`<div class="opt${p.installed?'':' dis'}${selBrain===p.id?' sel':''}">
         <span class="flag">${p.installed?'🧠':'⚪'}</span>
-        <div><b>${p.label}</b><span class="badge${p.installed?'':' off'}">${p.installed?t('brainIn'):t('brainOut')}</span><small>${(p.desc&&p.desc[lang])||''}</small></div></div>`);
+        <div><b>${p.label}</b><span class="badge${p.installed?'':' off'}">${p.installed?t('brainIn'):t('brainOut')}</span>${costBadge}${recBadge}<small>${(p.desc&&p.desc[lang])||''}</small></div></div>`);
       o.onclick=()=>{ if(!p.installed) return; selBrain=p.id; show(d); };
       // chưa cài + có trang hướng dẫn → nút "Cài não này" mở đúng trang
       // hãng (không chạy lệnh hộ — cài CLI cần quyền/UAC), kèm nút kiểm
@@ -261,6 +279,8 @@ function stepBrain(){
       if(!parts.length){ err.textContent=t('brainEmpty'); return; }
       payload={cmd:parts[0],args:parts.slice(1)};
     }else if(brainData&&brainData.current&&selBrain!==brainData.current.id){
+      const picked=(brainData.presets||[]).find(p=>p.id===selBrain);
+      if(picked&&!picked.installed){ err.textContent=t('brainNeedInstall'); return; }
       payload={id:selBrain};
     }
     if(!payload) return go(3);

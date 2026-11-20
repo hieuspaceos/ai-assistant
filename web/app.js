@@ -37,6 +37,7 @@ const I18N = {
     brainHint: 'Trợ lý nghĩ và làm việc bằng chương trình AI này — chỉ đổi khi máy bạn có sẵn chương trình khác (đổi xong trợ lý khởi động lại trong vài giây).',
     brainCurrent: 'đang dùng', brainSwitching: 'Đang đổi…',
     brainDone: 'Đã đổi xong', brainFail: 'Chưa đổi được',
+    brainCostFree: 'miễn phí', brainCostByok: 'app miễn phí', brainCostPaid: 'trả phí',
     connCodeTitle: 'Mã kết nối',
     connCodeHint: 'Khi extension Trợ Lý AI hỏi mã, dán mã này vào — giống đưa chìa khoá nhà cho nó, chỉ cần một lần.',
     connCopy: 'Sao chép', connCopied: 'Đã sao chép ✓',
@@ -93,6 +94,7 @@ const I18N = {
     brainHint: 'The assistant thinks and works through this AI program — only change it if another one is already installed (it restarts in a few seconds).',
     brainCurrent: 'in use', brainSwitching: 'Switching…',
     brainDone: 'Switched', brainFail: 'Couldn\'t switch',
+    brainCostFree: 'free', brainCostByok: 'free app', brainCostPaid: 'paid',
     connCodeTitle: 'Connection code',
     connCodeHint: 'If the Trợ Lý AI extension asks for a code, paste this in — like handing it the house key, once is enough.',
     connCopy: 'Copy', connCopied: 'Copied ✓',
@@ -527,7 +529,10 @@ async function renderBrain() {
     }
     opts.forEach(p => {
       const o = document.createElement('option');
-      o.value = p.id; o.textContent = p.label;
+      o.value = p.id;
+      const cost = p.cost === 'free' ? t('brainCostFree')
+        : p.cost === 'byok' ? t('brainCostByok') : t('brainCostPaid');
+      o.textContent = p.label + ' · ' + cost;
       sel.appendChild(o);
     });
     sel.value = (d.current && d.current.id) || 'devin';
