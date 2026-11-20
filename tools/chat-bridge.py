@@ -195,7 +195,7 @@ def run_probe(probe):
         if probe["type"] == "tabs":
             # Có trang web đang mở khớp URL — vd: đã mở Zalo/Outlook trong browser
             req = urllib.request.Request(
-                "http://127.0.0.1:7683/api/browser",
+                "http://127.0.0.1:7684/api/browser",
                 data=json.dumps({"action": "tabs"}).encode(),
                 headers={"Content-Type": "application/json"})
             with urllib.request.urlopen(req, timeout=6) as r:
@@ -316,7 +316,9 @@ class Handler(BaseHTTPRequestHandler):
             cl = int(self.headers.get("Content-Length") or 0)
         except ValueError:
             cl = 0
-        if cl > 1_000_000:
+        # save-page cần limit lớn hơn — file clone nhúng ảnh base64 dễ qua 1MB
+        cap = 8_000_000 if path == "/api/save-page" else 1_000_000
+        if cl > cap:
             self._json({"err": "body quá lớn"}, 413); return
         body = self.rfile.read(cl)
         try:
@@ -363,6 +365,30 @@ class Handler(BaseHTTPRequestHandler):
                           ensure_ascii=False, indent=2)
             except Exception:
                 pass
+            self._json({"ok": True})
+        elif path == "/api/save-page":
+            # clone-view.html lưu bản đã chỉnh — chỉ cho ghi file .html
+            # trong my-course/, chặn path ra ngoài
+            rel = str(data.get("file", "")).strip().lstrip("/")
+            html = str(data.get("html", ""))
+            course = os.path.realpath(os.path.join(os.path.abspath(CWD), "my-course"))
+            target = os.path.realpath(os.path.join(os.path.abspath(CWD), rel))
+            if not rel.startswith("my-course/") or ".." in rel or \
+               not target.startswith(course + os.sep) or \
+               not re.search(r"\.html?$", target, re.I):
+                self._json({"err": "chỉ lưu file .html trong my-course/"}, 400); return
+            if not html:
+                self._json({"err": "trang trống"}, 400); return
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            # backup bản trước khi ghi đè — học viên sửa hỏng còn về được
+            if os.path.exists(target):
+                try:
+                    import shutil
+                    shutil.copy2(target, target + ".bak")
+                except OSError:
+                    pass
+            with open(target, "w", encoding="utf-8") as f:
+                f.write(html)
             self._json({"ok": True})
         elif path == "/api/permissions":
             # Học viên (hoặc trợ lý) thêm folder được phép đọc/ghi

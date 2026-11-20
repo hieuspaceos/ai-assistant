@@ -16,7 +16,7 @@ dò lại.
 
 ## Chuẩn bị (bắt buộc, lần đầu)
 
-1. `curl -s http://localhost:7683/api/browser/status` → `connected: true`
+1. `curl -s http://localhost:7684/api/browser/status` → `connected: true`
    mới tiếp. Nếu `false` → hướng dẫn học viên cài extension (SETUP Bước 5).
 2. `{"action":"tabs"}` → tìm tab `chat.zalo.me`. Chưa có thì
    `{"action":"open","url":"https://chat.zalo.me"}`.

@@ -34,19 +34,40 @@ macOS/Linux chạy được bằng `start.sh`. Hỗ trợ **tiếng Việt và E
 8. Học: xem slide → đọc guide → làm bài tập → kẹt thì hỏi lại trong tab
    chat (`/hoc-bai` = chế độ gia sư dẫn từng bước).
 
+## Clone một trang web thành trang của học viên
+
+Skill `/clone-trang`: gửi link một trang đẹp → agent đo trực tiếp trên
+trình duyệt thật (DOM, computed style, trạng thái tương tác, kiến trúc
+route) → dựng lại một file `.html` giống hệt về khung, nội dung thay
+bằng của học viên. Pipeline: đo → khảo sát → token → dựng → so → giao,
+với vòng so tự động (`tools/clone-compare.py`: style-diff theo
+`data-cs-ref` + pixel-diff qua `sips`, không cần Pillow).
+
+- Site nhiều trang → một file `.html` với router băm (`#/route` →
+  `data-cs-page`), trang chi tiết (bài viết/sản phẩm…) clone mẫu và
+  đánh dấu `data-cs-template` để `/trang-moi` nhân bản khi học viên
+  viết thêm.
+- Kết quả mở trong viewer `web/clone-view.html` — trang hiện toàn
+  màn hình trong portal, bấm **Sửa nội dung** rồi click thẳng vào
+  chữ/ảnh/nút để chỉnh tại chỗ (nhờ marker `data-cs-*`), **Lưu lại
+  trang** ghi về file gốc và tự tạo `.bak`.
+- Số liệu đo giữ trong `my-course/clone-work/<tên-site>/` để lần sau
+  chỉnh tiếp không phải đo lại.
+
 ## Cấu trúc folder
 
 ```
 ai-assistant/
 ├── AGENTS.md                  # persona "giáo viên ELI10" + quy tắc an toàn (áp cho mọi session)
 ├── SETUP.md                   # hướng dẫn cài đặt cho học viên (Windows)
-├── start.bat                  # launcher: chat-bridge (7682) + ttyd (7681) + ext-bridge (7683) + portal (8080) + mở browser
+├── start.bat                  # launcher: chat-bridge (7682) + ttyd (7681) + ext-bridge (7684) + portal (8080) + mở browser
 ├── tools/serve.ps1            # static server PowerShell thuần, chặn dotfiles (serve.py cho macOS/Linux)
 ├── tools/ext-bridge.py        # cầu nối extension: HTTP API cho agent + WS cho extension (7683)
 ├── tools/chat-bridge.ps1      # cầu nối browser ↔ `devin acp` (Windows; .py cho macOS/Linux)
 ├── tools/chat-terminal.ps1    # chạy ttyd theme sáng + font lớn (chế độ Terminal)
 ├── intro/slides.html          # deck giới thiệu tĩnh (Bài 0)
-├── web/                       # portal: index.html + app.js + styles.css
+├── web/                       # portal: index.html + app.js + styles.css + clone-view.html (viewer sửa trang clone)
+├── tools/clone-compare.py     # pha "so" của /clone-trang: style-diff + pixel-diff, không cần Pillow
 ├── templates/                 # khung bài học / bài tập / kịch bản video / slide deck
 ├── .devin/
 │   ├── skills/                # skill đang dùng — được onboarding copy từ skill-packs
@@ -57,7 +78,7 @@ ai-assistant/
 │       ├── slide-builder.md   # subagent dựng slides.html từ nội dung bài
 │       └── video-builder.md   # subagent: kịch bản quay (luôn có) + video.mp4 (bonus)
 ├── extension/                 # MV3 extension "Trợ Lý AI" — điều khiển browser thật
-└── my-course/                 # khoá học cá nhân hoá + config/permissions/connections
+└── my-course/                 # khoá học cá nhân hoá + config/permissions/connections + clone-work/<site>/
 ```
 
 ## Triết lý thiết kế

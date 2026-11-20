@@ -293,6 +293,7 @@ function draw() {
   // tab
   document.querySelectorAll('#htabs span').forEach(sp =>
     sp.classList.toggle('on', sp.dataset.t === activeTab));
+  document.querySelectorAll('.flash').forEach(x => x.classList.remove('flash'));
   const ft = flashTarget ? document.querySelector(flashTarget) : null;
   if (ft) ft.classList.add('flash');
   if (flashTarget === '#send') $('#send').classList.add('flash');
@@ -326,8 +327,8 @@ function draw() {
   } else r.style.opacity = '0';
 
   // card + subtitle
+  $('#card').classList.toggle('show', !!card);
   if (card) {
-    $('#card').classList.add('show');
     $('#cardk').textContent = card.kicker || '';
     $('#cardh').textContent = card.heading || '';
     $('#cardp').textContent = card.text || '';

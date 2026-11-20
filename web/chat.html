@@ -103,14 +103,16 @@ body {
   border-top: var(--rule-hair) solid var(--color-rule);
 }
 #input {
-  flex: 1; border: 0; border-radius: var(--radius-pill);
-  height: 44px; padding: 0 var(--space-md); font-size: var(--text-md); outline: none;
+  flex: 1; border: 0; border-radius: var(--radius-card);
+  min-height: 44px; max-height: 160px; padding: var(--space-sm) var(--space-md);
+  font-size: var(--text-md); outline: none; resize: none;
+  font-family: var(--font-display); line-height: 1.5;
   background: var(--color-paper-2); color: var(--color-ink);
   box-shadow: inset 0 0 0 1.5px var(--color-rule-2);
 }
 #input:focus-visible { outline: none; box-shadow: inset 0 0 0 1.5px var(--color-ink); }
 #send {
-  border: 0; border-radius: var(--radius-pill);
+  border: 0; border-radius: var(--radius-pill); align-self: flex-end;
   height: 44px; padding: 0 var(--space-lg); font-size: var(--text-md); font-weight: 500; cursor: pointer;
   font-family: var(--font-display); 
   background: var(--color-accent); color: var(--color-accent-ink);
@@ -123,6 +125,17 @@ body {
   display: none; font-family: var(--mono);
 }
 .thinking { opacity: .6; font-style: italic; }
+
+/* bong bóng "đang gõ" — 3 chấm nhấp nhảy như người thật đang soạn tin */
+.msg.typing { display: inline-flex; gap: 5px; align-items: center; padding: var(--space-sm) var(--space-md); }
+.msg.typing i {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--color-muted); opacity: .35;
+  animation: tdot 1.1s ease-in-out infinite;
+}
+.msg.typing i:nth-child(2) { animation-delay: .18s; }
+.msg.typing i:nth-child(3) { animation-delay: .36s; }
+@keyframes tdot { 0%, 60%, 100% { transform: translateY(0); opacity: .35; } 30% { transform: translateY(-4px); opacity: 1; } }
 </style>
 </head>
 <body>
@@ -130,7 +143,7 @@ body {
   <div id="messages"></div>
   <div class="hint-chips" id="chips"></div>
   <div id="inputbar">
-    <input id="input" placeholder="Nhắn cho trợ lý… (VD: /phong-van)" autocomplete="off">
+    <textarea id="input" rows="1" placeholder="Nhắn cho trợ lý… (VD: /phong-van)" autocomplete="off"></textarea>
     <button id="send">Gửi</button>
   </div>
 <script>
@@ -157,8 +170,8 @@ const STR = {
             {label: 'Học một bài', text: '/hoc-bai'},
             {label: 'Giúp em việc này…', text: ''}],
     hello: 'Xin chào! Mình là trợ lý AI của bạn. Bạn cứ nhắn như nhắn tin cho một người giúp việc.\n\nChưa biết bắt đầu từ đâu thì gõ **`/phong-van`**, mình sẽ hỏi vài câu rồi thiết kế khoá học riêng cho bạn.',
-    ph: 'Nhắn cho trợ lý… (VD: /phong-van)',
-    send: 'Gửi', busy: 'Trợ lý đang làm việc…', permSuffix: ' — bạn cho phép không?',
+    ph: 'Nhắn cho trợ lý… (VD: /phong-van) · Enter gửi, Shift+Enter xuống dòng',
+    send: 'Gửi', busy: 'Trợ lý đang làm việc', permSuffix: ' — bạn cho phép không?',
     noOpt: 'Không đồng ý', errPfx: 'Ừm, có lỗi nhỏ: ',
   },
   en: {
@@ -166,8 +179,8 @@ const STR = {
             {label: 'Learn a lesson', text: '/tutor'},
             {label: 'Help me with…', text: ''}],
     hello: 'Hi! I\'m your AI assistant — just message me like you\'d message a helpful coworker.\n\nNot sure where to start? Type **`/interview`** and I\'ll ask a few questions, then design a course just for you.',
-    ph: 'Message the assistant… (e.g. /interview)',
-    send: 'Send', busy: 'The assistant is working…', permSuffix: ' — allow it?',
+    ph: 'Message the assistant… (e.g. /interview) · Enter sends, Shift+Enter new line',
+    send: 'Send', busy: 'The assistant is working', permSuffix: ' — allow it?',
     noOpt: 'Decline', errPfx: 'Hmm, small hiccup: ',
   },
 };
@@ -217,8 +230,37 @@ function addUser(t) {
   d.className = 'msg user'; d.textContent = t;
   msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight;
 }
+let typingEl = null;
+function addTyping() {
+  removeTyping();
+  typingEl = document.createElement('div');
+  typingEl.className = 'msg agent typing';
+  typingEl.innerHTML = '<i></i><i></i><i></i>';
+  msgs.appendChild(typingEl);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+function removeTyping() { if (typingEl) { typingEl.remove(); typingEl = null; } }
+
+let busyAt = 0, busyTimer = null, lastTool = '';
+function fmtBusy() {
+  const s = Math.round((Date.now() - busyAt) / 1000);
+  // việc agent vừa làm (tool mới nhất) + số giây — học viên thấy "nó đang chạy thật"
+  const act = lastTool ? lastTool + ' · ' : '';
+  return S.busy + '… ' + act + s + 's';
+}
+function startBusyClock() {
+  busyAt = Date.now(); lastTool = '';
+  statusEl.textContent = fmtBusy();
+  clearInterval(busyTimer);
+  busyTimer = setInterval(() => { statusEl.textContent = fmtBusy(); }, 1000);
+}
 function addTool(title, status) {
   curBubble = null;   // tool call = ranh giới tin nhắn → text sau mở bubble mới
+  removeTyping();
+  if (status === 'in_progress' && title) {
+    lastTool = title.slice(0, 60);
+    if (busyTimer) statusEl.textContent = fmtBusy();
+  }
   const d = document.createElement('div');
   d.className = 'tool' + (status !== 'in_progress' ? ' done' : '');
   d.textContent = (status === 'in_progress' ? 'Đang làm: ' : 'Xong: ') + (title || 'việc nhỏ');
@@ -259,14 +301,23 @@ function addErr(msg) {
 function setBusy(b) {
   statusEl.style.display = b ? 'block' : 'none';
   sendBtn.disabled = b;   // đang xử lý thì chặn gửi trùng
+  if (b) { startBusyClock(); addTyping(); }
+  else { clearInterval(busyTimer); busyTimer = null; removeTyping(); }
 }
 function say(t) { agentBubble(); curBubble.dataset.raw = t; curBubble.innerHTML = md(t); }
+
+function grow() {
+  input.style.height = 'auto';
+  input.style.height = Math.min(input.scrollHeight, 160) + 'px';
+}
+input.addEventListener('input', grow);
 
 async function send() {
   if (sendBtn.disabled) return;
   const t = input.value.trim();
   if (!t) return;
   input.value = '';
+  grow();
   addUser(t);
   setBusy(true);
   try {
@@ -279,7 +330,10 @@ async function send() {
   }
 }
 sendBtn.onclick = send;
-input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) send(); });
+// Enter = gửi, Shift+Enter = xuống dòng; isComposing = đang gõ dấu tiếng Việt/IME
+input.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
+});
 
 function handleEvent(ev) {
   if (ev.t === 'ready') {
@@ -288,9 +342,9 @@ function handleEvent(ev) {
       curBubble = null;   // lời agent đầu tiên phải ra bubble riêng, không nối vào lời chào
     }
   }
-  else if (ev.t === 'text') addText(ev.text);
+  else if (ev.t === 'text') { removeTyping(); addText(ev.text); }
   else if (ev.t === 'tool') addTool(ev.title, ev.status);
-  else if (ev.t === 'perm') addPerm(ev);
+  else if (ev.t === 'perm') { removeTyping(); addPerm(ev); }
   else if (ev.t === 'done') { setBusy(false); curBubble = null; }
   else if (ev.t === 'err') { addErr(ev.msg); setBusy(false); }
 }

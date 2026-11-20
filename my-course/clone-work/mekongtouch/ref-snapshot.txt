@@ -1,0 +1,74 @@
+e1 a "Aller au contenu" → https://www.mekongtouch.com/#main
+e2 a "MekongTouch accueil" → https://www.mekongtouch.com/
+e3 a "Nous" → https://www.mekongtouch.com/#nous
+e4 a "Destinations" → https://www.mekongtouch.com/#destinations
+e5 a "Savoir-faire" → https://www.mekongtouch.com/#savoir-faire
+e6 a "MICE" → https://www.mekongtouch.com/#incentive
+e7 a "RSE" → https://www.mekongtouch.com/#rse
+e8 a "Partenaires" → https://www.mekongtouch.com/#partenaires
+e9 a "Bureau de représentation" → https://www.mekongtouch.com/#bureau-italie
+e10 a "Contact" → https://www.mekongtouch.com/#contact
+e11 a "Instagram" → https://www.instagram.com/catia_mekongtouch/
+e12 a "LinkedIn" → https://www.linkedin.com/in/catia-cristao-mekongtouch-51796627/
+e13 a "FR" → https://www.mekongtouch.com/
+e14 a "EN" → https://www.mekongtouch.com/en/
+e15 a "IT" → https://www.mekongtouch.com/it/
+e16 a "Contact" → https://www.mekongtouch.com/#contact
+e17 h1 "MekongTouch"
+e18 a "Nous contacter" → https://www.mekongtouch.com/#contact
+e19 a "Découvrir nos destinations" → https://www.mekongtouch.com/#destinations
+e20 h2 "Là où l'expérience rencontre l'émotion"
+e21 h2 "Non seulement des voyages, des sensations."
+e22 h2 "Vietnam, Cambodge & Laos"
+e23 a "VIETNAM" → https://www.mekongtouch.com/#vietnam
+e24 a "CAMBODGE" → https://www.mekongtouch.com/#cambodge
+e25 a "LAOS" → https://www.mekongtouch.com/#laos
+e26 h2 "Vietnam"
+e27 a "01 VIETNAM" → https://www.mekongtouch.com/#vietnam
+e28 a "02 CAMBODGE" → https://www.mekongtouch.com/#cambodge
+e29 a "03 LAOS" → https://www.mekongtouch.com/#laos
+e30 h2 "Cambodge"
+e31 a "01 VIETNAM" → https://www.mekongtouch.com/#vietnam
+e32 a "02 CAMBODGE" → https://www.mekongtouch.com/#cambodge
+e33 a "03 LAOS" → https://www.mekongtouch.com/#laos
+e34 h2 "Laos"
+e35 a "01 VIETNAM" → https://www.mekongtouch.com/#vietnam
+e36 a "02 CAMBODGE" → https://www.mekongtouch.com/#cambodge
+e37 a "03 LAOS" → https://www.mekongtouch.com/#laos
+e38 h2
+e39 h2
+e40 h3
+e41 h2
+e42 h2
+e43 h2 "Une responsabilité ancrée dans le terrain"
+e44 h3 "Parce qu’un voyage ne se résume pas à un itinéraire"
+e45 h3 "Nous collaborons régulièrement avec"
+e46 h3 "Nos engagements en documents"
+e47 h3 "Ce que nous mettons déjà en place"
+e48 h3 "Activités que nous refusons"
+e49 h3 "Objectifs 2026–2028"
+e50 h2 "PARTENAIRES"
+e51 a "DMC Touch" → http://www.dmctouch.com/
+e52 h3 "DMC Touch"
+e53 a "Réceptifs Leaders" → https://www.receptifsleaders.com/
+e54 h3 "Réceptifs Leaders"
+e55 a "Destinations Hub" → https://www.destinations-hub.com/
+e56 h3 "Destinations Hub"
+e57 h2 "Les visages derrière MekongTouch"
+e58 h3 "Catia Cristao"
+e59 a "Mobile : +33 (0) 6 31 27 97 19" → tel:+33631279719
+e60 a "catia@mekongtouch.com" → mailto:catia@mekongtouch.com
+e61 h3 "Do Ngoc Anh"
+e62 a "Mobile : +84 903210580" → tel:+84903210580
+e63 a "anh.do@mekongtouch.com" → mailto:anh.do@mekongtouch.com
+e64 h3 "Viet Lê Quoc"
+e65 a "Mobile : +84 912125656" → tel:+84912125656
+e66 a "viet.le@mekongtouch.com" → mailto:viet.le@mekongtouch.com
+e67 h2 "Parlez-nous de votre projet"
+e68 a "info@mekongtouch.com" → mailto:info@mekongtouch.com
+e69 a "(+84.24) 38489311 / 39941441" → tel:+842438489311
+e70 a "+33 (0) 6 31 27 97 19" → tel:+33631279719
+e71 a "MekongTouch accueil" → https://www.mekongtouch.com/
+e72 a "Facebook" → https://www.facebook.com/mekongtouch/
+e73 a "Instagram" → https://www.instagram.com/catia_mekongtouch/
+e74 a "LinkedIn" → https://www.linkedin.com/in/catia-cristao-mekongtouch-51796627/

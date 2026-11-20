@@ -1,0 +1,503 @@
+{
+ "ok": true,
+ "title": "MekongTouch : réceptif Vietnam, Laos & Cambodge",
+ "images": [
+  {
+   "src": "https://www.mekongtouch.com/assets/logo/mekongtouch-logo-white.webp",
+   "alt": "",
+   "w": 720,
+   "h": 318
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/logo/mekongtouch-logo-brown.webp",
+   "alt": "",
+   "w": 720,
+   "h": 318
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/images/hero-phong-nam-2400.webp",
+   "alt": "Pont en bois et habitants traversant la vallée de Phong Nam au Vietnam",
+   "w": 1455,
+   "h": 970
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/generated/about-P1.webp",
+   "alt": "Bateaux sur une rivière entourée de reliefs karstiques",
+   "w": 440,
+   "h": 550
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/generated/about-P2.webp",
+   "alt": "Moine gravissant les marches d’un temple sous un arbre ancien",
+   "w": 440,
+   "h": 550
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/generated/about-P3.webp",
+   "alt": "Tuk-tuk devant une porte monumentale d’Angkor",
+   "w": 440,
+   "h": 550
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P4-sensations.webp",
+   "alt": "Scène de voyage sensible en Asie du Sud-Est",
+   "w": 610,
+   "h": 762
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/generated/destinations-beach-evening-ai.webp",
+   "alt": "Dîner aux lumières tamisées sur une plage tropicale au crépuscule",
+   "w": 1536,
+   "h": 1024
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P5-destination.webp",
+   "alt": "Destination MekongTouch P5",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P6-destination.webp",
+   "alt": "Destination MekongTouch P6",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P7-destination.webp",
+   "alt": "Destination MekongTouch P7",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P8-destination.webp",
+   "alt": "Destination MekongTouch P8",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P9-destination.webp",
+   "alt": "Destination MekongTouch P9",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P10-destination.webp",
+   "alt": "Destination MekongTouch P10",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P5-destination.webp",
+   "alt": "Destination MekongTouch P5",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P6-destination.webp",
+   "alt": "Destination MekongTouch P6",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P7-destination.webp",
+   "alt": "Destination MekongTouch P7",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P8-destination.webp",
+   "alt": "Destination MekongTouch P8",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P9-destination.webp",
+   "alt": "Destination MekongTouch P9",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P10-destination.webp",
+   "alt": "Destination MekongTouch P10",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/generated/country-vietnam-bg.webp",
+   "alt": "",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P12-country.webp",
+   "alt": "Rizières du Vietnam",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P12-country.webp",
+   "alt": "",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P12-country.webp",
+   "alt": "Rizières du Vietnam",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P11-country.webp",
+   "alt": "Paysage vietnamien",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/generated/P13-ai.webp",
+   "alt": "Hoi An illuminée au bord de la rivière à la tombée du jour",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P14-country.webp",
+   "alt": "Expérience au Vietnam",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/generated/country-cambodia-bg.webp",
+   "alt": "",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P15-country.webp",
+   "alt": "Temple au Cambodge",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P15-country.webp",
+   "alt": "",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P15-country.webp",
+   "alt": "Temple au Cambodge",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P16-country.webp",
+   "alt": "Detail de temple cambodgien",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P17-country.webp",
+   "alt": "Site patrimonial au Cambodge",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P18-country.webp",
+   "alt": "Ambiance cambodgienne",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/generated/country-laos-bg.webp",
+   "alt": "",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/laos-country.webp",
+   "alt": "Photo Laos demandée dans le brief",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/laos-country.webp",
+   "alt": "",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/laos-country.webp",
+   "alt": "Photo Laos demandée dans le brief",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P19-country.webp",
+   "alt": "Paysage du Laos",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P20-country.webp",
+   "alt": "Experience au Laos",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P21-country.webp",
+   "alt": "Lieu patrimonial au Laos",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/generated/expertise-overview-bg-ai.webp",
+   "alt": "",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P22-choice.webp",
+   "alt": "Choix incentive",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P23-choice.webp",
+   "alt": "Choix FIT",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P24-choice.webp",
+   "alt": "Choix groupes",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/generated/incentive-bg-ai.webp",
+   "alt": "",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P25-incentive.webp",
+   "alt": "Programme incentive MekongTouch",
+   "w": 1200,
+   "h": 798
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P26-incentive.webp",
+   "alt": "Moment MICE en Asie du Sud-Est",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P27-incentive.webp",
+   "alt": "Experience incentive de groupe",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/generated/fit-bg-ai.webp",
+   "alt": "",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P28-fit.webp",
+   "alt": "Voyage prive FIT",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P29-fit.webp",
+   "alt": "Itineraire FIT sur mesure",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P30-fit.webp",
+   "alt": "Experience individuelle accompagnee",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/generated/groups-bg-ai.webp",
+   "alt": "",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P31-groups.webp",
+   "alt": "Groupe culturel en Asie du Sud-Est",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P32-groups.webp",
+   "alt": "Rencontre locale pour groupes",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/P33-groups.webp",
+   "alt": "Parcours thematique de groupe",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/optimized/rse-mekong.webp",
+   "alt": "Le Mékong, les montagnes et les maisons traditionnelles au soleil couchant",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/rse/conversation-river.webp",
+   "alt": "Échange au fil du Mékong entre voyageurs et habitants",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/rse/conversation-incense.webp",
+   "alt": "Artisane préparant des bâtons d’encens colorés",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/logos/collaborations/greenviet.webp",
+   "alt": "GreenViet",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/logos/collaborations/mekong-quilts.webp",
+   "alt": "Mekong Quilts",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/logos/collaborations/koto.webp",
+   "alt": "KOTO",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/logos/collaborations/paul-dubrule.webp",
+   "alt": "École Paul Dubrule",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/logos/collaborations/sala-bai.webp",
+   "alt": "Sala Baï",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/logos/collaborations/refill-not-landfill.webp",
+   "alt": "Refill not Landfill",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/logos/collaborations/apopo.webp",
+   "alt": "APOPO",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/rse/resource-policy.webp",
+   "alt": "",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/rse/resource-report.webp",
+   "alt": "",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/rse/resource-code.webp",
+   "alt": "",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/rse/resource-dos-donts.webp",
+   "alt": "",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/logos/partners/dmc-touch.webp",
+   "alt": "DMC Touch",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/logos/partners/receptifs-leaders.webp",
+   "alt": "Réceptifs Leaders",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/logos/partners/destinations-hub.webp",
+   "alt": "Destinations Hub",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/logos/clients/essilor-luxottica.webp",
+   "alt": "EssilorLuxottica",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/logos/clients/richardson.webp",
+   "alt": "Richardson",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/logos/clients/samse.webp",
+   "alt": "Samse",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/logos/clients/bigmat.webp",
+   "alt": "BigMat",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/logos/clients/shiseido.webp",
+   "alt": "Shiseido",
+   "w": 0,
+   "h": 0
+  },
+  {
+   "src": "https://www.mekongtouch.com/assets/logos/clients/diot-pgm.webp",
+   "alt": "Diot PGM",
+   "w": 0,
+   "h": 0
+  }
+ ],
+ "svgs": [
+  "<svg class=\"social-icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M13.6 21v-8h2.7l.4-3.1h-3.1v-2c0-.9.3-1.5 1.6-1.5h1.7V3.6c-.8-.1-1.7-.2-2.5-.2-2.5 0-4.2 1.5-4.2 4.3v2.2H7.4V13h2.8v8h3.4Z\"></path></svg>",
+  "<svg class=\"social-icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\"><rect x=\"3.5\" y=\"3.5\" width=\"17\" height=\"17\" rx=\"5\"></rect><circle cx=\"12\" cy=\"12\" r=\"4\"></circle><circle class=\"social-icon-dot\" cx=\"17.4\" cy=\"6.7\" r=\"1\"></circle></svg>",
+  "<svg class=\"social-icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M6.4 9.2V19H3.2V9.2h3.2Zm.2-3a1.85 1.85 0 1 1-3.7 0 1.85 1.85 0 0 1 3.7 0Z\"></path><path d=\"M9 9.2h3.1v1.3h.1c.5-.8 1.5-1.7 3.3-1.7 3.5 0 4.2 2.3 4.2 5.3V19h-3.3v-4.3c0-1 0-2.4-1.5-2.4s-1.7 1.1-1.7 2.3V19H9V9.2Z\"></path></svg>"
+ ],
+ "cssLinks": [
+  "https://www.mekongtouch.com/assets/fonts/montserrat-latin.woff2",
+  "https://www.mekongtouch.com/_astro/SitePage.Fg38y3oB.css"
+ ],
+ "fonts": [
+  "Montserrat 300 800"
+ ],
+ "bgImages": [
+  "https://www.mekongtouch.com/assets/generated/about-mekong-dusk-wide-ai.webp",
+  "https://www.mekongtouch.com/assets/rse/rse-background.webp"
+ ],
+ "id": 109
+}

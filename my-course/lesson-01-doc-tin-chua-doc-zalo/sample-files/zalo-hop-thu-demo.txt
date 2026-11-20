@@ -1,0 +1,15 @@
+HỘP THƯ ZALO — bản chụp giả lập để luyện tập
+(mỗi dòng = một hội thoại: tên | số tin chưa đọc | giờ tin cuối | xem trước)
+
+Chị Hương - KH Landmark        | 2 chưa đọc | 09:41 | "Chị ơi giá căn 2PN còn giữ được không em"
+Nhóm Marketing tháng 12        | 5 chưa đọc | 09:38 | "Lan: banner mới up chưa mọi người"
+Khách Minh - hỏi báo giá       | 1 chưa đọc | 08:30 | "Bên mình có ship về tỉnh không ạ"
+Anh Tuấn - Sales MB            | đã đọc    | 09:15 | "ok em, chiều gửi file nhé"
+Bé Trang (em gái)              | đã đọc    | 08:52 | "trưa về ăn cơm không"
+Khách Loan - đặt lịch xem      | 3 chưa đọc | 08:20 | "Em ơi chị đổi lịch qua thứ 7 được không"
+Sếp Dũng                       | đã đọc    | 08:05 | "Báo cáo tuần gửi trước 10h nhé"
+Nhóm KH VIP - chăm sóc         | 8 chưa đọc | 07:55 | "Hải: cảm ơn shop nhiều ạ"
+Nhà cung cấp bao bì            | đã đọc    | 07:40 | "Đơn thùng tuần trước đã xuất kho"
+Khách Phúc - khiếu nại         | 2 chưa đọc | 07:22 | "Đơn của tôi sao 3 ngày chưa thấy?"
+Mẹ                             | đã đọc    | 06:58 | "con nhớ uống thuốc"
+Zalo thông báo                 | đã đọc    | 06:15 | "Cập nhật điều khoản sử dụng..."

@@ -1,0 +1,84 @@
+{
+  "title": "Bài 1 · Ai đang chờ mình trên Zalo?",
+  "lessons": [
+    {"name": "Đọc hết tin chưa đọc trên Zalo", "sub": "Bài 1 · khoảng 10 phút", "active": true}
+  ],
+  "steps": [
+    {
+      "kind": "card",
+      "kicker": "BÀI 1",
+      "heading": "Mở Zalo cái là biết ngay ai đang chờ",
+      "text": "Nhờ trợ lý lật hết hộp thư — kể lại ai nhắn, mỗi người cần gì",
+      "sub": "Sáng mở Zalo lên thấy chấm đỏ khắp nơi — hôm nay mình cho trợ lý lật hết hộp thư trong ba mươi giây.",
+      "say": "Sáng mở Zalo lên thấy chấm đỏ khắp nơi — ai cũng muốn biết ngay có ai đang chờ mình mà không phải bấm từng hội thoại một. Hôm nay mình cho trợ lý lật hết hộp thư trong ba mươi giây."
+    },
+    {
+      "kind": "files",
+      "title": "sample-files/ — hộp thư Zalo giả lập",
+      "items": [["zalo-hop-thu-demo.txt", "12 hội thoại"]],
+      "say": "Đây là hộp thư mô phỏng để luyện tập — mười mấy cuộc chat lẫn cả nhóm với gia đình. Muốn biết khách nào gấp thì trước giờ phải mở từng cái, mệt."
+    },
+    {
+      "kind": "move",
+      "to": "chat",
+      "say": "Giờ mình gõ một câu nhờ — nói rõ: đọc file hộp thư, liệt kê hội thoại nào có tin chưa đọc, kèm xem trước nội dung."
+    },
+    {
+      "kind": "type",
+      "text": "Đọc file my-course/lesson-01-doc-tin-chua-doc-zalo/sample-files/zalo-hop-thu-demo.txt rồi liệt kê giúp em những hội thoại nào có tin chưa đọc, kèm xem trước nội dung.",
+      "cps": 16,
+      "say": "Mình nhờ bằng lời thường luôn nè — với Zalo thật nó sẽ mở Zalo Web của bạn làm y chang, còn đây mình diễn trên bản mô phỏng cho dễ nhìn. Gõ xong bấm gửi."
+    },
+    {"kind": "click", "target": "send"},
+    {"kind": "send"},
+    {
+      "kind": "work",
+      "text": "Đang đọc file zalo-hop-thu-demo.txt…",
+      "dur": 2.2
+    },
+    {
+      "kind": "bubble",
+      "who": "agent",
+      "text": "Có **6 hội thoại** đang có tin chưa đọc:\n- **Chị Hương - KH Landmark** (2 tin): hỏi giá căn 2PN còn giữ được không\n- **Nhóm Marketing tháng 12** (5 tin): đang bàn banner mới\n- **Khách Minh** (1 tin): hỏi bên mình có ship về tỉnh không\n- **Khách Loan - đặt lịch xem** (3 tin): muốn đổi lịch qua thứ 7\n- **Nhóm KH VIP - chăm sóc** (8 tin): khách cảm ơn shop\n- **Khách Phúc - khiếu nại** (2 tin): đơn 3 ngày chưa thấy — nên ưu tiên trả lời trước",
+      "reveal": 0.032,
+      "say": "Xong — sáu hội thoại đang chờ, mỗi cái kèm xem trước. Thấy chưa, khách Phúc đang khiếu nại đơn ba ngày chưa thấy — cái này mình ưu tiên trả lời trước."
+    },
+    {
+      "kind": "say",
+      "text": "Nhớ nè — trợ lý chỉ ĐỌC thôi, nó không tự trả lời ai hết. Muốn gửi tin thì phải nhờ riêng, và nó luôn hỏi mình trước.",
+      "say": "Nhớ nè — trợ lý chỉ đọc thôi, nó không tự trả lời ai hết. Muốn gửi tin thì phải nhờ riêng, và nó luôn hỏi mình trước."
+    },
+    {
+      "kind": "type",
+      "text": "Đọc giúp em mấy tin của khách Phúc, tóm tắt xem họ cần gì.",
+      "cps": 14,
+      "say": "Thấy khách Phúc đáng chú ý nhất — mình hỏi sâu thêm một câu."
+    },
+    {"kind": "send"},
+    {
+      "kind": "work",
+      "text": "Đang đọc lại tin của Khách Phúc…",
+      "dur": 2.0
+    },
+    {
+      "kind": "bubble",
+      "who": "agent",
+      "text": "**Khách Phúc** đang bức xúc: đơn đặt 3 ngày trước mà chưa thấy ship. Anh ấy hỏi đơn đi đâu rồi và muốn được trả lời sớm. Bạn nên xin lỗi, gửi mã vận đơn và hẹn ngày giao cụ thể.",
+      "reveal": 0.04,
+      "say": "Khách Phúc đang chờ mã vận đơn — hiểu ngay vấn đề mà không phải cuộn cả đống tin nhắn."
+    },
+    {
+      "kind": "say",
+      "text": "Sáng nào mở máy cũng gõ /doc-zalo — trợ lý kể lại ai đang chờ trong nửa phút.",
+      "say": "Từ giờ sáng nào mở máy cũng gõ xẹt đọc Zalo — trợ lý kể lại ai đang chờ trong nửa phút."
+    },
+    {
+      "kind": "card",
+      "kicker": "XONG RỒI",
+      "heading": "Giờ tới lượt bạn",
+      "text": "Mở file exercise.md trong folder bài học — thử trên file mô phỏng trước, rồi áp vào Zalo thật",
+      "sub": "Bài tập đang chờ bạn trong exercise.md",
+      "say": "Bài tập trong exercise.md đang chờ — mở file mô phỏng lên làm thử đi nhé."
+    }
+  ]
+}

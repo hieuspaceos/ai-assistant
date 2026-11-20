@@ -177,7 +177,7 @@ function Run-Probe($probe) {
         }
         if ($probe.type -eq "tabs") {
             # Có trang web đang mở khớp URL — vd: đã mở Zalo/Outlook trong browser
-            $d = Invoke-RestMethod -Uri "http://127.0.0.1:7683/api/browser" -Method Post `
+            $d = Invoke-RestMethod -Uri "http://127.0.0.1:7684/api/browser" -Method Post `
                  -ContentType "application/json" -Body '{"action":"tabs"}' -TimeoutSec 6
             if (-not $d.ok) {
                 return @{ ok = $false; msg = "trình duyệt chưa nối — mở Chrome/Edge lên trước" }

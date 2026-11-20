@@ -24,7 +24,7 @@ curl -sL "https://docs.google.com/spreadsheets/d/<SHEET_ID>/export?format=csv&gi
 **Private sheet (most — company sheets)** → read through the learner's
 browser tab already signed into Google, no sharing needed:
 
-1. `{"action":"tabs"}` via ext-bridge :7683 → find a `docs.google.com`
+1. `{"action":"tabs"}` via ext-bridge :7684 → find a `docs.google.com`
    tab; none → `{"action":"open","url":"https://docs.google.com/spreadsheets/"}`
    (they're already signed in — just wait for it to load).
 2. Download the sheet's CSV using that tab's session:

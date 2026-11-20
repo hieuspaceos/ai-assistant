@@ -16,7 +16,7 @@ you don't have to re-discover them.
 
 ## Setup (mandatory, first time)
 
-1. `curl -s http://localhost:7683/api/browser/status` → `connected: true`
+1. `curl -s http://localhost:7684/api/browser/status` → `connected: true`
    before continuing. If `false` → walk the learner through installing
    the extension (SETUP step 5).
 2. `{"action":"tabs"}` → find the `chat.zalo.me` tab. If absent,

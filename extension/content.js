@@ -28,6 +28,13 @@ function labelOf(el) {
   return String(t).replace(/\s+/g, ' ').trim().slice(0, 80);
 }
 
+// Khung hình chữ nhật của phần tử — clone cần biết kích thước/vị trí thật
+function boxOf(el) {
+  const r = el.getBoundingClientRect();
+  return { x: Math.round(r.x), y: Math.round(r.y),
+           w: Math.round(r.width), h: Math.round(r.height) };
+}
+
 // Tạo "cây phần tử" rút gọn — mỗi phần tử tương tác được một ref (e1, e2...)
 // để trợ lý chỉ cần nói "bấm e7" thay vì hiểu cả trang.
 function snapshot() {
@@ -254,6 +261,102 @@ const ACTIONS = {
     } catch (e) {
       return { ok: false, err: String(e && e.message || e) };
     }
+  },
+  // ── Trích xuất phục vụ /clone-trang ─────────────────────────────
+  // dom: HTML sống của trang (đã render xong JS) — bỏ script, giới hạn
+  // kích thước. read chỉ lấy text; clone cần cấu trúc + class + inline svg.
+  dom: p => {
+    const root = p.sel ? document.querySelector(p.sel) : document.documentElement;
+    if (!root) return { ok: false, err: 'không thấy vùng ' + p.sel };
+    const c = root.cloneNode(true);
+    c.querySelectorAll('script,noscript').forEach(n => n.remove());
+    const html = c.outerHTML;
+    const cap = p.max || 300000;
+    return { ok: true, html: html.slice(0, cap), truncated: html.length > cap };
+  },
+  // styles: computed style THẬT của các phần tử khớp selector (hoặc các
+  // phần tử con trong vùng sel khi deep=true). Đây là số liệu clone chuẩn —
+  // màu/font/khoảng cách/cỡ đều lấy từ đây, không phỏng đoán.
+  styles: p => {
+    const PROPS = ['color', 'background-color', 'font-family', 'font-size',
+      'font-weight', 'line-height', 'letter-spacing', 'text-transform',
+      'padding', 'margin', 'border', 'border-radius', 'box-shadow',
+      'display', 'gap', 'width', 'height', 'max-width',
+      'justify-content', 'align-items', 'text-align', 'background-image'];
+    const pick = el => {
+      const s = getComputedStyle(el);
+      const o = {};
+      for (const k of PROPS) {
+        const v = s.getPropertyValue(k);
+        if (v && v !== 'none' && v !== 'normal' && v !== '0px'
+            && v !== 'auto' && v !== 'rgba(0, 0, 0, 0)') o[k] = v;
+      }
+      return o;
+    };
+    const idOf = el => {
+      let s = el.tagName.toLowerCase();
+      if (el.id) s += '#' + el.id;
+      const cls = String(el.className && el.className.baseVal !== undefined
+        ? el.className.baseVal : el.className).trim();
+      if (cls) s += '.' + cls.split(/\s+/).slice(0, 2).join('.');
+      return s.slice(0, 80);
+    };
+    if (p.deep) {
+      const root = p.sel ? document.querySelector(p.sel) : document.body;
+      if (!root) return { ok: false, err: 'không thấy vùng ' + p.sel };
+      const out = [];
+      const walk = (el, depth) => {
+        if (out.length >= 120 || depth > (p.depth || 3)) return;
+        if (visible(el)) out.push({ el: idOf(el), box: boxOf(el), css: pick(el) });
+        for (const ch of el.children) walk(ch, depth + 1);
+      };
+      walk(root, 0);
+      return { ok: true, count: out.length, items: out };
+    }
+    const els = [...document.querySelectorAll(p.sel || 'body')];
+    const items = els.slice(0, 30).map(el => ({ el: idOf(el), box: boxOf(el), css: pick(el) }));
+    return { ok: true, count: els.length, items };
+  },
+  // assets: danh mục "nguyên liệu hình" của trang — ảnh, icon svg inline,
+  // font đang nạp, stylesheet link, background-image. Clone giống hệt cần
+  // biết trang mẫu dùng font/icon/ảnh gì.
+  assets: () => {
+    const imgs = [...document.images].slice(0, 80).map(i => ({
+      src: i.currentSrc || i.src, alt: (i.alt || '').slice(0, 80),
+      w: i.naturalWidth, h: i.naturalHeight }));
+    const svgs = [...document.querySelectorAll('svg')].slice(0, 60)
+      .map(s => { const c = s.cloneNode(true);
+        c.querySelectorAll('script').forEach(n => n.remove());
+        return c.outerHTML.slice(0, 4000); });
+    const cssLinks = [...document.querySelectorAll('link[rel="stylesheet"],link[rel="preload"]')]
+      .map(l => l.href).slice(0, 60);
+    const fonts = new Set();
+    try { document.fonts.forEach(f => fonts.add(`${f.family} ${f.weight}`)); } catch (e) {}
+    const bgs = new Set();
+    for (const el of document.querySelectorAll('body *')) {
+      if (bgs.size >= 40) break;
+      const b = getComputedStyle(el).backgroundImage;
+      if (b && b !== 'none')
+        for (const m of b.matchAll(/url\(["']?([^"')]+)/g)) bgs.add(m[1]);
+    }
+    return { ok: true, title: document.title, images: imgs, svgs,
+             cssLinks, fonts: [...fonts].slice(0, 30), bgImages: [...bgs] };
+  },
+  // css: nội dung các stylesheet trang đang dùng (CSSOM — đọc được cả rule
+  // do JS bơm). Sheet chặn CORS thì chỉ trả href để gọi fetch lấy nội dung.
+  css: p => {
+    const out = [];
+    for (const ss of document.styleSheets) {
+      try {
+        const rules = [...ss.cssRules].map(r => r.cssText).join('\n');
+        out.push({ href: ss.href || null, css: rules.slice(0, 200000),
+                   truncated: rules.length > 200000 });
+      } catch (e) {
+        out.push({ href: ss.href || null, err: 'blocked' });
+      }
+      if (out.length >= 40) break;
+    }
+    return { ok: true, sheets: out };
   },
   // Liệt kê các vùng cuộn được (scrollHeight > clientHeight) — để biết
   // khung chat/bảng dữ liệu nằm ở selector nào.

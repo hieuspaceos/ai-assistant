@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trung Kiên — Trung Kiên là số 1</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,'Segoe UI',Roboto,sans-serif}
+  body{background:#0d1117;color:#e6edf3;line-height:1.6}
+
+  /* Thanh menu trên — kiểu GitHub */
+  nav{display:flex;align-items:center;justify-content:space-between;padding:16px 40px;border-bottom:1px solid #21262d;position:sticky;top:0;background:#0d1117}
+  .logo{font-size:20px;font-weight:800;letter-spacing:1px}
+  .logo span{color:#a371f7}
+  nav ul{display:flex;gap:28px;list-style:none}
+  nav ul a{color:#e6edf3;text-decoration:none;font-size:14px;opacity:.85}
+  nav ul a:hover{opacity:1}
+  .nav-btn{background:#238636;color:#fff;padding:8px 18px;border-radius:8px;font-weight:600}
+
+  /* Hero — khẩu hiệu to giữa trang */
+  .hero{text-align:center;padding:110px 20px 80px;background:radial-gradient(ellipse at 50% -20%,rgba(163,113,247,.25),transparent 60%)}
+  .hero h1{font-size:64px;font-weight:800;background:linear-gradient(90deg,#a371f7,#58a6ff,#3fb950);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:16px}
+  .hero p{font-size:20px;color:#8b949e;max-width:600px;margin:0 auto 32px}
+  .cta{display:inline-block;background:#238636;color:#fff;font-weight:700;font-size:18px;padding:14px 42px;border-radius:10px;text-decoration:none}
+  .cta:hover{background:#2ea043}
+  .cta-ghost{display:inline-block;border:1px solid #30363d;color:#e6edf3;font-weight:600;font-size:18px;padding:13px 32px;border-radius:10px;text-decoration:none;margin-left:12px}
+  .cta-ghost:hover{border-color:#58a6ff}
+
+  /* Dải con số */
+  .stats{display:flex;justify-content:center;gap:60px;flex-wrap:wrap;padding:44px 20px;border-top:1px solid #21262d;border-bottom:1px solid #21262d}
+  .stat{text-align:center}
+  .stat .num{font-size:36px;font-weight:800;color:#58a6ff}
+  .stat .lbl{font-size:14px;color:#8b949e}
+
+  /* Thẻ ưu điểm */
+  .features{max-width:1100px;margin:0 auto;padding:80px 20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px}
+  .card{background:#161b22;border:1px solid #30363d;border-radius:16px;padding:32px}
+  .card .icon{font-size:40px;margin-bottom:16px}
+  .card h3{font-size:22px;margin-bottom:10px}
+  .card p{color:#8b949e;font-size:15px}
+  .card:hover{border-color:#a371f7;transform:translateY(-4px);transition:.2s}
+
+  /* Lời chứng thực */
+  .quotes{background:#161b22;border-top:1px solid #21262d;border-bottom:1px solid #21262d;padding:70px 20px}
+  .quotes h2{text-align:center;font-size:32px;margin-bottom:48px}
+  .quote-grid{max-width:1000px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px}
+  .quote{background:#0d1117;border:1px solid #30363d;border-radius:12px;padding:26px;font-style:italic;color:#c9d1d9}
+  .quote .who{margin-top:14px;font-style:normal;font-weight:700;color:#58a6ff;font-size:14px}
+
+  /* Kêu gọi cuối */
+  .final{text-align:center;padding:90px 20px}
+  .final h2{font-size:40px;margin-bottom:14px}
+  .final p{color:#8b949e;margin-bottom:30px}
+
+  footer{text-align:center;padding:26px;color:#6e7681;font-size:13px;border-top:1px solid #21262d}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">TRUNG<span>KIEN</span></div>
+  <ul>
+    <li><a href="#kynang">Kỹ năng</a></li>
+    <li><a href="#loichungthuc">Lời chứng thực</a></li>
+    <li><a class="nav-btn" href="#lienhe">Liên hệ ngay</a></li>
+  </ul>
+</nav>
+
+<section class="hero">
+  <h1>Trung Kiên là số 1</h1>
+  <p>Không phải tự nhận đâu — có cả một trang web chứng minh.</p>
+  <a class="cta" href="#lienhe">LIÊN HỆ TRUNG KIÊN</a>
+  <a class="cta-ghost" href="#kynang">Xem kỹ năng</a>
+</section>
+
+<section class="stats">
+  <div class="stat"><div class="num">24/7</div><div class="lbl">sẵn sàng ngủ mọi lúc</div></div>
+  <div class="stat"><div class="num">100%</div><div class="lbl">prompt đưa ra là chuẩn</div></div>
+  <div class="stat"><div class="num">∞</div><div class="lbl">câu tào lao mỗi ngày</div></div>
+</section>
+
+<section class="features" id="kynang">
+  <div class="card">
+    <div class="icon">😴</div>
+    <h3>Giỏi ngủ</h3>
+    <p>Ngủ đúng giờ, ngủ đủ giấc, ngủ ở bất cứ đâu — kỹ năng nền tảng giúp mọi kỹ năng khác phát huy hết công suất.</p>
+  </div>
+  <div class="card">
+    <div class="icon">🤖</div>
+    <h3>Giỏi dùng AI</h3>
+    <p>Biết nhờ trợ lý AI làm việc thay: đọc Zalo, xử lý file, dựng cả trang web này — người khác làm tay, Trung Kiên đi uống cà phê.</p>
+  </div>
+  <div class="card">
+    <div class="icon">💬</div>
+    <h3>Giỏi tào lao</h3>
+    <p>Nói chuyện duyên dáng, chém gió có tầm, kể chuyện có hồn — kỹ năng mềm không trường nào dạy được.</p>
+  </div>
+</section>
+
+<section class="quotes" id="loichungthuc">
+  <h2>Người trong cuộc nói gì</h2>
+  <div class="quote-grid">
+    <div class="quote">"Giao việc gì cho Kiên là yên tâm — trừ việc đòi dậy sớm."<div class="who">— Một đồng nghiệp ẩn danh</div></div>
+    <div class="quote">"Lần đầu thấy ai cho AI làm hết mọi thứ mà kết quả vẫn tốt."<div class="who">— Trợ lý AI của Kiên</div></div>
+    <div class="quote">"Nghe Kiên kể chuyện xong quên mất mình định hỏi gì."<div class="who">— Khách hàng từng gặp</div></div>
+  </div>
+</section>
+
+<section class="final" id="lienhe">
+  <h2>Sẵn sàng làm việc với số 1?</h2>
+  <p>Nhắn tin qua Zalo — Trung Kiên (hoặc trợ lý của Kiên) sẽ trả lời.</p>
+  <a class="cta" href="#">LIÊN HỆ TRUNG KIÊN</a>
+</section>
+
+<footer>Trang dựng bởi trợ lý AI cho Trung Kiên — khuôn học từ github.com, nội dung của Trung Kiên.</footer>
+
+</body>
+</html>
