@@ -296,9 +296,12 @@ function addPerm(ev) {
     if (i === 0) b.className = 'primary';
     b.onclick = async () => {
       d.remove();
-      await bfetch(BRIDGE + '/api/respond', {method: 'POST',
+      // bridge giờ siết respond: id không còn pending → 404 (card replay từ
+      // history, hoặc lượt đã đóng). Báo nhẹ thay vì im lặng gửi lệnh vô nghĩa.
+      const res = await bfetch(BRIDGE + '/api/respond', {method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({id: ev.id, optionId: o.optionId})});
+      if (!res.ok) addErr('yêu cầu xin phép đã hết hạn');
     };
     btns.appendChild(b);
   });

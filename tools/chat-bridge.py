@@ -230,10 +230,18 @@ def is_local_origin(origin):
         return False
     return h in ("localhost", "127.0.0.1", "::1") or h.endswith(".localhost")
 
+# Card xin phép chỉ được trả lời khi đang pending — /api/respond trước
+# đây nhận id/optionId tuỳ ý → ai có token cũng tự duyệt thay học viên.
+perm_pending = {}         # id -> {"options": set(optionId), "ts": epoch}
+PERM_TTL = 600            # perm treo >10 phút coi như chết
+PERM_MAX = 200            # trần chống phình
+
 def broadcast(ev):
     global event_base
     with store_lock:
         event_store.append(ev)
+        if ev.get("t") in ("ready", "done", "err"):
+            perm_pending.clear()   # lượt mới/kết thúc/lỗi → perm cũ hết hạn
         excess = len(event_store) - MAX_EVENTS
         if excess > 0:
             del event_store[:excess]
@@ -316,13 +324,19 @@ class Acp:
         if m.get("method") == "session/request_permission":
             p = m.get("params", {})
             tc = p.get("toolCall") or {}
+            opts = [{"optionId": o.get("optionId"),
+                     "name": o.get("name", o.get("kind", "?")),
+                     "kind": o.get("kind", "")}
+                    for o in p.get("options", [])]
+            with store_lock:
+                if len(perm_pending) >= PERM_MAX:
+                    perm_pending.clear()
+                perm_pending[m["id"]] = {"options": {o["optionId"] for o in opts},
+                                        "ts": time.time()}
             broadcast({
                 "t": "perm", "id": m["id"],
                 "title": tc.get("title") or "Trợ lý muốn làm một việc",
-                "options": [{"optionId": o.get("optionId"),
-                             "name": o.get("name", o.get("kind", "?")),
-                             "kind": o.get("kind", "")}
-                            for o in p.get("options", [])],
+                "options": opts,
             })
             return
         if m.get("method") != "session/update":
@@ -767,14 +781,35 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"err": "trợ lý đã dừng — chạy lại file start"}, 503); return
             self._json({"ok": True})
         elif path == "/api/respond":
-            if data.get("optionId") == "__cancel__":
+            rid = data.get("id")
+            oid = data.get("optionId")
+            # id PHẢI đang pending cho cả hai đường — __cancel__ chỉ miễn
+            # check optionId (option ảo do UI tự thêm), không miễn check id;
+            # nếu không kẻ có token vẫn bơm được id rác vào kênh điều khiển.
+            # Validate + consume PHẢI atomic trong lock, và chỉ pop khi hợp
+            # lệ — nếu pop trước thì request optionId lạ cũng giết card
+            # (kẻ xấu DoS được nút bấm của học viên).
+            with store_lock:
+                rec = perm_pending.get(rid)
+                if (rec is not None
+                        and time.time() - rec["ts"] <= PERM_TTL
+                        and (oid == "__cancel__" or oid in rec["options"])):
+                    perm_pending.pop(rid, None)   # one-shot, không replay
+                    valid = True
+                else:
+                    valid = False
+            if rec is None or time.time() - rec["ts"] > PERM_TTL:
+                self._json({"err": "yêu cầu không còn hiệu lực"}, 404); return
+            if not valid:
+                self._json({"err": "lựa chọn không hợp lệ"}, 400); return
+            if oid == "__cancel__":
                 # học viên từ chối / card không có nút nào → báo cancel cho agent
-                payload = {"jsonrpc": "2.0", "id": data.get("id"),
+                payload = {"jsonrpc": "2.0", "id": rid,
                            "error": {"code": -32800, "message": "học viên không đồng ý"}}
             else:
-                payload = {"jsonrpc": "2.0", "id": data.get("id"),
+                payload = {"jsonrpc": "2.0", "id": rid,
                            "result": {"outcome": {"outcome": "selected",
-                                                  "optionId": data.get("optionId")}}}
+                                                  "optionId": oid}}}
             try:
                 if acp and not acp.dead:
                     acp.send(payload)

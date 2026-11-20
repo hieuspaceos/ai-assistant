@@ -122,6 +122,12 @@ $script:EventStore = New-Object System.Collections.ArrayList
 $script:EventBase = 0          # số event đã cắt khỏi đầu — cursor poll đếm tuyệt đối
 $MaxEvents = 3000
 
+# Card xin phép chỉ được trả lời khi đang pending — giống chat-bridge.py:
+# /api/respond trước đây nhận id/optionId tuỳ ý → tự duyệt thay học viên.
+$script:PermPending = @{}      # id -> @{ options = @(optionId); ts = epoch }
+$PermTtl = 600                 # perm treo >10 phút coi như chết
+$PermMax = 200                 # trần chống phình
+
 # Dòng stdout của acp chạy qua event -> queue, main loop xử lý
 $lineQueue = New-Object 'System.Collections.Concurrent.ConcurrentQueue[string]'
 
@@ -142,6 +148,9 @@ function Call-Acp($method, $params) {
 
 function Push-Event($ev) {
     [void]$script:EventStore.Add($ev)
+    if ($ev.t -in @("ready", "done", "err")) {
+        $script:PermPending.Clear()   # lượt mới/kết thúc/lỗi → perm cũ hết hạn
+    }
     if ($script:EventStore.Count -gt $MaxEvents) {
         $excess = $script:EventStore.Count - $MaxEvents
         $script:EventStore.RemoveRange(0, $excess)
@@ -220,8 +229,15 @@ function Drain-Queue {
         if ($m.method -eq "session/request_permission") {
             $p = $m.params; $tc = $p.toolCall
             $opts = @()
+            $optIds = @()
             foreach ($o in $p.options) {
                 $opts += [ordered]@{ optionId = $o.optionId; name = $o.name; kind = $o.kind }
+                $optIds += [string]$o.optionId
+            }
+            if ($script:PermPending.Count -ge $PermMax) { $script:PermPending.Clear() }
+            $script:PermPending[[string]$m.id] = @{
+                options = $optIds
+                ts = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
             }
             Push-Event ([ordered]@{
                 t = "perm"; id = $m.id
@@ -530,20 +546,35 @@ try {
             elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/respond") {
                 $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
                 $body = $reader.ReadToEnd() | ConvertFrom-Json
-                if ($body.optionId -eq "__cancel__") {
-                    # học viên từ chối / card không có nút nào → báo cancel cho agent
-                    $payload = [ordered]@{
-                        jsonrpc = "2.0"; id = $body.id
-                        error = @{ code = -32800; message = "học viên không đồng ý" }
-                    }
+                # id PHẢI đang pending cho cả hai đường — __cancel__ chỉ miễn
+                # check optionId, không miễn check id (chặn bơm id rác).
+                # Chỉ Remove khi hợp lệ — request optionId lạ không được giết
+                # card (kẻ xấu sẽ DoS được nút bấm của học viên).
+                $key = [string]$body.id
+                $rec = $script:PermPending[$key]
+                $age = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() - $(if ($rec) { $rec.ts } else { 0 })
+                if ($null -eq $rec -or $age -gt $PermTtl) {
+                    Send-Json $ctx @{ err = "yêu cầu không còn hiệu lực" } 404
+                } elseif ($body.optionId -ne "__cancel__" -and
+                          $rec.options -notcontains [string]$body.optionId) {
+                    Send-Json $ctx @{ err = "lựa chọn không hợp lệ" } 400
                 } else {
-                    $payload = [ordered]@{
-                        jsonrpc = "2.0"; id = $body.id
-                        result = @{ outcome = @{ outcome = "selected"; optionId = $body.optionId } }
+                    $script:PermPending.Remove($key)     # one-shot, không replay
+                    if ($body.optionId -eq "__cancel__") {
+                        # học viên từ chối / card không có nút nào → báo cancel cho agent
+                        $payload = [ordered]@{
+                            jsonrpc = "2.0"; id = $body.id
+                            error = @{ code = -32800; message = "học viên không đồng ý" }
+                        }
+                    } else {
+                        $payload = [ordered]@{
+                            jsonrpc = "2.0"; id = $body.id
+                            result = @{ outcome = @{ outcome = "selected"; optionId = $body.optionId } }
+                        }
                     }
+                    try { if (-not $script:AcpDead -and $script:AcpProc -and -not $script:AcpProc.HasExited) { Send-Acp $payload } } catch {}
+                    Send-Json $ctx @{ ok = $true }
                 }
-                try { if (-not $script:AcpDead -and $script:AcpProc -and -not $script:AcpProc.HasExited) { Send-Acp $payload } } catch {}
-                Send-Json $ctx @{ ok = $true }
             }
             elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/delete-lesson") {
                 $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
