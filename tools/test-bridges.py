@@ -43,6 +43,19 @@ def http(method, url, body=None, token=None, headers=None):
     except Exception as e:
         return -1, {"_exc": str(e)}, {}
 
+def http_raw(url, headers=None):
+    """GET thường — chỉ cần status + headers (file tĩnh không phải JSON)."""
+    req = urllib.request.Request(url)
+    for k, v in (headers or {}).items():
+        req.add_header(k, v)
+    try:
+        with urllib.request.urlopen(req, timeout=8) as r:
+            return r.status, dict(r.headers)
+    except urllib.error.HTTPError as e:
+        return e.code, dict(e.headers)
+    except Exception:
+        return -1, {}
+
 def spawn(script, port, cwd):
     p = subprocess.Popen([sys.executable, os.path.join(TOOLS, script),
                           str(port), cwd],
@@ -313,12 +326,12 @@ def main():
              {"action": "activate", "id": None})   # dọn — về trợ lý chung
 
         # ---- lock-down ph-1: Host check + term-gate + ws cap ----
-        s, _, _ = http("GET", f"http://127.0.0.1:{sv}/my-course/manifest.json",
-                       headers={"Host": "evil.example"})
+        s, _ = http_raw(f"http://127.0.0.1:{sv}/my-course/manifest.json",
+                        headers={"Host": "evil.example"})
         check("21. serve Host lạ → 403 (rebinding)", s == 403, str(s))
 
-        s, _, _ = http("GET", f"http://127.0.0.1:{sv}/my-course/manifest.json",
-                       headers={"Host": f"localhost:{sv}"})
+        s, _ = http_raw(f"http://127.0.0.1:{sv}/my-course/manifest.json",
+                        headers={"Host": f"localhost:{sv}"})
         check("22. serve Host localhost → 200", s == 200, str(s))
 
         # static: cả 3 đường spawn ttyd đều đi qua term-gate và có -a
@@ -338,6 +351,23 @@ def main():
         seg = src_eb[i_lock:i_lock + 300]
         check("24. ext-bridge: MAX_WS_MSG + next_id dưới lock",
               "MAX_WS_MSG" in src_eb and "next_id[0] += 1" in seg)
+
+        # ---- lock-down ph-2: CSP trên vùng nội dung ----
+        with open(os.path.join(wd, "my-course", "csp-check.html"), "w") as f:
+            f.write("<p>x</p>")
+        os.makedirs(os.path.join(wd, "site"), exist_ok=True)
+        with open(os.path.join(wd, "site", "t.html"), "w") as f:
+            f.write("<p>x</p>")
+        s, h = http_raw(f"http://127.0.0.1:{sv}/my-course/csp-check.html")
+        csp = h.get("Content-Security-Policy", "")
+        check("25. .html my-course có CSP connect-src 'none'",
+              s == 200 and "connect-src 'none'" in csp, f"{s} {csp[:60]}")
+        s, h = http_raw(f"http://127.0.0.1:{sv}/my-course/manifest.json")
+        check("25a. .json my-course KHÔNG có CSP",
+              s == 200 and "Content-Security-Policy" not in h)
+        s, h = http_raw(f"http://127.0.0.1:{sv}/site/t.html")
+        check("26. .html ngoài vùng nội dung KHÔNG có CSP",
+              s == 200 and "Content-Security-Policy" not in h)
     finally:
         for p in procs:
             try:

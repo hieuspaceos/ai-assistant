@@ -18,6 +18,15 @@ $mime = @{
   '.woff'='font/woff'; '.woff2'='font/woff2'; '.ttf'='font/ttf'
 }
 
+# CSP cho .html duoi my-course/intro/ (noi dung agent sinh) - script van
+# chay nhung connect-src 'none' chan goi bridge :7682/:7684 va moi fetch/
+# XHR/WS. KHONG ap cho /web/ - portal phai goi bridge duoc.
+$csp = "default-src 'self'; script-src 'self' 'unsafe-inline' https:; " +
+       "style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https:; " +
+       "font-src 'self' data: https:; media-src 'self' data:; " +
+       "connect-src 'none'; form-action 'none'; base-uri 'none'; " +
+       "object-src 'none'; frame-src 'self' https:; frame-ancestors 'self'"
+
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://localhost:$port/")
 $listener.Prefixes.Add("http://127.0.0.1:$port/")
@@ -50,6 +59,10 @@ while ($listener.IsListening) {
       $res.ContentType = $mime[$ext]; if (-not $res.ContentType) { $res.ContentType = 'application/octet-stream' }
       # portal luôn cần thấy bài mới nhất — không cache
       $res.Headers.Add('Cache-Control', 'no-store')
+      if (($path.StartsWith('/my-course/') -or $path.StartsWith('/intro/')) -and
+          ($ext -eq '.html' -or $ext -eq '.htm')) {
+        $res.Headers.Add('Content-Security-Policy', $csp)
+      }
       $res.ContentLength64 = $bytes.Length
       $res.OutputStream.Write($bytes, 0, $bytes.Length)
     } else {

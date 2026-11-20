@@ -87,6 +87,15 @@ Trang hiện toàn màn hình trong portal + thanh công cụ:
 File clone KHÔNG nhúng script sửa — viewer inject khi render, nên file
 đứng một mình vẫn sạch.
 
+**Ràng buộc CSP (từ lock-down 2026-11):** mọi `.html` dưới `my-course/`
+được serve kèm `Content-Security-Policy` với `connect-src 'none'` —
+clone **không được phụ thuộc** `fetch`/`XHR`/`WebSocket`/`sendBeacon`
+kể cả gọi localhost (dead code, CSP chặn). Được phép: ảnh/font/style/
+script ngoài qua `https:` (`img-src`/`font-src`/`style-src`/`script-src`
+đã mở), iframe nhúng ngoài (`frame-src 'self' https:` — embed YouTube/
+Maps sống), media `self`/`data:`. Form clone chỉ giả lập —
+`form-action 'none'` chặn submit thật.
+
 ## /trang-moi — thêm trang chi tiết sau clone
 
 "Viết thêm bài blog/tour/sản phẩm" → skill quét `my-course/*.html` tìm
