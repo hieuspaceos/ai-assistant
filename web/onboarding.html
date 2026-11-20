@@ -198,6 +198,7 @@ let brainData = null, selBrain = '', customBrain = '';
 
 function t(k){ return T[lang][k]; }
 function el(html){ const d=document.createElement('div'); d.innerHTML=html.trim(); return d.firstChild; }
+function esc(s){ const d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function dots(){ const d=document.getElementById('dots'); d.innerHTML=''; for(let i=0;i<7;i++) d.appendChild(el(`<div class="step-dot${i<=stepIdx?' on':''}"></div>`)); }
 function go(i){ stepIdx=i; dots(); [stepLang,stepName,stepBot,stepBrain,stepFolder,stepApps,stepDone][i](); }
 
@@ -250,17 +251,17 @@ function stepBot(){
       const needs=(tp.needs||[]).map(n=>{
         const a=conn[n]; const ok=a&&a.status==='connected';
         const nm=(a&&a.name)||n;
-        return `<span class="need ${ok?'ok':'warn'}" title="${ok?t('botConnOk'):t('botConnWarn')}">${nm} ${ok?'✓':'⚠'}</span>`;
+        return `<span class="need ${ok?'ok':'warn'}" title="${ok?t('botConnOk'):t('botConnWarn')}">${esc(nm)} ${ok?'✓':'⚠'}</span>`;
       }).join(' ');
       const nm=(tp.suggested_bot_name&&tp.suggested_bot_name[lang])||tp.suggested_bot_name?.vi||'';
       const card=el(`<div class="opt bot-card${selTpl===tp?' sel':''}">
-        <span class="flag">${tp.avatar||'🤖'}</span>
-        <div><b>${(tp.name&&tp.name[lang])||tp.id}</b>
-          <small>${(tp.desc&&tp.desc[lang])||''}</small>
+        <span class="flag">${esc(tp.avatar||'🤖')}</span>
+        <div><b>${esc((tp.name&&tp.name[lang])||tp.id)}</b>
+          <small>${esc((tp.desc&&tp.desc[lang])||'')}</small>
           <div class="need-row"><span class="note">${t('botNeeds')}</span> ${needs}</div>
           <div class="bot-pick" style="display:none">
             <label class="note">${t('botNameLbl')}</label>
-            <input type="text" class="bot-name" value="${nm}">
+            <input type="text" class="bot-name" value="${esc(nm)}">
           </div>
         </div></div>`);
       const pick=card.querySelector('.bot-pick');

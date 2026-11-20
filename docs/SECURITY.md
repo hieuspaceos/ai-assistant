@@ -73,7 +73,15 @@ là **mã từ bên ngoài** — chỉ nhập từ người tin. Lớp phòng th
 - Preview trước khi ghi: instructions đầy đủ hiện cho học viên đọc, kèm
   cảnh báo "thấy lệnh lạ (gửi tin, xoá gì đó) thì đừng nhập".
 - Zip chỉ nhận `bot.json`, `README.txt`, `skills/<tên>/...` — mọi entry
-  chứa `..` hoặc path lạ bị bỏ (chống zip-slip ghi ra ngoài temp).
+  chứa `..` hoặc path lạ bị bỏ (chống zip-slip ghi ra ngoài temp);
+  tổng dung lượng bung kẹp 64MB chống zip bomb; giữ tối đa 10 stage.
+- **Tên skill đi vào đường dẫn file** → whitelist `[a-zA-Z0-9_-]{1,64}`
+  ở cả ba lớp: lọc khi nhập, lọc khi `create`, chặn ngay trước
+  `copytree` khi activate — bot khai `skills:["../x"]` không sao chép
+  được gì ra ngoài `.devin/skills`.
+- Field bot nhập chỉ giữ schema (`name/avatar/role/skills/needs/
+  recipes/instructions`), kẹp độ dài, `id` do file gửi bị bỏ — id là
+  khoá nội bộ của máy nhận.
 - Skill kèm zip cài theo luật "không đè" — không ghi đè skill đang có.
 - Bot nhập **không tự activate** — đổi context agent phải do học viên
   chọn rõ ràng trong menu.
