@@ -1,5 +1,9 @@
 # Phase 4 — Định vị lại: assistant-first
 
+> **Status: xong** — README, site (đã deploy live), SETUP, PDR,
+> web/index.html, app.js i18n đều lead "trợ lý làm việc thật". Verify
+> live troly.hieuspace.com 20/11.
+
 ## Mục tiêu
 
 Thông điệp ngoài cùng dẫn bằng **trợ lý làm việc thật** (giá trị hàng
