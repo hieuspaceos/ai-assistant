@@ -55,6 +55,16 @@ không có token (đã chặn Origin trước đó, token là lớp thứ hai).
 4. **Cookie thay header** — bỏ: cookie theo port, `:8080` không phủ
    `:7682`/`:7684`, không giải quyết được cross-port.
 
+## Chat history
+
+`.logs/chat-history.jsonl` giữ lịch sử chat để portal reload không mất
+ngữ cảnh sau restart. File chứa nội dung trợ lý đã nói (có thể gồm tóm
+tắt tin nhắn Zalo/mail học viên nhờ đọc) → `chmod 600`, chỉ user máy đọc
+được. Event `perm` (card xin phép) là transient, KHÔNG persist — tránh
+card "tồi sinh" tự duyệt sau restart. File tự rotate: >2MB giữ lại
+3000 event cuối. Xoá sạch lịch sử = xoá `.logs/` (hoặc riêng
+`chat-history.jsonl`) khi trợ lý không chạy.
+
 ## Rotation
 
 Xoá `.devin/bridge.token` + chạy lại file start = khoá mới; mọi phía
