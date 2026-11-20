@@ -41,6 +41,7 @@ if [ ! -s "$TOKEN_FILE" ]; then
 fi
 BRIDGE_TOKEN="$(cat "$TOKEN_FILE")"
 export BRIDGE_TOKEN
+export BRAIN_TERM          # term-gate.sh lay nao tu env, khong qua argv
 
 # --- 1. Portal tinh (cong 8080) — chan dotfiles (.devin chua secrets) ---
 python3 tools/serve.py 8080 "$ROOT" >"$LOGDIR/portal.log" 2>&1 &
@@ -54,7 +55,10 @@ python3 tools/ext-bridge.py 7684 "$ROOT" >"$LOGDIR/ext-bridge.log" 2>&1 &
 
 # --- 4. ttyd (cong 7681, tuy chon): che do Terminal nhung web ---
 if command -v ttyd >/dev/null 2>&1; then
-  ttyd -p 7681 -i 127.0.0.1 -W "$BRAIN_TERM" >"$LOGDIR/ttyd.log" 2>&1 &
+  # ttyd KHONG tu xac thuc (-O chi so hostname, bo port) → moi ket noi
+  # phai qua term-gate: doi ma ket noi roi moi exec nao. -a cho phep
+  # portal tu dien ma qua ?arg= (append cuoi argv).
+  ttyd -p 7681 -i 127.0.0.1 -W -a sh tools/term-gate.sh >"$LOGDIR/ttyd.log" 2>&1 &
 else
   echo "  [!] Khong co ttyd - che do Terminal khong dung duoc (Chat van binh thuong)"
 fi

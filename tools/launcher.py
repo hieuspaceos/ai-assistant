@@ -132,8 +132,16 @@ def supervisor():
     đăng ký được ở main thread). Trả khi STOPPING, đã terminate hết con."""
     jobs = [("serve", 8080), ("chat-bridge", 7682), ("ext-bridge", 7684)]
     if shutil.which("ttyd"):
-        jobs.append(("ttyd", ["ttyd", "-p", "7681", "-i", "127.0.0.1", "-W",
-                              brain_terminal()]))
+        # ttyd không tự xác thực được → spawn qua term-gate (đòi mã kết nối
+        # trong shell trước khi exec não); -a để portal tự điền mã qua ?arg=.
+        # term-gate.* nằm trong tools/ → CODE_DIRS đã copy sang DATA.
+        os.environ["BRAIN_TERM"] = brain_terminal()
+        if platform.system() == "Windows":
+            gate = ["cmd", "/c", os.path.join(DATA, "tools", "term-gate.cmd")]
+        else:
+            gate = ["sh", os.path.join(DATA, "tools", "term-gate.sh")]
+        jobs.append(("ttyd", ["ttyd", "-p", "7681", "-i", "127.0.0.1",
+                              "-W", "-a"] + gate))
     procs, fails, born = {}, {n: 0 for n, _ in jobs}, {}
 
     def cmd_of(n, spec):

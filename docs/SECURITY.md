@@ -18,6 +18,7 @@ hoặc query `?token=<mã>`; so bằng `hmac.compare_digest` / `-ceq`.
 |---|---|
 | `chat-bridge :7682` | Mọi endpoint trừ `GET /api/health` và `OPTIONS` (preflight CORS không thực thi hành động nên miễn — thiếu nó portal chết) |
 | `ext-bridge :7684` | `/api/*` + WS `GET /ext?token=` — token kiểm TRƯỚC origin check |
+| `ttyd :7681` | Không khoá được bằng flag — mọi kết nối spawn `term-gate.sh`/`.cmd`, shell tự đòi mã trước khi exec não (portal autofill qua `?arg=` + `ttyd -a`). Đã kiểm chứng `-O` chỉ so hostname bỏ port → vô dụng với trang `localhost:*`, không dùng |
 | `serve :8080` | KHÔNG khoá — xem trade-off dưới |
 
 **Ai lấy khoá ở đâu:** portal nhận `?t=` từ URL file start mở →
@@ -106,7 +107,9 @@ trong options).
 | Agent → folder ngoài | `permissions.json` — chưa có trong list thì phải hỏi học viên |
 | Agent → app bên ngoài | `connections.json` — chưa kết nối thì dẫn học viên kết nối trước |
 | Trang local → spawn process | `POST /api/brain` spawn "não" mới: `cmd` bị giới hạn ở **tên lệnh trần** `[A-Za-z0-9_.-]+` — không `/`, không path — nên không trỏ được vào script lạ; args cắt 20 mục × 200 ký tự |
-| Trang lạ → extension | `externally_connectable.matches` chỉ localhost; extension chỉ nhận `{t:'set-token'}` — kẻ lạ ghi đè token chỉ gây DoS reconnect |
+| Trang lạ → extension | `externally_connectable.matches` chỉ localhost; extension chỉ nhận `{t:'set-token'}`, token mới chỉ persist SAU khi WS mở (bridge trả 401 khi mã sai) — mã rác chỉ phá được session hiện tại, token đúng trong storage không bị ghi đè |
+| Trang `localhost:*` → shell qua ttyd | WS vẫn nối nhưng chỉ gặp `term-gate` đòi mã trong shell — sai mã → exit. Không phụ thuộc flag ttyd nào |
+| DNS rebinding → file trên :8080 | `serve.py` reject Host không phải loopback (403); `serve.ps1` đã an toàn sẵn nhờ http.sys prefix `localhost`/`127.0.0.1` |
 
 ## permissions.json — ngăn tủ được phép
 

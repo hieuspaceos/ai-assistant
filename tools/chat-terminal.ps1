@@ -29,8 +29,12 @@ try {
 $tokFile = Join-Path (Split-Path -Parent $PSScriptRoot) ".devin\bridge.token"
 if (Test-Path $tokFile) { $env:BRIDGE_TOKEN = (Get-Content $tokFile -Raw -Encoding UTF8).Trim() }
 
-ttyd -p 7681 -i 127.0.0.1 -W `
+# ttyd KHÔNG tự xác thực (flag -O chỉ so hostname, bỏ port) → mỗi kết nối
+# phải đi qua term-gate.cmd: đòi mã kết nối đúng rồi mới chạy não. -a cho
+# portal tự điền mã qua ?arg= (ttyd append arg đó vào cuối lệnh).
+$env:BRAIN_TERM = $brain
+ttyd -p 7681 -i 127.0.0.1 -W -a `
   -t $theme `
   -t fontSize=17 `
   -t lineHeight=1.45 `
-  $brain
+  cmd /c "$PSScriptRoot\term-gate.cmd"
