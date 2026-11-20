@@ -2,14 +2,14 @@
 
 ## Executive Summary
 
-ai-assistant là **một cỗ máy sinh khoá học cá nhân hoá** chạy trên Devin CLI,
-không phải một khoá học viết sẵn. Học viên được phỏng vấn về công việc thật
-→ agent tự thiết kế giáo trình → sinh bài học (guide + bài tập + slide +
-kịch bản video) → hiển thị qua portal web local có nhúng chat/terminal.
+ai-assistant là **trợ lý AI làm việc thật trên máy học viên**: đọc
+Zalo/Outlook, cập nhật Google Sheets, đăng WordPress, xử lý Excel/Word/ảnh,
+và **clone một trang web thành trang của học viên** (`/clone-trang`).
 
-Ngoài dạy học, hệ thống là **trợ lý làm việc thật**: đọc Zalo/Outlook, cập
-nhật Google Sheets, đăng WordPress, xử lý Excel/Word/ảnh, và **clone một
-trang web thành trang của học viên** (`/clone-trang`).
+Điểm khác biệt: nó là trợ lý duy nhất **tự dạy người dùng dùng nó** — lần
+đầu chạy, hệ thống phỏng vấn về công việc thật → agent tự thiết kế giáo
+trình → sinh bài học (guide + bài tập + slide + kịch bản video) → hiển thị
+qua portal web local có nhúng chat/terminal.
 
 ## Business Context
 
