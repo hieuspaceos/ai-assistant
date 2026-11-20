@@ -18,9 +18,15 @@ function setBadge(state) {
 function connect() {
   if (!extToken) { setBadge('need-token'); return; }
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
-  ws = new WebSocket(WS_URL + '?token=' + encodeURIComponent(extToken)
+  const tok = extToken;   // chụp tại thời điểm nối — extToken có thể đổi sau
+  ws = new WebSocket(WS_URL + '?token=' + encodeURIComponent(tok)
         + '&v=' + encodeURIComponent(chrome.runtime.getManifest().version));
-  ws.onopen = () => setBadge('on');
+  ws.onopen = () => {
+    setBadge('on');
+    // Chỉ lưu mã sau khi WS mở — ext-bridge trả 401 (không 101) khi mã sai,
+    // nên mã rác do trang localhost lạ đẩy vào không bao giờ được persist.
+    chrome.storage.local.set({ bridge_token: tok });
+  };
   ws.onclose = ws.onerror = () => {
     setBadge('off');
     ws = null;
@@ -45,7 +51,8 @@ function connect() {
 chrome.runtime.onMessageExternal.addListener((m, sender, reply) => {
   if (m && m.t === 'set-token' && typeof m.token === 'string' && m.token) {
     extToken = m.token;
-    chrome.storage.local.set({ bridge_token: m.token });
+    // KHÔNG persist ở đây — chỉ lưu trong ws.onopen sau khi bridge chấp nhận.
+    // Sai mã → kết nối rớt → extToken cũ trong storage vẫn nguyên.
     try { ws && ws.close(); } catch (e) {}
     connect();
     if (reply) reply({ ok: true });

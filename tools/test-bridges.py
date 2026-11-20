@@ -311,6 +311,33 @@ def main():
               str(b)[:80])
         http("POST", b3 + f"/api/bot?token={TOKEN}",
              {"action": "activate", "id": None})   # dọn — về trợ lý chung
+
+        # ---- lock-down ph-1: Host check + term-gate + ws cap ----
+        s, _, _ = http("GET", f"http://127.0.0.1:{sv}/my-course/manifest.json",
+                       headers={"Host": "evil.example"})
+        check("21. serve Host lạ → 403 (rebinding)", s == 403, str(s))
+
+        s, _, _ = http("GET", f"http://127.0.0.1:{sv}/my-course/manifest.json",
+                       headers={"Host": f"localhost:{sv}"})
+        check("22. serve Host localhost → 200", s == 200, str(s))
+
+        # static: cả 3 đường spawn ttyd đều đi qua term-gate và có -a
+        src_sh = open(os.path.join(ROOT, "start.sh"), encoding="utf-8").read()
+        src_ps = open(os.path.join(TOOLS, "chat-terminal.ps1"),
+                      encoding="utf-8-sig").read()
+        src_ln = open(os.path.join(TOOLS, "launcher.py"),
+                      encoding="utf-8").read()
+        check("23. 3 đường spawn ttyd qua term-gate + -a",
+              "term-gate.sh" in src_sh and " -a " in src_sh
+              and "term-gate.cmd" in src_ps and "-a" in src_ps
+              and "term-gate" in src_ln and '"-a"' in src_ln)
+
+        src_eb = open(os.path.join(TOOLS, "ext-bridge.py"),
+                      encoding="utf-8").read()
+        i_lock = src_eb.index("with ext_lock:\n        s = ext_sock")
+        seg = src_eb[i_lock:i_lock + 300]
+        check("24. ext-bridge: MAX_WS_MSG + next_id dưới lock",
+              "MAX_WS_MSG" in src_eb and "next_id[0] += 1" in seg)
     finally:
         for p in procs:
             try:

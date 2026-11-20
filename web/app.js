@@ -437,7 +437,9 @@ async function setChatMode(mode) {
     }
   } else {
     if (await ping(TTYD_URL)) {
-      if (!termFrame.src) termFrame.src = TTYD_URL;
+      // ttyd -a append ?arg= vào cuối lệnh → term-gate tự nhận mã kết nối,
+      // học viên khỏi gõ tay. Không arg → gate hỏi mã (fallback an toàn).
+      if (!termFrame.src) termFrame.src = TTYD_URL + '/?arg=' + encodeURIComponent(window.BRIDGE_TOKEN || '');
       status.innerHTML = '';
     } else {
       status.innerHTML = `<span class="warn">${t('warnCli').replace('devin', brainTerminal)}</span>`;

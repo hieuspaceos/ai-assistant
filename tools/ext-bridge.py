@@ -101,6 +101,7 @@ ext_sock = None          # socket của extension đang kết nối (chỉ một
 ext_version = None      # version extension tự báo qua ?v= lúc WS upgrade
 pending = {}             # id -> {"event": Event, "res": dict}
 next_id = [0]
+MAX_WS_MSG = 64 * 1024 * 1024   # trần message WS (screenshot b64 ~vài MB)
 
 # ---------- websocket (server side, stdlib) ----------
 
@@ -135,6 +136,10 @@ def ws_recv(sock):
             n = struct.unpack("!H", _read(sock, 2))[0]
         elif n == 127:
             n = struct.unpack("!Q", _read(sock, 8))[0]
+        # cap CẢ tổng tích luỹ: frame đơn đã khai báo n — nếu chỉ kiểm n
+        # thì nhiều continuation frame nhỏ vẫn phình RAM vô hạn
+        if len(msg) + n > MAX_WS_MSG:
+            raise ConnectionError("message WS quá lớn")
         mask = _read(sock, 4) if b2 & 0x80 else None
         payload = _read(sock, n)
         if mask:
@@ -195,10 +200,10 @@ def ext_call(action, params, timeout=20):
     """Gửi lệnh tới extension, chờ kết quả. Trả về dict {ok, ...}."""
     with ext_lock:
         s = ext_sock
+        next_id[0] += 1         # trong lock: 2 thread không bao giờ trùng id
+        rid = next_id[0]
     if not s:
         return {"ok": False, "err": "extension chưa kết nối — học viên cần mở trình duyệt có cài Trợ Lý AI"}
-    next_id[0] += 1
-    rid = next_id[0]
     ev = threading.Event()
     pending[rid] = {"event": ev, "res": None}
     try:

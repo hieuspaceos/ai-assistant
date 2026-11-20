@@ -38,6 +38,19 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return fp
 
     def send_head(self):
+        # chống DNS rebinding: chỉ phục vụ Host loopback. Trang web lạ rebind
+        # DNS về 127.0.0.1 thì Host header vẫn là domain của nó → 403.
+        # (Windows: serve.ps1 nhờ http.sys prefix đã chặn sẵn ở kernel.)
+        h = (self.headers.get("Host") or "").strip()
+        if h.startswith("[") and "]" in h:
+            h = h[1:h.index("]")]              # [::1]:8080 → ::1
+        elif not h.startswith("["):
+            h = h.rsplit(":", 1)[0]            # localhost:8080 → localhost
+        # Host dị dạng ("[", "[]", thiếu hẳn) → h lạ → rơi vào 403 dưới đây
+        if h not in ("localhost", "127.0.0.1", "::1") \
+                and not h.endswith(".localhost"):
+            self.send_error(403, "Host khong duoc phep")   # reason phải latin-1
+            return None
         fp = self.translate_path(self.path)
         if fp is None or os.path.isdir(fp):
             self.send_error(404, "Not found")
