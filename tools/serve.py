@@ -99,8 +99,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if rng and rng.startswith("bytes=") and "," not in rng:
             try:
                 s, _, e = rng[6:].partition("-")
-                start = int(s) if s else 0
-                end = int(e) if e else size - 1
+                if not s and not e:
+                    raise ValueError          # "bytes=-" — vô nghĩa → 200
+                if not s:                      # suffix: bytes=-500 = 500 byte cuối
+                    start = max(0, size - int(e))
+                    end = size - 1
+                else:
+                    start = int(s)
+                    end = int(e) if e else size - 1
                 if start > end or start >= size:
                     f.close()
                     self.send_error(416)
@@ -136,7 +142,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(size))
         self.send_header("Accept-Ranges", "bytes")
         raw_path = urllib.parse.unquote(urllib.parse.urlparse(self.path).path)
-        if raw_path.startswith(CSP_PATHS) \
+        # .lower() BẮT BUỘC: FS macOS/Windows không phân biệt hoa-thường nên
+        # /MY-COURSE/x.html resolve ra cùng file — nếu so case-sensitive thì
+        # content độc chỉ cần location.href sang alias hoa là thoát CSP.
+        if raw_path.lower().startswith(CSP_PATHS) \
                 and raw_path.lower().endswith((".html", ".htm")):
             self.send_header("Content-Security-Policy", CSP)
         self.end_headers()

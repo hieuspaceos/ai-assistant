@@ -60,7 +60,10 @@ while ($listener.IsListening) {
       # vendor khong doi theo request -> cache 1h; cho khac giu no-store
       $cc = if ($path.StartsWith('/web/vendor/')) { 'max-age=3600' } else { 'no-store' }
       $res.Headers.Add('Cache-Control', $cc)
-      if (($path.StartsWith('/my-course/') -or $path.StartsWith('/intro/')) -and
+      # ToLower BAT BUOC: FS Windows/macOS khong phan biet hoa-thuong nen
+      # /MY-COURSE/x.html resolve ra cung file — so case-sensitive se lam
+      # content doc thoat CSP qua alias viet hoa.
+      if (($path.ToLower().StartsWith('/my-course/') -or $path.ToLower().StartsWith('/intro/')) -and
           ($ext -eq '.html' -or $ext -eq '.htm')) {
         $res.Headers.Add('Content-Security-Policy', $csp)
       }
@@ -68,8 +71,15 @@ while ($listener.IsListening) {
       # multi-range/chuoi la bo qua -> 200 tron file. HttpListener tu keep-alive.
       $range = [string]$req.Headers['Range']
       if ($range -match '^bytes=(\d*)-(\d*)$') {
-        $s = if ($Matches[1]) { [long]$Matches[1] } else { 0 }
-        $e = if ($Matches[2]) { [long]$Matches[2] } else { [long]$bytes.Length - 1 }
+        if ($Matches[1]) {
+          $s = [long]$Matches[1]
+          $e = if ($Matches[2]) { [long]$Matches[2] } else { [long]$bytes.Length - 1 }
+        } else {
+          # suffix: bytes=-500 = 500 byte cuoi (bytes=- → suf=0 → $s=size → 416)
+          $suf = if ($Matches[2]) { [long]$Matches[2] } else { 0 }
+          $s = [Math]::Max(0, [long]$bytes.Length - $suf)
+          $e = [long]$bytes.Length - 1
+        }
         if ($s -le $e -and $s -lt $bytes.Length) {
           $e = [Math]::Min($e, [long]$bytes.Length - 1)
           $res.StatusCode = 206
