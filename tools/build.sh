@@ -20,6 +20,7 @@ pyinstaller --onefile --name troly --clean \
   --hidden-import http.server \
   --hidden-import urllib.parse \
   --hidden-import urllib.request \
+  --hidden-import urllib.error \
   --hidden-import socket \
   --hidden-import struct \
   --hidden-import hashlib \
@@ -28,6 +29,16 @@ pyinstaller --onefile --name troly --clean \
   --hidden-import secrets \
   --hidden-import threading \
   --hidden-import shutil \
+  --hidden-import subprocess \
+  --hidden-import tempfile \
+  --hidden-import signal \
+  --hidden-import platform \
+  --hidden-import runpy \
+  --hidden-import webbrowser \
+  --hidden-import queue \
+  --hidden-import concurrent.futures \
+  --hidden-import functools \
+  --hidden-import winreg \
   --add-data "web${SEP}web" \
   --add-data "tools${SEP}tools" \
   --add-data "extension${SEP}extension" \
@@ -45,4 +56,5 @@ pyinstaller --onefile --name troly --clean \
   --exclude-module tkinter \
   tools/launcher.py
 
-echo "Xong → dist/troly — copy file này cho học viên là xong."
+OUT="$(ls dist/troly* 2>/dev/null | head -1)"
+echo "Xong → ${OUT:-dist/troly} — copy file này cho học viên là xong."

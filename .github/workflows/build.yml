@@ -1,0 +1,62 @@
+name: build
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: |
+          python tools/test-bridges.py
+          python tools/test-parity.py
+          python tools/test-packs.py
+
+  build:
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - { os: macos-latest,    name: troly,       shell: bash }
+          - { os: windows-latest,  name: TroLyAI.exe, shell: bash }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run: { shell: ${{ matrix.shell }} }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: python -m pip install pyinstaller
+      - run: bash tools/build.sh
+      - name: rename artifact
+        run: mv dist/troly* "dist/${{ matrix.name }}" || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: dist/${{ matrix.name }}
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+      # Tag phải khớp VERSION — portal so VERSION với release mới nhất để
+      # hiện banner "có bản mới"; lệch nhau là banner báo sai.
+      # create → nếu release đã tồn tại (tag lại) thì upload --clobber.
+      - run: |
+          test "v$(cat VERSION)" = "$GITHUB_REF_NAME" || {
+            echo "tag $GITHUB_REF_NAME != VERSION $(cat VERSION)"; exit 1; }
+          gh release create "$GITHUB_REF_NAME" \
+            troly/troly "TroLyAI.exe/TroLyAI.exe" \
+            --generate-notes --verify-tag \
+          || gh release upload "$GITHUB_REF_NAME" \
+            troly/troly "TroLyAI.exe/TroLyAI.exe" --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

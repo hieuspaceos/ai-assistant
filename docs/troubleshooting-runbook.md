@@ -17,6 +17,30 @@ Bất kỳ test nào đỏ → KHÔNG release. `test-parity` đỏ thường là
 endpoint sang bản bridge kia; `test-packs` đỏ là skill mới/sửa chưa đồng
 bộ vào `skill-packs/`.
 
+## 0.5. Release một phiên bản mới (CI)
+
+```bash
+# 1. sửa VERSION (vd 1.0.1) → commit → tag cùng số
+git tag v1.0.1 && git push --tags
+# 2. CI (.github/workflows/build.yml) tự chạy:
+#    test (3 script trên, fail → không build) → build troly (macOS) +
+#    TroLyAI.exe (Windows) → attach vào Release của tag
+```
+
+Tag **phải** bằng `v` + `VERSION` — job release kiểm `v$(cat VERSION)`
+và chết nếu lệch (banner "có bản mới" trên portal so VERSION với release
+mới nhất). Chạy thử build không release: Actions → build → Run workflow
+(`workflow_dispatch`, không cần tag).
+
+Sự cố CI thường gặp:
+- Build Windows chết `ModuleNotFoundError` khi chạy exe → thiếu
+  `--hidden-import` trong `tools/build.sh` (children chạy qua runpy nên
+  PyInstaller không tự thấy import của chúng).
+- `--hidden-import winreg` trên macOS cảnh báo "not found" — bình
+  thường, bỏ qua.
+- SmartScreen chặn `TroLyAI.exe` trên máy học viên → hướng dẫn "More
+  info → Run anyway" (chưa ký code trong pilot).
+
 ## 1. Health check nhanh
 
 ```bash
