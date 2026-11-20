@@ -16,8 +16,9 @@ việc lặp lại. Không có skill agent vẫn làm được — có skill th�
 .devin/skills/<tên>/SKILL.md   ← skill ACTIVE, agent đọc thư mục này
 ```
 
-- **Sửa skill → sửa ở `.devin/skills/`** (bản active). `skill-packs/` là
-  kho gốc để onboard máy mới — sửa cả hai nếu muốn thay đổi lan ra.
+- **Sửa skill → sửa ở `.devin/skills/` rồi đồng bộ sang pack vi** —
+  `test-packs.py` bắt buộc hai bản giống nhau, quên đồng bộ = test đỏ.
+  Bản en là dịch thuật, không cần giống chữ với vi.
 - **Skill mới muốn phát cho học viên → copy vào CẢ HAI pack.** Skill chỉ
   nằm ở `.devin/skills/` sẽ KHÔNG có trong bản đóng gói `troly`
   (launcher chỉ bundle `skill-packs/`) — đã từng mất `/clone-trang`
@@ -70,9 +71,10 @@ Phần thân = hướng dẫn theo phong cách "checklist + bẫy đã gặp":
 | xuat-canva | export-canva | Dẫn học viên export đúng từ Canva |
 | zalo-oa | zalo-oa | Gửi tin Zalo OA qua API chính thức |
 | gom-skill | pack-skill | Đóng gói skill tự sinh chia sẻ |
+| clone-trang | clone-page | Clone trang mẫu → HTML của học viên |
+| trang-moi | new-page | Thêm trang chi tiết vào site clone |
 
-Skill **không nằm trong pack** (cài trực tiếp, có ở cả hai ngôn ngữ):
-`clone-trang`, `trang-moi` — xem `clone-pipeline.md`.
+Pipeline clone (`data-cs-*` markers): xem `clone-pipeline.md`.
 
 ## Contract dữ liệu xuyên skill
 
