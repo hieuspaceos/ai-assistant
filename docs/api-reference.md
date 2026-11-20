@@ -113,6 +113,8 @@ có ảnh base64).
 | `/api/setup` | `{language, learner_name, ...}` | onboarding: ghi config, cài skill pack đúng ngôn ngữ |
 | `/api/check-connection` | `{id}` | probe trạng thái app (http/tabs) |
 | `/api/bot` | `{action, ...}` | `create`/`activate`/`delete`/`rename` bot; activate → cài skill thiếu + ghi `my-course/bot.md`; `id:null` → bỏ chọn |
+| `/api/bot-import` | `{file: "<base64 zip>"}` | bung bundle bot vào temp → trả `{preview:{stage,name,avatar,instructions,skills,needs,bundled}}`; chống zip-slip; body cap 8MB |
+| `/api/bot-import-confirm` | `{stage}` | ghi thật: cài skill (không đè) + thêm bot vào `bots.json`; KHÔNG tự activate; stage dùng một lần |
 
 ---
 

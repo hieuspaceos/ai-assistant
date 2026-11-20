@@ -86,3 +86,22 @@ Pipeline clone (`data-cs-*` markers): xem `clone-pipeline.md`.
   `data-cs-template`, `data-cs-ref`. Bảng đầy đủ: `clone-pipeline.md`.
 - **permissions.json** — mọi skill đụng folder ngoài `my-course/` phải
   kiểm tra trước (xem `SECURITY.md`).
+
+## Bot bundle — đơn vị chia sẻ "cả trợ lý"
+
+`gom-skill` (vi) / `pack-skill` (en) có mode gói bot: một bot trong
+`my-course/bots.json` + các skill nó tham chiếu → `bot-<slug>.zip`:
+
+```
+bot-hang.zip
+├── bot.json    # {name, avatar, role, skills[], needs[], recipes[],
+│               #  instructions} — KHÔNG kèm id, triggers
+├── README.txt  # 3 dòng: làm gì, cần nối gì, nhắc đọc instructions
+└── skills/<tên>/   # thư mục skill đầy đủ
+```
+
+Nhập qua portal: menu chip trợ lý → "Nhập trợ lý từ file" →
+`POST /api/bot-import` (preview instructions trước) →
+`POST /api/bot-import-confirm` (ghi thật, KHÔNG tự activate).
+Bot hay sau curate → thêm `skill-packs/roles/<id>.json` để phát cho mọi
+máy như role template (xem `SECURITY.md` mục "Bot / skill nhập").

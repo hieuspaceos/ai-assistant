@@ -65,6 +65,22 @@ card "tồi sinh" tự duyệt sau restart. File tự rotate: >2MB giữ lại
 3000 event cuối. Xoá sạch lịch sử = xoá `.logs/` (hoặc riêng
 `chat-history.jsonl`) khi trợ lý không chạy.
 
+## Bot / skill nhập từ file — mã từ người khác
+
+`POST /api/bot-import` nhận file `bot-*.zip` do người khác chia sẻ. Đây
+là **mã từ bên ngoài** — chỉ nhập từ người tin. Lớp phòng thủ:
+
+- Preview trước khi ghi: instructions đầy đủ hiện cho học viên đọc, kèm
+  cảnh báo "thấy lệnh lạ (gửi tin, xoá gì đó) thì đừng nhập".
+- Zip chỉ nhận `bot.json`, `README.txt`, `skills/<tên>/...` — mọi entry
+  chứa `..` hoặc path lạ bị bỏ (chống zip-slip ghi ra ngoài temp).
+- Skill kèm zip cài theo luật "không đè" — không ghi đè skill đang có.
+- Bot nhập **không tự activate** — đổi context agent phải do học viên
+  chọn rõ ràng trong menu.
+- `instructions` của bot vẫn chỉ là context: luật an toàn trong
+  `AGENTS.md` đứng trên — instructions độc ("gửi tin không cần hỏi")
+  không thắng được luật xác nhận.
+
 ## Rotation
 
 Xoá `.devin/bridge.token` + chạy lại file start = khoá mới; mọi phía

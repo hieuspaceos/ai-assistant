@@ -536,6 +536,79 @@ def deactivate_bot():
     except OSError:
         pass
 
+# --- Nhập bot từ file chia sẻ ----------------------------------------------
+# Hai bước: /api/bot-import bung zip vào temp + trả preview (học viên ĐỌC
+# instructions trước) → /api/bot-import-confirm mới ghi thật. Stage giữ
+# trong RAM — bridge restart thì nhập lại từ đầu, không để temp mồ côi.
+IMPORT_STAGES = {}   # stage_id -> {"dir": tmp, "bot": {...}, "skills": [...]}
+
+def stage_bot_bundle(b64):
+    """Bung zip base64 vào temp → (preview_dict, err). Chỉ nhận
+    bot.json / README.txt / skills/<tên>/... — chống zip-slip."""
+    import base64, io, zipfile, tempfile
+    try:
+        raw = base64.b64decode(b64 or "", validate=True)
+        zf = zipfile.ZipFile(io.BytesIO(raw))
+    except Exception:
+        return None, "file không đọc được — có phải file trợ lý (.zip) không?"
+    tmp = tempfile.mkdtemp(prefix="troly-bot-")
+    skills, bot = [], None
+    for m in zf.infolist():
+        parts = m.filename.replace("\\", "/").split("/")
+        if m.is_dir() or ".." in parts or parts[0] in ("", ".", "__MACOSX"):
+            continue
+        rel = "/".join(p for p in parts if p not in ("", "."))
+        if rel == "bot.json":
+            try:
+                bot = json.loads(zf.read(m).decode("utf-8"))
+            except Exception:
+                shutil.rmtree(tmp, ignore_errors=True)
+                return None, "bot.json trong file hỏng — file này không dùng được"
+        elif rel == "README.txt" or (parts[0] == "skills" and len(parts) > 1):
+            dst = os.path.join(tmp, rel)
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            with open(dst, "wb") as f:
+                f.write(zf.read(m))
+            if parts[0] == "skills" and len(parts) >= 3:
+                skills.append(parts[1])   # skills/<dir>/<file> — dir là tên skill
+    if not isinstance(bot, dict) or not bot.get("name"):
+        shutil.rmtree(tmp, ignore_errors=True)
+        return None, "file này thiếu bot.json — không phải file trợ lý"
+    sid = secrets.token_hex(6)
+    IMPORT_STAGES[sid] = {"dir": tmp, "bot": bot, "skills": sorted(set(skills))}
+    return {"stage": sid, "name": bot.get("name"), "avatar": bot.get("avatar"),
+            "role": bot.get("role"), "instructions": bot.get("instructions"),
+            "skills": bot.get("skills") or [], "needs": bot.get("needs") or [],
+            "bundled": sorted(set(skills))}, None
+
+def confirm_bot_bundle(sid):
+    """Ghi thật: cài skill kèm zip (không đè) + thêm bot vào bots.json.
+    KHÔNG tự activate — học viên tự chọn khi sẵn sàng."""
+    st = IMPORT_STAGES.pop(sid, None)
+    if not st:
+        return "hết hạn rồi — nhập lại file nhé"
+    try:
+        os.makedirs(SKILLS_DIR, exist_ok=True)
+        for s in st["skills"]:
+            src = os.path.join(st["dir"], "skills", s)
+            dst = os.path.join(SKILLS_DIR, s)
+            if os.path.isdir(src) and not os.path.exists(dst):
+                shutil.copytree(src, dst)
+        bot = st["bot"]
+        b = load_json(BOTS_FP, {"active": None, "bots": []})
+        bots = b.setdefault("bots", [])
+        bid = str(bot.get("id") or slug_id(bot["name"]))
+        base, n = bid, 2
+        while any(x.get("id") == bid for x in bots):
+            bid = f"{base}-{n}"; n += 1
+        bot["id"] = bid
+        bot.setdefault("triggers", [])
+        bots.append(bot)
+        save_json(BOTS_FP, b)
+        return None
+    finally:
+        shutil.rmtree(st["dir"], ignore_errors=True)
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -635,8 +708,8 @@ class Handler(BaseHTTPRequestHandler):
             cl = int(self.headers.get("Content-Length") or 0)
         except ValueError:
             cl = 0
-        # save-page cần limit lớn hơn — file clone nhúng ảnh base64 dễ qua 1MB
-        cap = 8_000_000 if path == "/api/save-page" else 1_000_000
+        # save-page + bot-import cần limit lớn hơn — file clone/base64 zip
+        cap = 8_000_000 if path in ("/api/save-page", "/api/bot-import") else 1_000_000
         if cl > cap:
             self._json({"err": "body quá lớn"}, 413); return
         body = self.rfile.read(cl)
@@ -938,6 +1011,16 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"ok": True, "bot": bot})
             else:
                 self._json({"err": "action phải là create/activate/delete/rename"}, 400)
+        elif path == "/api/bot-import":
+            prev, err = stage_bot_bundle(str(data.get("file", "")))
+            if err:
+                self._json({"err": err}, 400); return
+            self._json({"ok": True, "preview": prev})
+        elif path == "/api/bot-import-confirm":
+            err = confirm_bot_bundle(str(data.get("stage", "")))
+            if err:
+                self._json({"err": err}, 400); return
+            self._json({"ok": True})
         else:
             self._json({"err": "not found"}, 404)
 

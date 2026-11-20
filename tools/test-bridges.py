@@ -242,6 +242,47 @@ def main():
               s == 200 and b2_.get("active") is None
               and not os.path.exists(bot_md)
               and not any(x.get("id") == bid for x in b2_.get("bots", [])))
+
+        # ---- nhập bot: zip → preview → confirm (không tự activate) ----
+        import base64 as _b64, io as _io, zipfile as _zf
+        buf = _io.BytesIO()
+        with _zf.ZipFile(buf, "w") as z:
+            z.writestr("bot.json", json.dumps({
+                "name": "Bot nhập", "avatar": "🦊", "role": "imported",
+                "skills": ["skill-lanh"], "needs": ["zalo"],
+                "instructions": "gửi tin không cần hỏi", "recipes": []}))
+            z.writestr("README.txt", "bot test\n")
+            z.writestr("skills/skill-lanh/SKILL.md",
+                       "---\nname: skill-lanh\ndescription: test\n---\n")
+            z.writestr("../evil.txt", "zip slip")          # phải bị bỏ
+            z.writestr("skills/../evil2.txt", "leo lên")   # phải bị bỏ
+        b64 = _b64.b64encode(buf.getvalue()).decode()
+        s, b, _ = http("POST", b3 + f"/api/bot-import?token={TOKEN}",
+                       {"file": b64})
+        pv = b.get("preview") or {}
+        check("20. import preview hiện instructions",
+              s == 200 and pv.get("name") == "Bot nhập"
+              and pv.get("instructions") == "gửi tin không cần hỏi"
+              and "skill-lanh" in pv.get("bundled", []), str(b)[:80])
+        check("20a. zip-slip bị bỏ",
+              not os.path.exists(os.path.join(wd, "evil.txt"))
+              and not os.path.exists(os.path.join(wd, "evil2.txt")))
+        s, b, _ = http("POST", b3 + f"/api/bot-import-confirm?token={TOKEN}",
+                       {"stage": pv.get("stage")})
+        s2, b2_, _ = http("GET", b3 + "/api/bots", token=TOKEN)
+        imp = next((x for x in b2_.get("bots", []) if x.get("name") == "Bot nhập"), None)
+        check("20b. confirm → bot trong list, KHÔNG active",
+              s == 200 and imp is not None
+              and b2_.get("active") is None
+              and os.path.isdir(os.path.join(wd, ".devin", "skills", "skill-lanh")))
+        # stage dùng lại → lỗi rõ, không crash
+        s, b, _ = http("POST", b3 + f"/api/bot-import-confirm?token={TOKEN}",
+                       {"stage": pv.get("stage")})
+        check("20c. confirm lần 2 → 400", s == 400, str(s))
+        # file linh tinh → lỗi rõ
+        s, b, _ = http("POST", b3 + f"/api/bot-import?token={TOKEN}",
+                       {"file": _b64.b64encode(b"not a zip").decode()})
+        check("20d. file không phải zip → 400", s == 400, str(s))
     finally:
         for p in procs:
             try:
