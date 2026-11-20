@@ -173,6 +173,8 @@ _hist_permed = False
 
 def hist_write(ev):
     global _hist_permed
+    if ev.get("t") == "perm":
+        return          # card xin phép là transient — không ghi vào file
     try:
         with open(HIST_FP, "a", encoding="utf-8") as f:
             f.write(json.dumps(ev, ensure_ascii=False) + "\n")
@@ -463,6 +465,8 @@ def run_probe(probe):
 # .devin/skills/ dùng chung — bot chỉ trỏ tên, không sở hữu, nên đổi/xoá bot
 # không mất skill. Template theo nghề nằm trong skill-packs/roles/*.json.
 
+SKILL_NAME_RE = re.compile(r"[a-zA-Z0-9_-]{1,64}")
+
 def slug_id(s):
     s = unicodedata.normalize("NFKD", str(s))
     s = "".join(c for c in s if not unicodedata.combining(c))
@@ -509,6 +513,12 @@ def activate_bot(bot):
             name = smap[s]
         else:
             name = s
+        # Tên skill đi thẳng vào đường dẫn file — bots.json có thể đến từ
+        # file nhập (đầu vào không tin) nên chỉ nhận tên thường: tên chứa
+        # "..", "/", "\" coi như không cài được, tuyệt đối không join.
+        if not SKILL_NAME_RE.fullmatch(name):
+            missing.append(name)
+            continue
         dst = os.path.join(SKILLS_DIR, name)
         src = os.path.join(SKILL_PACKS, lang, name)
         if os.path.isdir(dst):
@@ -552,11 +562,15 @@ def stage_bot_bundle(b64):
     except Exception:
         return None, "file không đọc được — có phải file trợ lý (.zip) không?"
     tmp = tempfile.mkdtemp(prefix="troly-bot-")
-    skills, bot = [], None
+    skills, bot, total = [], None, 0
     for m in zf.infolist():
         parts = m.filename.replace("\\", "/").split("/")
         if m.is_dir() or ".." in parts or parts[0] in ("", ".", "__MACOSX"):
             continue
+        total += m.file_size
+        if total > 64 * 1024 * 1024:   # 8MB nén có thể bung ra rất lớn (zip bomb)
+            shutil.rmtree(tmp, ignore_errors=True)
+            return None, "file bung ra quá lớn — không nhập được"
         rel = "/".join(p for p in parts if p not in ("", "."))
         if rel == "bot.json":
             try:
@@ -574,6 +588,11 @@ def stage_bot_bundle(b64):
     if not isinstance(bot, dict) or not bot.get("name"):
         shutil.rmtree(tmp, ignore_errors=True)
         return None, "file này thiếu bot.json — không phải file trợ lý"
+    # preview không xác nhận thì stage nằm mãi trong RAM + temp — giữ tối đa
+    # 10 stage, đuổi cái cũ nhất (kèm dọn temp) khi đầy
+    while len(IMPORT_STAGES) >= 10:
+        old = IMPORT_STAGES.pop(next(iter(IMPORT_STAGES)))
+        shutil.rmtree(old["dir"], ignore_errors=True)
     sid = secrets.token_hex(6)
     IMPORT_STAGES[sid] = {"dir": tmp, "bot": bot, "skills": sorted(set(skills))}
     return {"stage": sid, "name": bot.get("name"), "avatar": bot.get("avatar"),
@@ -590,19 +609,34 @@ def confirm_bot_bundle(sid):
     try:
         os.makedirs(SKILLS_DIR, exist_ok=True)
         for s in st["skills"]:
+            if not SKILL_NAME_RE.fullmatch(s):
+                continue            # tên dir lạ trong zip — không chép
             src = os.path.join(st["dir"], "skills", s)
             dst = os.path.join(SKILLS_DIR, s)
             if os.path.isdir(src) and not os.path.exists(dst):
                 shutil.copytree(src, dst)
-        bot = st["bot"]
+        # Chỉ giữ đúng field schema + kẹp độ dài — file nhập là đầu vào
+        # không tin, id do file gửi bị bỏ (id là khoá nội bộ của máy này)
+        raw = st["bot"]
+        bot = {"name": str(raw.get("name") or "").strip()[:60],
+               "avatar": str(raw.get("avatar") or "")[:8],
+               "role": str(raw.get("role") or "").strip()[:40],
+               "skills": [s for s in map(str, raw.get("skills") or [])
+                          if SKILL_NAME_RE.fullmatch(s)],
+               "needs": [str(n)[:40] for n in raw.get("needs") or []],
+               "recipes": raw.get("recipes") if isinstance(raw.get("recipes"), list) else [],
+               "instructions": raw.get("instructions")
+                               if isinstance(raw.get("instructions"), (str, dict)) else "",
+               "triggers": []}
+        if isinstance(bot["instructions"], str):
+            bot["instructions"] = bot["instructions"][:2000]
         b = load_json(BOTS_FP, {"active": None, "bots": []})
         bots = b.setdefault("bots", [])
-        bid = str(bot.get("id") or slug_id(bot["name"]))
+        bid = slug_id(bot["name"])
         base, n = bid, 2
         while any(x.get("id") == bid for x in bots):
             bid = f"{base}-{n}"; n += 1
         bot["id"] = bid
-        bot.setdefault("triggers", [])
         bots.append(bot)
         save_json(BOTS_FP, b)
         return None
@@ -956,8 +990,10 @@ class Handler(BaseHTTPRequestHandler):
                     bid = f"{base}-{n}"; n += 1
                 bot = {"id": bid, "name": name, "role": role,
                        "avatar": str(data.get("avatar", ""))[:8],
-                       "skills": [str(s)[:40] for s in
-                                  (data.get("skills") if isinstance(data.get("skills"), list) else [])],
+                       "skills": [s for s in
+                                  (str(s)[:40] for s in
+                                   (data.get("skills") if isinstance(data.get("skills"), list) else []))
+                                  if SKILL_NAME_RE.fullmatch(s)],
                        "needs": [str(s)[:40] for s in
                                  (data.get("needs") if isinstance(data.get("needs"), list) else [])],
                        "recipes": data.get("recipes") if isinstance(data.get("recipes"), list) else [],

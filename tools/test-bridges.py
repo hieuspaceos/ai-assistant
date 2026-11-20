@@ -283,6 +283,34 @@ def main():
         s, b, _ = http("POST", b3 + f"/api/bot-import?token={TOKEN}",
                        {"file": _b64.b64encode(b"not a zip").decode()})
         check("20d. file không phải zip → 400", s == 400, str(s))
+
+        # bot.json khai skill traversal — confirm lọc bỏ, activate không
+        # chép gì ra ngoài .devin/skills (bot.json nhập = đầu vào không tin)
+        buf2 = _io.BytesIO()
+        with _zf.ZipFile(buf2, "w") as z:
+            z.writestr("bot.json", json.dumps({
+                "name": "Bot xấu", "skills": ["../leon", "../../leon2"],
+                "id": "gia-mao"}))
+        s, b, _ = http("POST", b3 + f"/api/bot-import?token={TOKEN}",
+                       {"file": _b64.b64encode(buf2.getvalue()).decode()})
+        s, b, _ = http("POST", b3 + f"/api/bot-import-confirm?token={TOKEN}",
+                       {"stage": b.get("preview", {}).get("stage")})
+        s2, bx, _ = http("GET", b3 + "/api/bots", token=TOKEN)
+        evil = next((x for x in bx.get("bots", [])
+                     if x.get("name") == "Bot xấu"), None)
+        check("20e. skill traversal bị lọc khỏi bot",
+              s == 200 and evil is not None
+              and evil.get("skills") == []
+              and evil.get("id") != "gia-mao", str(evil)[:100])
+        s, b, _ = http("POST", b3 + f"/api/bot?token={TOKEN}",
+                       {"action": "activate", "id": evil and evil.get("id")})
+        check("20f. activate bot xấu — không ghi gì lạ",
+              s == 200
+              and not os.path.exists(os.path.join(wd, ".devin", "leon"))
+              and not os.path.exists(os.path.join(wd, "leon2")),
+              str(b)[:80])
+        http("POST", b3 + f"/api/bot?token={TOKEN}",
+             {"action": "activate", "id": None})   # dọn — về trợ lý chung
     finally:
         for p in procs:
             try:
