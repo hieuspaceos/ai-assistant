@@ -1,5 +1,10 @@
 # Phase 1 — CI build `troly.exe` cho Windows
 
+> **Status: code xong (commit `005a07f`) — chờ push + tag để CI chạy thật.**
+> Build.sh verify trên macOS: build xanh, exe chạy được. Phần còn lại của
+> phase là E2E trên GitHub Actions + verify exe Windows (gộp chung với
+> fix-audit ph-5).
+
 ## Mục tiêu
 
 Mỗi tag `v*` tự động ra GitHub Release có CẢ `troly` (macOS) lẫn
