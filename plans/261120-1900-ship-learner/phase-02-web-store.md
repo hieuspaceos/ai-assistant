@@ -1,5 +1,10 @@
 # Phase 2 — Extension lên Chrome Web Store
 
+> **Status: phần chuẩn bị xong** — privacy.html, zip, screenshot,
+> justification đủ 7 mục đều sẵn. Còn lại là việc NGƯỜI DÙNG: tài khoản
+> dev $5 + upload/điền form + (khuyến nghị) 1 ảnh icon trên toolbar chụp
+> tay. Sau duyệt mới làm mục 2c.
+
 ## Mục tiêu
 
 Học viên cài extension bằng MỘT link store thay vì quy trình
