@@ -6,9 +6,15 @@ upload `extension/` đã zip, điền listing dưới đây.
 
 ## Cần chuẩn bị trước khi submit
 
-- [ ] `cd extension && zip -r ../troly-ext.zip .` (zip từ TRONG folder)
-- [ ] 1–3 screenshot 1280×800: icon trên toolbar + portal đang lái browser
-- [ ] Icon 128×128 (đã có `icons/` trong extension)
+- [x] `cd extension && zip -r ../troly-ext.zip .` (zip từ TRONG folder — đã tạo, ~14K)
+- [x] Screenshot 640×400: `docs/store-assets/portal-640x400.png` +
+  `onboarding-640x400.png` (từ ảnh quay thật trong `site/assets/`).
+  Nên chụp thêm 1 shot icon trên toolbar với badge ON — phần này phải
+  chụp tay trên máy có extension cài sẵn.
+- [x] Icon 128×128 (đã có `icons/` trong extension)
+- [x] Privacy URL: `site/privacy.html` → sau deploy có
+  `https://troly.hieuspace.com/privacy.html` (điền vào ô Privacy policy
+  trong form submit)
 - [ ] Kiểm ID thật sau khi Google cấp → cập nhật `EXT_ID` trong
   `web/app.js` + `web/onboarding.html` nếu khác `key` hiện tại
 
@@ -42,14 +48,50 @@ passwords or data.
 - All data stays on your machine; nothing is sent to the internet.
 - You always see what the assistant does on screen.
 
-## Justification cho quyền `debugger` (bắt buộc ghi trong form quyền)
+## Justification cho từng quyền (điền trong form quyền khi submit)
 
+**`debugger`**
 > The extension drives Chrome DevTools Protocol ONLY on the tab the user
 > is interacting with, to deliver real (trusted) input events — some web
 > apps (Zalo Web, Google Sheets) ignore synthetic JS events. The debugger
 > attaches per-action and detaches right after; the "debugging" banner
 > appears visibly to the user. No network traffic is intercepted, no data
 > leaves the machine.
+
+**`tabs`**
+> The extension needs to see which tab the user is viewing so the local
+> assistant can act on the page the user actually has open — not a
+> hidden or background tab. Tab URLs/titles never leave the machine.
+
+**`scripting`**
+> Used to run the assistant's small read/act scripts inside the page the
+> user is looking at (read text, click a button, fill a field) — only
+> after the user asks the assistant to do so. Scripts are fixed,
+> shipped inside the extension, never fetched remotely.
+
+**`activeTab`**
+> Lets the extension act on the currently active tab only when the user
+> invokes it — the standard least-privilege way to limit access to the
+> page in front of the user.
+
+**`alarms`**
+> The MV3 service worker is suspended when idle; a short periodic alarm
+> wakes it so the extension can keep/re-establish its local WebSocket
+> connection to the user's own assistant on 127.0.0.1. No user data is
+> involved.
+
+**`storage`**
+> Stores a single random "connection code" in `chrome.storage.local` so
+> the extension can authenticate commands from the user's own local
+> assistant. This is a few dozen bytes on-device; nothing is synced.
+
+**Host access `<all_urls>`**
+> The assistant's job is to read and act on whatever web app the user
+> works in — Zalo Web, Outlook Web, WordPress admin, Google Sheets are
+> all different domains the user chooses at runtime. Restricting to a
+> fixed host list would break the core feature for any site we did not
+> predict. All page access happens only on the user's open tab, only
+> on the user's request, and no content leaves the machine.
 
 ## Rủi ro & đường dự phòng
 
