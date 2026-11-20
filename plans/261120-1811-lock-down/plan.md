@@ -18,9 +18,9 @@ depends-on: 261120-1635-fix-audit (test infra test-bridges.py/parity đã có, t
 
 | # | Vấn đề | Mức | Bằng chứng |
 |---|--------|-----|-----------|
-| A | `ttyd -W` không `-c`/`-O` → nhận WS từ **mọi Origin/Host** | **Cao** | Test trực tiếp trên ttyd 1.7.7 máy dev: handshake `Origin: evil.example.com` + `Host: attacker-via-rebind.com` → `101 Switching Protocols`. Bất kỳ trang `localhost:*` nào cũng có shell quyền user |
+| A | `ttyd -W` không auth → nhận WS từ **mọi Origin/Host**; `-O` cũng **vô dụng** (chỉ so hostname, bỏ port — `localhost:*` vẫn qua) | **Cao** | Test trực tiếp ttyd 1.7.7: `Origin: evil.example.com`, `localhost:3000`, rebind — đều `101`. Bất kỳ trang `localhost:*` nào cũng có shell quyền user |
 | B | Mọi `.html` trên `:8080` (slide, clone) chạy script **cùng origin với `localStorage.bridge_token`** | **Cao** | `iframe()` dùng `sandbox="allow-scripts allow-same-origin"` (tương đương không sandbox); clone-view iframe không sandbox; `/api/save-page` không lọc nội dung; clone có sẵn `<script>` hợp lệ |
-| C | `/api/respond` nhận `id`/`optionId` tuỳ ý — không kiểm pending | Cao (vào chuỗi B) | `chat-bridge.py:520-534` — trang độc tự duyệt permission card, bypass lớp chặn con người |
+| C | `/api/respond` nhận `id`/`optionId` tuỳ ý — không kiểm pending | Cao (vào chuỗi B) | `chat-bridge.py:576-590` — trang độc tự duyệt permission card, bypass lớp chặn con người |
 | D | `serve.py` không check `Host` → DNS rebinding đọc file (macOS/Linux) | Trung bình | Không lộ token (localStorage theo host:port), read-only, Chrome chặn phần lớn qua PNA — nhưng Safari/Firefox + nav top-level còn hở. **Windows an toàn hơn** nhờ http.sys prefix `localhost` |
 | E | `next_id` race trong ext_call → response về sai pending | Nhỏ | `ext-bridge.py:200` — tăng id ngoài lock, thread-per-conn |
 | F | `ws_recv` không cap kích thước frame → memory DoS | Nhỏ | `ext-bridge.py:128-150` |
@@ -28,6 +28,7 @@ depends-on: 261120-1635-fix-audit (test infra test-bridges.py/parity đã có, t
 | H | chat.html re-parse markdown **toàn văn** mỗi chunk → O(n²) | Trung bình | `chat.html:222-227` |
 | I | Poll 900ms = thread mới mỗi request; không long-poll | Nhỏ | chậm thừa, tốn thread |
 | J | Prompt không serialize — 2 tab gửi đồng thời đan xen event | Nhỏ | `/api/prompt` không busy flag |
+| K | Extension persist `set-token` trước khi chứng minh đúng → trang localhost lạ ghi token rác → DoS kéo dài | Nhỏ | `background.js:45-53` — chỉ nên persist sau `ws.onopen` |
 
 Nguyên nhân gốc của A+B+C cùng một mẹ: **token chỉ bảo vệ được cửa nào
 đi qua nó** — ttyd là cửa thứ 3 không qua tay code tự viết nên tuột khỏi
@@ -36,12 +37,13 @@ mô hình; còn "vùng nội dung" (my-course html) nằm chung origin với
 
 ## Thiết kế tổng thể
 
-1. **Khoá cửa thứ 3** — `ttyd -O` (check-origin). Chọn `-O` không phải
-   `-c` vì: WS của ttyd hợp lệ phát từ chính document `localhost:7681`
-   (iframe), còn trang lạ `localhost:PORT_khác` có Origin khác → bị từ
-   chối. `-c` basic-auth không dùng được vì browser không cho credential
-   nhúng trong iframe src. Residual: rebinding (Origin==Host sau rebind)
-   — ghi nhận trong SECURITY.md, giảm thêm khi phase 1 có Host check.
+1. **Khoá cửa thứ 3 bằng gate-script, không bằng flag ttyd** — đã
+   kiểm chứng `-O` vô dụng với `localhost:*` (chỉ so hostname) và `-c`
+   không dùng được qua iframe. Thay vào đó ttyd spawn `term-gate.sh`/
+   `term-gate.cmd`: shell tự đòi "mã kết nối" (`$BRIDGE_TOKEN`) trước
+   khi exec não — autofill qua `?arg=` (`-a`), fallback prompt tay.
+   Kẻ lạ kể cả sau rebind cũng chỉ gặp prompt mã → cửa này giờ cũng
+   dùng đúng "chìa khoá nhà" như hai bridge.
 2. **Cách ly credential khỏi vùng nội dung bằng CSP** thay vì tách port:
    thêm `Content-Security-Policy` cho `.html` dưới `/my-course/` + `/intro/`
    với `connect-src 'none'` → script trong clone/slide vẫn chạy (nút
@@ -59,8 +61,13 @@ mô hình; còn "vùng nội dung" (my-course html) nằm chung origin với
    quả text một pass, cap số node) và render stream (batch bằng rAF).
    Không "tối ưu" lan man.
 5. **Mở rộng** — chỉ làm phần rẻ có ích ngay: long-poll `/api/poll` +
-   serialize prompt; phần lớn (multi-session, sandbox agent) để out of
-   scope vì là viết lại, không phải vá.
+   serialize prompt; multi-session để out of scope vì là viết lại.
+6. **OS sandbox quanh não** — biến `permissions.json` từ policy thành
+   enforcement: Seatbelt (`sandbox-exec`, đã verify sống trên Darwin 27)
+   trên macOS; user-account hạn chế + NTFS ACL trên Windows (thiết kế
+   + script khung, chờ máy verify). Whitelist deny-default: chỉ CWD +
+   folder quyền + tool paths được đọc/ghi; `network-outbound` mở (não
+   bắt buộc gọi LLM API) nhưng `network-bind` chặn.
 
 Parity: mọi thay đổi `.py` có bản `.ps1` tương đương (hoặc ghi rõ lý do
 miễn — vd serve.ps1 đã an toàn Host nhờ http.sys). Test mới bổ sung vào
@@ -70,11 +77,12 @@ miễn — vd serve.ps1 đã an toàn Host nhờ http.sys). Test mới bổ sung
 
 | # | Phase | Nội dung | Link |
 |---|-------|----------|------|
-| 1 | Khoá cửa mở | `ttyd -O` (start.sh + chat-terminal.ps1); `serve.py` Host check; ext-bridge race + WS cap | [phase-01](./phase-01-open-doors.md) |
+| 1 | Khoá cửa mở | `term-gate` cho ttyd (`.sh`+`.cmd`, `-a` autofill) áp **cả 3 đường spawn**: start.sh, chat-terminal.ps1, `launcher.py` (binary đóng gói); `serve.py` Host check; ext-bridge race + WS cap; ext chỉ persist token sau WS open | [phase-01](./phase-01-open-doors.md) |
 | 2 | CSP cách ly | CSP header cho `.html` dưới `/my-course/`, `/intro/` — serve.py + serve.ps1; verify clone-view edit vẫn sống | [phase-02](./phase-02-csp-isolation.md) |
 | 3 | Siết respond | pending-perm map + validate id/optionId + one-shot — `.py` + `.ps1` | [phase-03](./phase-03-respond-gate.md) |
-| 4 | Hiệu năng | content.js: 1-pass text scan + cap node; chat.html: rAF batch render; vendor cache header | [phase-04](./phase-04-perf-scans.md) |
+| 4 | Hiệu năng | content.js: 1-pass text scan + cap node; chat.html: rAF batch render + replay gom bubble; vendor cache; serve: HTTP/1.1 keep-alive + Range cho video | [phase-04](./phase-04-perf-scans.md) |
 | 5 | Mở rộng + kiểm chứng | long-poll `/api/poll`; serialize `/api/prompt`; test mới; cập nhật SECURITY.md/decision-log; checklist Windows | [phase-05](./phase-05-scale-tests.md) |
+| 6 | OS sandbox | `gen-sandbox.py` sinh Seatbelt profile từ permissions.json; bọc não trong `Acp.spawn` + term-gate (macOS); `setup-agent-user.ps1` + runas (Windows, chờ verify) | [phase-06](./phase-06-os-sandbox.md) |
 
 ## Rủi ro chính
 
@@ -84,8 +92,11 @@ miễn — vd serve.ps1 đã an toàn Host nhờ http.sys). Test mới bổ sung
   remote) → whitelist rộng `img-src/style-src/font-src` gồm `https:`,
   chỉ siết `connect-src` + `form-action` + `base-uri` — chỗ đau nhất.
   Rollback = bỏ header, không migration.
-- **R3**: `ttyd -O` trên bản ttyd cũ không có flag → start fail ngay (dễ
-  thấy, không âm thầm). ttyd `-O` có từ 1.4.x; winget/brew đều bản mới.
+- **R3**: `-a` (url-arg) không truyền arg xuống command trên bản ttyd
+  khác/không được build sẵn tính năng → autofill chết. An toàn vì
+  gate-script có fallback prompt hỏi mã — tính năng không hở, chỉ UX
+  kém đi. Verify bằng browser thật ngay khi implement (checklist
+  phase-01).
 - **R4**: pending-perm map lọt trường hợp agent gửi perm khi UI đang
   reconnect/reset → dọn map khi broadcast `ready`/`done` để không kẹt.
 - **R5**: refactor actClick đổi thứ tự ưu tiên khớp → hỏng /doc-zalo.
@@ -94,22 +105,30 @@ miễn — vd serve.ps1 đã an toàn Host nhờ http.sys). Test mới bổ sung
 - **R6**: long-poll trên ThreadingHTTPServer giữ 1 thread/client — OK ở
   1 client; cap `wait` ≤ 30s + timeout sạch. `.ps1` (HttpListener) phức
   tạp hơn — nếu vướng, cho `.py` trước + ghi nợ parity vào plan.
+- **R7**: Seatbelt profile siết quá → não chết lặng (tool cài ở path lạ
+  không exec được, npx không ghi cache) → gen-sandbox auto-allow cha của
+  `shutil.which(não)` + list tool dirs phổ biến + escape hatch
+  `TROLY_NO_SANDBOX=1`; test end-to-end `/hoc-bai` trước khi ship.
+  `sandbox-exec` deprecated từ lâu nhưng verify còn chạy trên Darwin 27.
 
 ## Out of scope
 
 - Tách `my-course/` sang port riêng (:8081) — phương án mạnh hơn CSP
   nhưng động nhiều file; chỉ làm nếu CSP tỏ ra thiếu hoặc khi làm relay.
-- Sandbox process agent (chạy trong container/Seatbelt) — thay đổi mô
-  hình vận hành, bàn riêng.
+- Full VM / container / AppContainer cho não — phase 6 dùng Seatbelt
+  (macOS) + user-account hạn chế (Windows); VM chỉ cân nhắc nếu
+  user-account approach trên Windows chứng minh không khả thi.
 - Giảm quyền extension (`debugger`, `<all_urls>`) — là trade-off của
-  nhóm action `t*`, không bỏ được mà giữ tính năng.
+  nhóm action `t*`, không bỏ được mà giữ tính năng. Sandbox não KHÔNG
+  bảo vệ được cánh tay extension (phiên browser phải nằm ngoài sandbox
+  theo bản chất) — phòng thủ cho kênh đó vẫn là lớp duyệt + phase 2+3.
 - Multi-session / multi-browser / multi-brain đồng thời.
 - Relay/VPS — đã có plan `261120-1500-relay-mobile`.
-- Enforce `permissions.json` ở tầng hệ thống (hiện là policy cho agent,
-  không phải boundary kỹ thuật) — sửa SECURITY.md gọi đúng tên, enforce
-  thật thuộc mục sandbox ở trên.
 
 ## Thứ tự thực thi
 
 Phase 1→2→3 làm liền (đều vài chục dòng, đóng các chuỗi tấn công). Phase
-4 độc lập, làm sau. Phase 5 chốt test + doc. Mỗi phase commit riêng.
+4 độc lập, làm sau. Phase 5 chốt test + doc. Phase 6 (OS sandbox) là
+thay đổi kiến trúc lớn nhất — làm riêng một đợt sau khi 1–3 đã ổn, vì
+debug "não chết trong sandbox" trên nền chưa vá cửa mở sẽ rất rối. Mỗi
+phase commit riêng.

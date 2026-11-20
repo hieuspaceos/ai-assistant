@@ -11,8 +11,9 @@ chỉ chấp nhận cặp hợp lệ, one-shot.
 
 | File | Action | Việc |
 |---|---|---|
-| `tools/chat-bridge.py` | modify | pending_perm map + validate trong `do_POST /api/respond` |
-| `tools/chat-bridge.ps1` | modify | parity — **giữ BOM** |
+| `tools/chat-bridge.py` | modify | pending_perm map + validate trong `do_POST /api/respond` (handler thật ở ~dòng 576, không phải 520) |
+| `tools/chat-bridge.ps1` | modify | parity — **giữ BOM** (`/api/respond` ở ~dòng 530) |
+| `web/chat.html` | modify | handler bấm nút perm: check `res.ok`, 404 → hiện `addErr` "yêu cầu đã hết hạn" (~5 dòng) |
 | `tools/test-bridges.py` | modify | case 25–27 |
 
 ## Chi tiết chat-bridge.py
@@ -32,23 +33,26 @@ with store_lock:
 # (broadcast("ready") ở session mới và "done" kết lượt → clear hết)
 ```
 
-Trong `do_POST /api/respond`:
+Trong `do_POST /api/respond` — **validate id cho CẢ hai đường**
+(không để `__cancel__` lách kiểm tra: id rác gửi thẳng tới agent
+cũng là rác trong kênh điều khiển):
 
 ```python
 rid = data.get("id")
 oid = data.get("optionId")
-if oid == "__cancel__":
-    pass  # từ chối luôn hợp lệ — không có gì để lạm dụng
-else:
-    rec = perm_pending.pop(rid, None)
-    if rec is None or time.time() - rec["ts"] > PERM_TTL:
-        self._json({"err": "yêu cầu không còn hiệu lực"}, 404); return
-    if oid not in rec["options"]:
-        self._json({"err": "lựa chọn không hợp lệ"}, 400); return
+rec = perm_pending.pop(rid, None)
+if rec is None or time.time() - rec["ts"] > PERM_TTL:
+    self._json({"err": "yêu cầu không còn hiệu lực"}, 404); return
+if oid != "__cancel__" and oid not in rec["options"]:
+    self._json({"err": "lựa chọn không hợp lệ"}, 400); return
 ```
 
-Dọn map: `perm_pending.clear()` khi broadcast `ready` hoặc `done`
-(perm treo qua lượt mới là trạng thái rác — UI cũng không còn thẻ).
+Dọn map: `perm_pending.clear()` khi broadcast `ready`, `done`, **hoặc
+`err`** (perm treo qua lượt mới/lỗi là trạng thái rác — UI cũng không
+còn thẻ). Residual ghi rõ: ai có token đọc `/api/poll` vẫn thấy id
+đang pending và duyệt được — không chặn được mà không tách trust; fix
+này chặn **id bịa + optionId ngoài danh sách + replay**, còn "token
+holder giả làm người dùng" là giới hạn mô hình (giống mọi API khác).
 
 `.ps1`: cùng logic — hashtable `$script:permPending`, validate trong
 handler `/api/respond` tương ứng. **Giữ BOM** (R1).
@@ -59,7 +63,10 @@ handler `/api/respond` tương ứng. **Giữ BOM** (R1).
   giờ trả 404 thay vì im lặng gửi lệnh vô nghĩa — đúng hơn, UI nên
   hiển thị "yêu cầu đã hết hạn" (chat.html: thêm check `res.ok` trong
   handler bấm nút, hiện `addErr` nhẹ — 5 dòng).
-- `__cancel__` vẫn miễn kiểm tra: xấu nhất là đóng được card — an toàn.
+- `__cancel__` chỉ miễn kiểm tra **optionId** (option ảo do UI tự thêm
+  khi card không có nút) — `id` VẪN phải nằm trong pending map như
+  thường. (Draft đầu viết "miễn kiểm tra" không rõ — đọc nhầm là miễn
+  validate id thì tạo lại lỗ hổng bơm id rác.)
 
 ## Test bổ sung
 

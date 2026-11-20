@@ -38,6 +38,11 @@ ngay khi có event hoặc sau 25s trả rỗng → poll lại. Giảm ~97% reque
 (1 req/25s thay vì ~1 req/s) và độ trễ hiển thị ~0ms. Giữ hành vi cũ
 khi không có `wait` (compat agent/script khác).
 
+Cạm bẫy implementation: `new_event.wait()` phải nằm TRONG `with
+store_lock:` (Condition tự release khi chờ, reacquire khi dậy); sau khi
+dậy phải **tính lại** `reset`/`evs` — không được trả evs đã đọc trước
+wait. `broadcast()` phải `new_event.notify_all()` trong `store_lock`.
+
 `.ps1`: HttpListener async phức tạp hơn — nếu triển khai vướng trong
 phase này thì `.py` ship trước, ghi nợ parity (client tự fallback vì
 `wait` chỉ là hint; `.ps1` bỏ qua param vẫn đúng protocol).
@@ -51,7 +56,9 @@ prompt_busy = threading.Event()
 if prompt_busy.is_set():
     self._json({"err": "trợ lý đang xử lý câu trước"}, 409); return
 prompt_busy.set()
-# clear khi broadcast {"t":"done"} hoặc {"t":"err"} (và khi spawn_brain)
+# clear trong broadcast() khi {"t":"done"} hoặc {"t":"err"},
+# VÀ trong spawn_brain()/_reader đặt dead — não chết giữa chừng
+# không được kẹt busy mãi (giống bug "sendBtn disabled" đã từng vá ở UI)
 ```
 
 Chặn 2 tab/2 client đan prompt vào một session ACP — event interleave
@@ -62,12 +69,14 @@ thứ hai cho client khác).
 ### 5c. Doc
 
 - SECURITY.md: thêm hàng `Nội dung my-course → bridge | CSP connect-src
-  'none'`; `WS ext → origin lạ | ttyd -O / ext-bridge token+origin`;
+  'none'`; `WS ttyd → origin lạ | term-gate đòi mã trong shell`;
   `Host lạ → serve | reject 403 (py) / http.sys prefix (ps1)`; sửa rõ
   `permissions.json` là **policy cho agent, không phải technical
   boundary** (agent chạy shell full quyền user).
-- decision-log: "CSP > tách port vì blast radius"; "`-O` > `-c` vì
-  iframe không nhúng credential được; residual rebinding chấp nhận".
+- decision-log: "CSP > tách port vì blast radius"; "term-gate >
+  `-O`/`-c` vì `-O` chỉ so hostname bỏ port (đã test: `localhost:*` vẫn
+  qua) còn `-c` không nhúng credential vào iframe được — gate ở shell
+  độc lập mọi flag ttyd".
 
 ## Test bổ sung
 
@@ -79,10 +88,12 @@ thứ hai cho client khác).
 
 ## Checklist kiểm chứng tay (Windows + macOS)
 
-- [ ] `start.sh`/`start.bat` mở đủ 4 dịch vụ, tab Terminal nhúng được
-  (không bị `-O` chặn nhầm)
-- [ ] Trang `localhost:*` lạ (serve thử 1 file html port khác) gọi WS
-  ttyd → bị từ chối
+- [ ] `start.sh`/`start.bat`/`troly run` (launcher.py) mở đủ dịch vụ,
+  tab Terminal nhúng được và vào thẳng não nhờ `?arg=`
+- [ ] Trang `localhost:*` lạ (serve thử 1 file html port khác) mở
+  `http://localhost:7681/` → WS vẫn nối nhưng chỉ thấy prompt "Ma ket
+  noi", gõ sai → exit (gate không phải từ chối ở tầng WS — đừng nhầm
+  là hở)
 - [ ] `Host: evil` vào :8080 → 403 (mac); Windows kiểm vẫn 200 vì đã
   an toàn sẵn — verify đúng hành vi hiện tại
 - [ ] Clone-view sửa+lưu được; slide chuyển trang được (CSP không giết)
