@@ -79,6 +79,14 @@ const I18N = {
     botConnOk: 'đã nối', botConnWarn: 'chưa nối — nối sau cũng được',
     botErr: 'Chưa đổi được trợ lý — thử lại nhé',
     botCreating: 'Đang tạo…',
+    botImport: 'Nhập trợ lý từ file',
+    botImportTitle: 'Nhập trợ lý',
+    botImportWarn: 'Đọc kỹ lời dặn dưới đây — nếu thấy chỗ bảo gửi tin, xoá gì đó, hay làm việc lạ thì đừng nhập.',
+    botImportSkills: 'Công thức đi kèm:',
+    botImportNeeds: 'Cần nối:',
+    botImportBtn: 'Nhập trợ lý này',
+    botImporting: 'Đang nhập…',
+    botImportDone: 'Đã nhập — trợ lý nằm trong menu, bạn tự chọn khi sẵn sàng.',
   },
   en: {
     loading: 'Loading…',
@@ -146,6 +154,14 @@ const I18N = {
     botConnOk: 'connected', botConnWarn: 'not connected — you can connect later',
     botErr: 'Couldn\'t switch assistants — try again',
     botCreating: 'Creating…',
+    botImport: 'Import assistant from file',
+    botImportTitle: 'Import assistant',
+    botImportWarn: 'Read the instructions below carefully — if anything says to send messages, delete things, or do odd actions, do not import.',
+    botImportSkills: 'Bundled recipes:',
+    botImportNeeds: 'Needs:',
+    botImportBtn: 'Import this assistant',
+    botImporting: 'Importing…',
+    botImportDone: 'Imported — it\'s in the menu, switch to it when ready.',
   },
 };
 function t(k) { return (I18N[LANG] && I18N[LANG][k]) || I18N.vi[k] || k; }
@@ -785,12 +801,14 @@ $('#bot-chip').onclick = (e) => {
   menu.innerHTML = items +
     `<button class="bot-item${!botsState.active ? ' on' : ''}" data-id=""><span>🤖</span> ${escapeHtml(t('botGeneral'))}${!botsState.active ? ' <span class="need ok">✓</span>' : ''}</button>` +
     `<div class="bot-sep"></div>` +
-    `<button class="bot-item" data-new="1"><span>＋</span> ${escapeHtml(t('botNew'))}</button>`;
+    `<button class="bot-item" data-new="1"><span>＋</span> ${escapeHtml(t('botNew'))}</button>` +
+    `<button class="bot-item" data-imp="1"><span>📥</span> ${escapeHtml(t('botImport'))}</button>`;
   menu.hidden = false;
   menu.querySelectorAll('.bot-item').forEach(it => {
     it.onclick = async () => {
       menu.hidden = true;
       if (it.dataset.new) { openBotGallery(); return; }
+      if (it.dataset.imp) { $('#bot-file').click(); return; }
       try {
         await bfetch(BRIDGE_URL + '/api/bot', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -811,6 +829,9 @@ function openBotGallery() {
   galleryTpl = null;
   const g = $('#bot-gallery');
   g.innerHTML = '';
+  $('#bot-import-view').hidden = true;
+  const title = document.querySelector('#bot-panel .settings-head span');
+  if (title) title.textContent = t('botNewTitle');   // reset sau import view
   botsState.templates.forEach(tp => {
     const nm = (tp.suggested_bot_name && (tp.suggested_bot_name[LANG] || tp.suggested_bot_name.vi)) || '';
     const card = document.createElement('div');
@@ -860,6 +881,67 @@ $('#bot-create-btn').onclick = async () => {
     loadManifest();
   } catch { uiAlert(t('botErr'), ''); }
   btn.disabled = false; btn.textContent = t('botCreateBtn');
+};
+
+/* Nhập trợ lý từ file .zip — preview instructions TRƯỚC khi ghi thật */
+$('#bot-file').onchange = async (e) => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  let b64;
+  try {
+    b64 = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result).split(',')[1] || '');
+      r.onerror = rej;
+      r.readAsDataURL(f);
+    });
+  } catch { uiAlert(t('botErr'), ''); return; }
+  let d;
+  try {
+    const r = await bfetch(BRIDGE_URL + '/api/bot-import', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file: b64 })
+    });
+    d = await r.json();
+    if (!r.ok) { uiAlert(t('botImportTitle'), d.err || t('botErr')); return; }
+  } catch { uiAlert(t('botErr'), ''); return; }
+  const p = d.preview;
+  const ins = typeof p.instructions === 'object'
+    ? (p.instructions[LANG] || p.instructions.vi || '') : (p.instructions || '');
+  $('#bot-gallery').innerHTML = '';
+  $('#bot-create-row').hidden = true;
+  const v = $('#bot-import-view');
+  v.hidden = false;
+  v.innerHTML =
+    `<div class="bot-gcard"><span class="bot-gava">${escapeHtml(p.avatar || '🤖')}</span>` +
+    `<div><b>${escapeHtml(p.name || '')}</b> <small>${escapeHtml(p.role || '')}</small>` +
+    `<div class="need-row">${botNeedsHtml(p.needs)}</div></div></div>` +
+    `<p class="bot-import-warn">${escapeHtml(t('botImportWarn'))}</p>` +
+    `<div class="bot-import-ins">${escapeHtml(ins) || '<i>—</i>'}</div>` +
+    `<p class="note">${escapeHtml(t('botImportSkills'))} <code>${(p.skills || []).map(escapeHtml).join('</code> <code>') || '—'}</code></p>` +
+    `<div class="row" style="justify-content:flex-end"><button class="mini-btn" id="bot-imp-ok">${escapeHtml(t('botImportBtn'))}</button></div>`;
+  const title = document.querySelector('#bot-panel .settings-head span');
+  if (title) title.textContent = t('botImportTitle');
+  $('#bot-overlay').hidden = false;
+  $('#bot-imp-ok').onclick = async () => {
+    const btn = $('#bot-imp-ok');
+    btn.disabled = true; btn.textContent = t('botImporting');
+    try {
+      const r = await bfetch(BRIDGE_URL + '/api/bot-import-confirm', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stage: p.stage })
+      });
+      const d2 = await r.json().catch(() => ({}));
+      if (!r.ok) { uiAlert(t('botImportTitle'), d2.err || t('botErr')); }
+      else {
+        $('#bot-overlay').hidden = true;
+        uiAlert(t('botImportTitle'), t('botImportDone'));
+        await loadBots();
+      }
+    } catch { uiAlert(t('botErr'), ''); }
+    btn.disabled = false; btn.textContent = t('botImportBtn');
+  };
 };
 
 loadBots();

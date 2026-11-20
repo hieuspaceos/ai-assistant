@@ -1,5 +1,13 @@
 # Phase 3 — Chia sẻ & nhập bot (skill bank đóng gói theo bot)
 
+> **Status: ✅ DONE** — `gom-skill`/`pack-skill` có mode gói bot
+> (bot.json + README.txt + skills/); `/api/bot-import` preview (base64
+> zip, cap 8MB, chống zip-slip) → `/api/bot-import-confirm` ghi thật
+> không tự activate; menu chip portal có "Nhập trợ lý từ file" với
+> màn đọc instructions + cảnh báo; SECURITY.md + skills-system.md +
+> api-reference.md đã ghi. Test 20 (preview/zip-slip/không-active/
+> stage 1 lần/file rác) — 33 xanh.
+
 ## Mục tiêu
 
 Bot trở thành **đơn vị chia sẻ** của skill bank: học viên A gói bot

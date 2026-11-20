@@ -35,3 +35,39 @@ Skill hay sinh ra trên máy học viên nằm trong `.devin/skills/<tên>/`.
    kho (mình không tự gửi)"*.
 5. Người quản kho: giải nén vào `.devin/skill-packs/<vi|en>/` → các
    learner cài lại qua `/api/setup` hoặc copy sang `.devin/skills/`.
+
+## Mode gói BOT — "chia sẻ cả trợ lý"
+
+Ngoài skill lẻ, có thể gói một **bot** trong `my-course/bots.json`
+(trợ lý có tên riêng + bộ skill nó dùng). File ra đời mở được trên máy
+khác bằng mục "Nhập trợ lý" trong menu chip trợ lý.
+
+1. Đọc `my-course/bots.json` → liệt kê `bots[]` (tên + role) → hỏi học
+   viên chọn bot nào muốn chia sẻ.
+2. Lấy đúng object bot đó, viết `bot.json` — chỉ các trường schema:
+   `name, avatar, role, skills, needs, recipes, instructions`
+   (KHÔNG kèm `id`, `triggers`).
+3. Viết `README.txt` 3 dòng: bot làm gì, cần nối app nào, và câu nhắc
+   "đọc lời dặn (instructions) trước khi nhập".
+4. Copy từng skill trong `bot["skills"]` từ `.devin/skills/<tên>/` vào
+   `skills/<tên>/` trong bundle (skill hệ thống cũng gói — file nhỏ,
+   bên nhận không đè skill đang có).
+5. Nén thành `my-course/skill-exports/bot-<slug>.zip` đúng layout:
+
+   ```
+   bot-hang.zip
+   ├── bot.json
+   ├── README.txt
+   └── skills/<tên>/SKILL.md (+ file kèm)
+   ```
+
+   Dùng python `zipfile` (Windows không chắc có `zip`):
+   ```bash
+   python3 -c "import zipfile,glob,os
+   z=zipfile.ZipFile('my-course/skill-exports/bot-<slug>.zip','w')
+   z.write('bot.json'); z.write('README.txt')
+   [z.write(f,os.path.relpath(f,'.')) for f in glob.glob('skills/**/*',recursive=True) if os.path.isfile(f)]
+   z.close()"
+   ```
+   (chạy từ một folder tạm đã bung bot.json + README.txt + skills/)
+6. Báo đường dẫn file — học viên tự gửi cho bạn bè, mình không tự gửi.
