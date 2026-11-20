@@ -387,7 +387,10 @@ let since = 0;
 let connected = false;
 async function poll() {
   try {
-    const res = await bfetch(BRIDGE + '/api/poll?since=' + since);
+    const t0 = Date.now();
+    // long-poll: bridge giữ request tới khi có event (tối đa 25s) → độ trễ
+    // hiển thị ~0 và không poll chặt mỗi giây nữa
+    const res = await bfetch(BRIDGE + '/api/poll?since=' + since + '&wait=25000');
     if (!res.ok) throw new Error('bad');
     const data = await res.json();
     if (data.reset) {
@@ -408,7 +411,11 @@ async function poll() {
     (data.events || []).forEach(handleEvent);
     replaying = false;
     flushBubble();        // bubble cuối replay có thể đang mở dở
-    setTimeout(poll, 900);
+    // Server bỏ qua `wait` (chat-bridge.ps1 — loop đơn luồng không giữ
+    // request được) → trả rỗng ngay: phải tự nghỉ nhịp cũ, không lặp chặt.
+    // Có event hoặc đã chờ lâu (long-poll thật) → repoll ngay để đón kịp.
+    const had = (data.events || []).length > 0;
+    setTimeout(poll, had || Date.now() - t0 >= 800 ? 0 : 900);
   } catch (e) {
     connected = false;
     setTimeout(poll, 4000);

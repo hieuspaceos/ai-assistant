@@ -236,16 +236,27 @@ perm_pending = {}         # id -> {"options": set(optionId), "ts": epoch}
 PERM_TTL = 600            # perm treo >10 phút coi như chết
 PERM_MAX = 200            # trần chống phình
 
+# long-poll /api/poll: client chờ tới khi có event mới (tối đa wait ms)
+# thay vì poll chặt mỗi ~1s — giảm ~97% request và độ trễ hiển thị ~0.
+new_event = threading.Condition(store_lock)
+
+# Serialize /api/prompt: 2 tab/2 client gửi đồng thời → event đan xen làm
+# rối cả session ACP. acquire không blocking → kẻ đến sau nhận 409.
+prompt_lock = threading.Lock()
+
 def broadcast(ev):
     global event_base
     with store_lock:
         event_store.append(ev)
         if ev.get("t") in ("ready", "done", "err"):
             perm_pending.clear()   # lượt mới/kết thúc/lỗi → perm cũ hết hạn
+            if prompt_lock.locked():   # kết lượt (kể cả não chết → err) → mở
+                prompt_lock.release()
         excess = len(event_store) - MAX_EVENTS
         if excess > 0:
             del event_store[:excess]
             event_base += excess
+        new_event.notify_all()         # đánh thức long-poll đang chờ
     hist_write(ev)          # ghi ngoài lock — IO chậm không chặn stream
 
 class Acp:
@@ -720,16 +731,27 @@ class Handler(BaseHTTPRequestHandler):
                                     for k in ("id", "label", "cmd", "args", "terminal")},
                         "presets": presets})
         elif path == "/api/poll":
-            qs = urllib.parse.urlparse(self.path).query
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             try:
-                since = int(urllib.parse.parse_qs(qs).get("since", ["0"])[0])
+                since = int(q.get("since", ["0"])[0])
             except ValueError:
                 since = 0
+            try:
+                wait_ms = min(int(q.get("wait", ["0"])[0] or 0), 30000)
+            except ValueError:
+                wait_ms = 0
             with store_lock:
                 total = event_base + len(event_store)
                 # reset: cursor của client trỏ ngoài vùng event còn giữ —
                 # thường là bridge vừa restart → replay toàn bộ cho client dựng lại
                 reset = since < 0 or since < event_base or since > total
+                # long-poll: không có event mới và không cần reset → chờ tới
+                # wait hoặc broadcast() đánh thức. wait() tự release lock khi
+                # ngủ và reacquire khi dậy — xong phải TÍNH LẠI mọi thứ.
+                if wait_ms and not reset and total <= since:
+                    new_event.wait(wait_ms / 1000)
+                    total = event_base + len(event_store)
+                    reset = since < 0 or since < event_base or since > total
                 evs = list(event_store) if reset else list(event_store[since - event_base:])
             self._json({"events": evs, "next": total, "reset": reset})
         elif path == "/api/permissions":
@@ -773,11 +795,14 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"err": "đang khởi động lại trợ lý — gửi lại sau vài giây"}, 503); return
             if not acp.session_id:
                 self._json({"err": "chưa có session"}, 503); return
+            if not prompt_lock.acquire(blocking=False):
+                self._json({"err": "trợ lý đang xử lý câu trước"}, 409); return
             try:
                 acp.call("session/prompt", {
                     "sessionId": acp.session_id,
                     "prompt": [{"type": "text", "text": data.get("text", "")}]})
             except (BrokenPipeError, OSError):
+                prompt_lock.release()   # não chết ngay khi gửi → không kẹt busy
                 self._json({"err": "trợ lý đã dừng — chạy lại file start"}, 503); return
             self._json({"ok": True})
         elif path == "/api/respond":
