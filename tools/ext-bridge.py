@@ -98,6 +98,7 @@ EXT_ORIGIN_PREFIXES = ("chrome-extension://", "moz-extension://",
 ext_lock = threading.Lock()
 ext_send_lock = threading.Lock()
 ext_sock = None          # socket của extension đang kết nối (chỉ một)
+ext_version = None      # version extension tự báo qua ?v= lúc WS upgrade
 pending = {}             # id -> {"event": Event, "res": dict}
 next_id = [0]
 
@@ -249,7 +250,8 @@ def send_json(sock, obj, code=200, origin=None):
 
 def handle_api(method, path, body):
     if path == "/api/browser/status":
-        return {"connected": ext_sock is not None}
+        return {"connected": ext_sock is not None,
+                "extVersion": ext_version}
     if path == "/api/browser" and method == "POST":
         try:
             d = json.loads(body or b"{}")
@@ -281,7 +283,7 @@ def handle_api(method, path, body):
     return {"err": "not found"}, 404
 
 def serve_conn(sock):
-    global ext_sock
+    global ext_sock, ext_version
     try:
         r = read_http(sock)
         if not r:
@@ -309,6 +311,7 @@ def serve_conn(sock):
                 # read_http đặt timeout 15s để đọc header — phải gỡ ra, nếu
                 # không WS rớt sau 15s im lặng (extension flap liên tục)
                 sock.settimeout(None)
+                ext_version = (urllib.parse.parse_qs(pu.query).get("v") or [None])[0]
                 with ext_lock:
                     old = ext_sock
                     ext_sock = sock

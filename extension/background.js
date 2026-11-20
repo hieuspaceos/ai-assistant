@@ -18,7 +18,8 @@ function setBadge(state) {
 function connect() {
   if (!extToken) { setBadge('need-token'); return; }
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
-  ws = new WebSocket(WS_URL + '?token=' + encodeURIComponent(extToken));
+  ws = new WebSocket(WS_URL + '?token=' + encodeURIComponent(extToken)
+        + '&v=' + encodeURIComponent(chrome.runtime.getManifest().version));
   ws.onopen = () => setBadge('on');
   ws.onclose = ws.onerror = () => {
     setBadge('off');

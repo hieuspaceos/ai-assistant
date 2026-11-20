@@ -79,6 +79,15 @@ def app_version():
     except OSError:
         return "0"
 
+def ext_expected_version():
+    # version extension "đúng" = version trong payload đang chạy
+    try:
+        with open(os.path.join(os.path.abspath(CWD), "extension", "manifest.json"),
+                  encoding="utf-8") as f:
+            return json.load(f).get("version")
+    except (OSError, json.JSONDecodeError):
+        return None
+
 # Các "não" biết nói ACP mà onboarding gợi ý. requires = binary phải có
 # trên PATH thì preset mới coi là "đã cài" (adapter chạy qua npx nên vẫn
 # cần CLI gốc để đăng nhập — vd codex-acp cần `codex`).
@@ -435,7 +444,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/health":
             self._json({"ok": True, "sessionId": acp.session_id if acp else None,
                         "brain": getattr(acp, "brain_id", None) or load_brain().get("id"),
-                        "version": app_version()})
+                        "version": app_version(),
+                        "extVersion": ext_expected_version()})
         elif path == "/api/brain":
             cur = load_brain()
             presets = []

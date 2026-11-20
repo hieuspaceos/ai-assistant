@@ -30,6 +30,8 @@ const I18N = {
     how3: '<b>Kẹt cứ hỏi</b>: không có câu hỏi nào là “ngốc” cả.',
     extTitle: 'Trạng thái cánh tay trình duyệt (extension Trợ Lý AI)',
     extOn: 'Đã nối trình duyệt', extOff: 'Chưa nối trình duyệt',
+    extStale: 'Extension bản cũ', updateNew: 'Có bản mới {v} — bấm để tải',
+    extUpdateHint: 'Extension đang là bản {cur}, bản mới nhất là {exp} — tải file troly mới rồi gỡ extension cũ và Load unpacked lại trong brave://extensions.',
     settings: 'Cài đặt', closeTitle: 'Đóng',
     brainTitle: 'Bộ não của trợ lý',
     brainHint: 'Trợ lý nghĩ và làm việc bằng chương trình AI này — chỉ đổi khi máy bạn có sẵn chương trình khác (đổi xong trợ lý khởi động lại trong vài giây).',
@@ -84,6 +86,8 @@ const I18N = {
     how3: '<b>Stuck? Just ask</b> — no question is a silly one.',
     extTitle: 'Browser arm status (Trợ Lý AI extension)',
     extOn: 'Browser connected', extOff: 'Browser not connected',
+    extStale: 'Extension outdated', updateNew: 'New version {v} — click to download',
+    extUpdateHint: 'Extension is v{cur}, latest is v{exp} — download the new troly file, then remove and re-load the extension at brave://extensions.',
     settings: 'Settings', closeTitle: 'Close',
     brainTitle: 'Assistant brain',
     brainHint: 'The assistant thinks and works through this AI program — only change it if another one is already installed (it restarts in a few seconds).',
@@ -418,21 +422,66 @@ function tryPairExt() {
   } catch (e) { /* chưa cài extension */ }
 }
 tryPairExt();
+let expectedExtV = null;   // version extension đúng = version trong payload đang chạy
 async function pollExtStatus() {
   const el = $('#ext-status'), txt = $('#ext-status-text');
   try {
     const sig = (window.AbortSignal && AbortSignal.timeout) ? AbortSignal.timeout(3000) : undefined;
     const r = await bfetch(EXT_BRIDGE + '/api/browser/status', { signal: sig });
     const d = await r.json();
+    const stale = d.connected && expectedExtV && d.extVersion && d.extVersion !== expectedExtV;
     el.classList.toggle('on', !!d.connected);
-    txt.textContent = d.connected ? t('extOn') : t('extOff');
+    el.classList.toggle('stale', !!stale);
+    txt.textContent = stale ? t('extStale') : (d.connected ? t('extOn') : t('extOff'));
+    const note = $('#ext-update-note');
+    if (note) {
+      note.hidden = !stale;
+      if (stale) note.textContent = t('extUpdateHint')
+        .replace('{cur}', 'v' + d.extVersion).replace('{exp}', 'v' + expectedExtV);
+    }
   } catch {
     el.classList.remove('on');
+    el.classList.remove('stale');
     txt.textContent = t('extOff');
   }
 }
 pollExtStatus();
 setInterval(pollExtStatus, 10000);
+// Extension đã nối nhưng bản cũ → bấm pill mở Cài đặt để xem cách cập nhật
+$('#ext-status').onclick = () => {
+  if ($('#ext-status').classList.contains('stale')) settingsOverlay.hidden = false;
+};
+
+/* ---- Cập nhật: banner khi GitHub Release có bản mới hơn VERSION đang chạy ---- */
+function semverGt(a, b) {
+  const pa = String(a).replace(/^v/, '').split('.').map(Number);
+  const pb = String(b).replace(/^v/, '').split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i] || 0, y = pb[i] || 0;
+    if (x !== y) return x > y;
+  }
+  return false;
+}
+async function checkForUpdate() {
+  try {
+    const [gh, health] = await Promise.all([
+      fetch('https://api.github.com/repos/hieuspaceos/ai-assistant/releases/latest',
+            { signal: AbortSignal.timeout(5000) }),
+      bfetch(BRIDGE_URL + '/api/health').then(r => r.json()).catch(() => null)
+    ]);
+    if (health && health.extVersion) expectedExtV = health.extVersion;
+    if (!gh.ok || !health) return;
+    const rel = await gh.json();
+    const latest = (rel.tag_name || '').replace(/^v/, '');
+    if (latest && semverGt(latest, health.version || '0')) {
+      const b = $('#update-banner');
+      b.textContent = t('updateNew').replace('{v}', 'v' + latest);
+      b.href = rel.html_url;
+      b.hidden = false;
+    }
+  } catch { /* mất mạng thì thôi — portal local vẫn dùng bình thường */ }
+}
+checkForUpdate();
 
 /* ---- Cài đặt: kết nối app + folder được phép — gom vào nút ⚙ cuối sidebar ---- */
 const settingsOverlay = $('#settings-overlay');

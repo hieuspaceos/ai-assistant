@@ -288,6 +288,12 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: va
 #ext-status .dot { width: 8px; height: 8px; border-radius: 50%; background: #bbb; }
 #ext-status.on { color: var(--color-accent); border-color: var(--color-accent); }
 #ext-status.on .dot { background: var(--color-accent); box-shadow: 0 0 6px rgba(20,122,79,.5); }
+#ext-status.stale { color: #8a5a00; border-color: #c99a2e; cursor: pointer; }
+#ext-status.stale .dot { background: #c99a2e; box-shadow: 0 0 6px rgba(201,154,46,.5); }
+#update-banner { display: block; text-align: center; padding: 7px 12px;
+  background: var(--color-accent-soft); color: var(--color-accent-deep);
+  font-weight: 600; font-size: var(--text-sm); text-decoration: none; }
+#update-banner:hover { text-decoration: underline; }
 
 /* ---- Kết nối ứng dụng + Folder được phép ---- */
 .app-row {
