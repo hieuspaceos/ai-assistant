@@ -36,6 +36,17 @@ queue làm prompt thứ hai "thành công" rồi chạy khi học viên đã qu�
 đúng thứ khiến agent làm việc không ai xin. 409 rõ ràng bắt client
 đối mặt với "trợ lý đang bận" thay vì im lặng đan xen hai lượt.
 
+**Seatbelt: whitelist-ghi + deny-enumeration cho đọc.** Vì: quirk thật
+đã đo trên Darwin 27 — `(allow process*)` chỉ compile khi profile có
+`file-read*` phủ tới `/`; whitelist-đọc thuần làm profile `Abort trap`
+lúc load. Vậy `gen-sandbox.py` cho đọc `/` rồi duyệt cây deny mọi
+sibling không nằm trên đường tới thư mục được phép (deny thắng allow —
+đã verify: ~/.ssh, ~/Documents chặn, ~/Downloads có perm đọc được).
+Ghi vẫn whitelist thuần. Residual: dir user tạo GIỮA hai lần regen đọc
+được — chấp nhận vì regen mỗi spawn + mỗi đổi permissions. Windows giữ
+policy-only cho tới khi spawn cross-user qua `troly-agent` verify được
+(stdio pipe qua CreateProcessWithLogonW — chưa có máy test).
+
 ## 2026 — Cập nhật: release banner + version handshake
 
 **Banner trong portal là "nút cập nhật" duy nhất.** Vì: học viên không

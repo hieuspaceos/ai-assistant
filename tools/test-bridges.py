@@ -463,6 +463,95 @@ def main():
         # 32: não giả không bao giờ gửi stopReason → lượt vẫn mở → busy
         s, b, _ = http("POST", b4 + f"/api/prompt?token={TOKEN}", {"text": "nữa"})
         check("32. prompt thứ 2 trong lượt → 409", s == 409, str(s))
+
+        # ---- lock-down ph-6: Seatbelt sandbox (macOS) ----
+        # vùng "cấm" trong home — phải tạo TRƯỚC khi gen profile vì
+        # deny enumeration là snapshot lúc gen (dir mới sinh sau sẽ đọc
+        # được — residual đã ghi trong docs)
+        dsecret = os.path.join(os.path.expanduser("~"), "sbtest-deny-zone")
+        os.makedirs(dsecret, exist_ok=True)
+        open(os.path.join(dsecret, "f"), "w").write("x")
+
+        # 33: profile sinh được + đúng cấu trúc (deny default, bind deny,
+        #     carve-out secrets/token, deny enumeration cho home)
+        sb_out = subprocess.run(
+            [sys.executable, os.path.join(TOOLS, "gen-sandbox.py"), wd],
+            capture_output=True, text=True)
+        sb_fp = os.path.join(wd, ".devin", "agent.sb")
+        prof = ""
+        try:
+            prof = open(sb_fp, encoding="utf-8").read()
+        except OSError:
+            pass
+        check("33. gen-sandbox → profile hợp lệ",
+              sb_out.returncode == 0
+              and "(deny default)" in prof
+              and "(deny network-bind network-inbound)" in prof
+              and '(literal "' + os.path.join(wd, ".devin",
+                        "secrets.local.json") + '")' in prof
+              and '(deny file-write* (literal "' +
+                  os.path.join(wd, ".devin", "bridge.token") + '")' in prof,
+              prof[:120])
+
+        has_sbx = (sys.platform == "darwin"
+                   and shutil.which("sandbox-exec"))
+        if has_sbx and prof:
+            # 34: não trong sandbox đọc được file project
+            r = subprocess.run(["sandbox-exec", "-f", sb_fp, "/bin/cat",
+                                os.path.join(wd, "my-course",
+                                             "manifest.json")],
+                               capture_output=True, text=True)
+            check("34. sandbox: đọc project → được",
+                  r.returncode == 0 and "learner_name" in r.stdout,
+                  r.stderr[:60])
+            # 35: ghi bridge.token bị deny; đọc thì vẫn được
+            r = subprocess.run(["sandbox-exec", "-f", sb_fp, "/bin/sh",
+                                "-c", "echo x >> '" +
+                                os.path.join(wd, ".devin",
+                                             "bridge.token") + "'"],
+                               capture_output=True, text=True)
+            r2 = subprocess.run(["sandbox-exec", "-f", sb_fp, "/bin/cat",
+                                 os.path.join(wd, ".devin",
+                                              "bridge.token")],
+                                capture_output=True, text=True)
+            check("35. sandbox: ghi token deny, đọc vẫn được",
+                  r.returncode != 0 and TOKEN in r2.stdout,
+                  f"{r.returncode} {r.stderr[:40]}")
+            # 36: vùng home ngoài quyền → deny enumeration chặn
+            r = subprocess.run(["sandbox-exec", "-f", sb_fp,
+                                "/bin/cat",
+                                os.path.join(dsecret, "f")],
+                               capture_output=True, text=True)
+            check("36. sandbox: home ngoài quyền → deny",
+                  r.returncode != 0
+                  and "not permitted" in (r.stderr or "").lower(),
+                  r.stderr[:60])
+        else:
+            check("34-36. sandbox runtime (chỉ chạy trên macOS)", True,
+                  "bỏ qua — không phải darwin")
+        shutil.rmtree(dsecret, ignore_errors=True)
+
+        # 37: quyền mới qua /api/permissions → profile regen chứa folder
+        perm_dir = tempfile.mkdtemp(prefix="troly-perm-")
+        s, b, _ = http("POST", b3 + f"/api/permissions?token={TOKEN}",
+                       {"path": perm_dir, "access": "read"})
+        prof2 = ""
+        try:
+            prof2 = open(os.path.join(wd, ".devin", "agent.sb"),
+                         encoding="utf-8").read()
+        except OSError:
+            pass
+        check("37. /api/permissions → regen profile",
+              s == 200 and os.path.realpath(perm_dir) in prof2,
+              f"{s} {'found' if os.path.realpath(perm_dir) in prof2 else 'missing'}")
+        shutil.rmtree(perm_dir, ignore_errors=True)
+
+        # 38: escape hatch + wrap spawn — kiểm static hai nền tảng
+        check("38. sandbox wrap + escape hatch trong code",
+              "_sandbox_wrap" in src_cb and "TROLY_NO_SANDBOX" in src_cb
+              and "sandbox-exec" in src_cb
+              and "agent.sb" in open(os.path.join(
+                  TOOLS, "term-gate.sh"), encoding="utf-8").read())
     finally:
         for p in procs:
             try:
