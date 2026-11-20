@@ -12,8 +12,13 @@ chạy trên một máy Windows (hoặc VM), ghi kết quả vào runbook.
 ## Điều kiện cần
 
 - Một máy Windows 10/11 (hoặc VM Parallels/UTM) có quyền cài phần mềm.
-- Repo clone hoặc file `TroLyAI.exe` build từ `tools/build.sh` trên
-  chính máy đó (PyInstaller không cross-compile).
+- File `TroLyAI.exe` từ CI (plan `261120-1900-ship-learner` phase 1) —
+  **đường chính, test trước**. Con đường `start.bat`+`.ps1` test sau
+  (sắp frozen theo ship-learner phase 5 — chỉ cần xác nhận chạy được
+  như cũ, không phải verify đầy đủ).
+- *(Audit 261120: checklist này và verify của ship-learner phase 1 là
+  một — gộp chạy một lượt trên cùng máy, mục 1-12 dưới đây áp cho
+  troly.exe; mục .ps1 chỉ giữ phần smoke.)*
 
 ## Checklist
 

@@ -34,12 +34,22 @@ Phức tạp hơn đáng kể — chỉ dùng nếu VPS đã có web server khá
 ## 3. Deploy relay.py
 
 ```bash
-useradd -r -m -d /opt/troly-relay troly
-scp deploy/relay.py troly@vps:/opt/troly-relay/
-scp -r web/ troly@vps:/opt/troly-relay/      # portal static
-ssh troly@vps 'python3 -c "import secrets;print(secrets.token_hex(32))" \
-    > /opt/troly-relay/relay.secret && chmod 600 relay.secret'
+useradd -r -d /opt/troly-relay troly          # system user, không shell login
+mkdir -p /opt/troly-relay && chown troly:troly /opt/troly-relay
+scp deploy/relay.py root@vps:/opt/troly-relay/   # scp bằng root/SSH key của
+scp -r web/ root@vps:/opt/troly-relay/           # mình — user 'troly' mới tạo
+ssh root@vps 'chown -R troly:troly /opt/troly-relay && \
+    sudo -u troly python3 -c "import secrets;print(secrets.token_hex(32))" \
+    > /opt/troly-relay/relay.secret && chmod 600 /opt/troly-relay/relay.secret'
 ```
+
+(Lệnh gốc `scp ... troly@vps` chết ngay: user `troly` vừa tạo không có
+SSH key/password — scp bằng tài khoản đăng nhập được rồi `chown`.)
+
+**`web/` là bản copy tĩnh — phải sync theo release**: mỗi lần desktop
+lên VERSION mới mà portal đổi, re-scp `web/` lên VPS, kẻo phone thấy
+bản cũ (lệch với `/api/health` trả về). Ghi bước này vào runbook +
+nhắc trong quy trình release của ship-learner phase 1.
 
 `relay.secret` = chìa khoá chung desktop↔relay → copy giá trị này vào
 `.devin/remote.json` `secret` phía desktop (phase 2).

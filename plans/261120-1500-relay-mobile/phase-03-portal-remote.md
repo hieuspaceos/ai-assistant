@@ -12,18 +12,43 @@ nhất.
 ```js
 const IS_LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
 const BRIDGE_URL = IS_LOCAL ? "http://127.0.0.1:7682" : "";   // same-origin
-// bfetch(path) đã tồn tại (đợt 1) → đổi thành:
-async function bfetch(path, opt = {}) {
-  const r = await fetch(BRIDGE_URL + path, {
-    ...opt,
-    headers: { ...opt.headers, "X-Bridge-Token": bridgeToken() },
-  });
-  ...
-}
+// bfetch(url, o) ĐÃ TỒN TẠI trong web/bridge-token.js (đợt 1) và
+// mọi trang đã load nó — KHÔNG định nghĩa lại trong app.js. Hai sửa
+// đổi cần: (a) mọi call site nối BRIDGE_URL + path như hiện tại;
+// (b) luật gắn token trong bridge-token.js — xem "CHẶN NGAY" dưới.
 ```
 
 Khi remote: `BRIDGE_URL=""` → fetch `/api/prompt` → relay nhận → bơm xuống
 connector → `:7682`. **Token vẫn đi kèm** — relay chỉ là đường ống.
+
+**CHẶN NGAY — `bridge-token.js` hiện TỪ CHỐI gắn token cho URL
+không-loopback** (feature bảo mật có chủ đích: "mã là chìa khoá nhà,
+không bao giờ gửi ra internet"). Remote portal gọi same-origin
+`https://relay.example.com/api/...` → hostname không phải localhost →
+**không token → bridge 401 toàn tập**. Bắt buộc sửa file này — luật
+mới: gắn token khi request là **loopback HOẶC same-origin**
+(`u.origin === location.origin`). Same-origin = chính relay user đã
+pair nên không phá ý đồ bảo mật; token vẫn không bao giờ đi tới origin
+thứ ba.
+
+**CHẶN TIẾP — `chat.html` validate `?bridge=`**: hiện chỉ chấp nhận
+`http://localhost|127.0.0.1` còn lại fallback về `localhost:7682`. App
+nhúng `chat.html?bridge=<BRIDGE_URL>` — remote `BRIDGE_URL=""` →
+fallback localhost:7682 → iframe chat chết trên phone. Sửa: `bridge`
+rỗng/không hợp lệ → dùng **same-origin** (`""`) thay vì localhost.
+Đồng thời `chatFrame.src = '/web/chat.html?bridge='` là absolute path
+→ relay phải serve portal tại `/web/` (phase 1 đã ghi), hoặc đổi thành
+relative `chat.html?bridge=` — chọn một, ghi vào checklist.
+
+Các chỗ hardcode còn lại (đã grep): `index.html:141`
+(`'http://localhost:7682/api/config'`), `onboarding.html` `BRIDGE`,
+`app.js` `EXT_BRIDGE`/`TTYD_URL` — tất cả qua `IS_LOCAL` + `BRIDGE_URL`
+hoặc ẩn khi remote. `EXT_BRIDGE` remote → `'/ext-api'` same-origin.
+
+**Terminal mode phải ẨN khi remote**: ttyd (`:7681`, iframe WS trực tiếp)
+không qua được relay — nút "Terminal" và cảnh báo `warnCli` không render
+khi `!IS_LOCAL` (hiện thông báo "chế độ Terminal chỉ có trên máy nhà"
+hoặc ẩn hẳn). Chat mode là chế độ duy nhất qua relay.
 
 Grep toàn bộ `127.0.0.1:7682`, `127.0.0.1:7684`, `localhost:8080` trong
 `web/` — mọi chỗ phải qua `bfetch`/`BRIDGE_URL`. Riêng ext-bridge (`:7684`)
@@ -82,7 +107,10 @@ xám "máy nhà đang nghỉ" — nguồn: `GET /api/health` qua relay trả 503
 ## Acceptance criteria
 
 - Mở portal qua URL giả remote (test bằng hosts/proxy) → `bfetch` gọi
-  same-origin, `curl /api/health` qua relay đúng bridge.
+  same-origin VÀ request mang `X-Bridge-Token` (kiểm bằng devtools
+  Network — không token = luật mới chưa vào `bridge-token.js`).
+- `curl /api/health` qua relay đúng bridge; request same-origin tới
+  domain lạ (không phải origin hiện tại) vẫn KHÔNG kèm token.
 - Toàn bộ hardcode `127.0.0.1:7xxx` trong `web/` = 0 (grep verify).
 - Pair e2e (một máy, relay chạy local port khác): lấy mã trên desktop →
   nhập trên trình duyệt khác → cookie → chat gửi prompt được.
@@ -91,6 +119,13 @@ xám "máy nhà đang nghỉ" — nguồn: `GET /api/health` qua relay trả 503
 ## Rủi ro
 
 - Sót chỗ hardcode → test bằng cách chạy portal qua relay thật (không
-  được phép chỉ đọc code).
+  được phép chỉ đọc code). Vị trí đã biết (grep 2026-11-20): `app.js`
+  ×3 (`TTYD_URL`, `BRIDGE_URL`, `EXT_BRIDGE`), `chat.html` ×2,
+  `clone-view.html`, `index.html`, `onboarding.html`, **`bridge-token.js`
+  (luật gắn token — chỗ dễ sót nhất vì nó "đang đúng" cho local)**.
 - `?t=` trong redirect `/pair` → URL có token, nằm trong history phone —
   chấp nhận (đã ghi trade-off đợt 1).
+- **Portal trên VPS là bản copy tĩnh** — có thể lệch version với code
+  trên desktop (`/api/health` trả VERSION của desktop). Ghi chú trong
+  phase 4: deploy relay phải đồng bộ `web/` theo release, và UI remote
+  nên hiện cả hai version nếu khác nhau.

@@ -1,7 +1,7 @@
 ---
 title: "Vá các lỗi audit 2026-11-20 — parity ps1/py + skill pack + smoke test"
 description: "Audit toàn cục phát hiện: chat-bridge.ps1 thiếu /api/save-page (clone-view không lưu được trên Windows — nền tảng chính), clone-trang/trang-moi nằm ngoài skill-packs nên bản đóng gói mất tính năng headline, en pack thiếu bản clone, không có test nào cho ~2000 dòng code nhạy cảm bảo mật, secrets.local.json không chmod 600, doc lệch port"
-status: in-progress (phase 1-4 xong; phase 5 chờ máy Windows)
+status: in-progress (phase 1-4 xong + lỗi H đã vá 261120; phase 5 chờ máy Windows)
 priority: P1
 effort: M
 branch: main
@@ -25,7 +25,7 @@ Review tổng thể repo (chấm ~8/10) phát hiện các lỗi thật, xếp th
 | E | `secrets.local.json` ghi qua `save_json` không `chmod 600` | Token được bảo vệ thì secret cũng phải được — file credential của học viên |
 | F | Doc lệch: `PLAN.md` ghi ext-bridge `:7683` (thực tế `:7684`); `skills-system.md` ghi en pack "17 skill" (thực tế 18); `start.bat` comment "mo 2 thu" (mở 4) | Người đọc sau hiểu sai hệ thống |
 | G | 8 file đang sửa dở chưa commit (tính năng `extVersion`) | Work-in-progress treo trong working tree |
-| H | `my-course/manifest.json` seed có `recipes` hardcode tiếng Việt (`/clone-trang`, `/nen-anh`…) | Học viên English thấy lệnh vi trong sidebar tới khi `/interview` sinh lại manifest |
+| H | `my-course/manifest.json` seed có `recipes` hardcode tiếng Việt (`/clone-trang`, `/nen-anh`…) | ~~Học viên English thấy lệnh vi~~ — **ĐÃ VÁ 261120**: seed `recipes: []`; `/api/setup` lấp đầy bằng `recipes/<lang>.json` đúng ngôn ngữ (đơn giản hơn phương án A/B trong phase-02 — không cần code mới). Trade-off: manifest của repo dev mất recipes hiển thị tới khi chạy lại setup/interview |
 
 Nguyên nhân gốc của A+B: **3 con đường chạy** (`.py` cho macOS, `.ps1` cho
 Windows, binary đóng gói) trôi khỏi nhau vì không có test parity và không

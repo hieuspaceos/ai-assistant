@@ -69,10 +69,26 @@ Nháp thiết kế gốc:
 
 ## Phase 4 — Đóng gói & kiểm chứng máy đích 🟡 (code xong, chờ test Windows)
 
-13. **Test `start.bat` + `chat-bridge.ps1` trên Windows thật** — ❌ vẫn chờ máy Windows
+13. **Test `start.bat` + `chat-bridge.ps1` trên Windows thật** — ❌ vẫn chờ máy Windows → gỡ bằng CI trong `261120-1900-ship-learner`
 14. **Offline fonts** ✅ — `web/vendor/fonts.css` + 10 woff2 (148KB), local trước Google
-15. **Skill bank** — 🟡 một phần: `/gom-skill` đã có (gom skill học viên tự tạo về kho chung); còn thiếu bước "pack" ngược lại khi onboard
+15. **Skill bank** — 🟡 một phần: `/gom-skill` đã có (gom skill học viên tự tạo về kho chung); chiều phát lại → `261120-1905-keep-moat` phase 2
 16. SETUP/README ✅ — onboarding, secrets, requirements, start.sh đã ghi
+
+## Đợt tiếp theo (từ đánh giá 261120 — xem `plans/`)
+
+Thứ tự ưu tiên sau đánh giá toàn cục — 3 plan đã lên sẵn:
+
+| Đợt | Plan | Trả lời cho |
+|---|---|---|
+| **Ship** | `261120-1900-ship-learner` | CI build `TroLyAI.exe` + Web Store + não miễn phí + định vị assistant-first + freeze `.ps1` — "cài được, dùng được, không tốn tiền não" |
+| **Mobile** | `261120-1500-relay-mobile` (đã có) | relay VPS + pairing — điện thoại = màn hình từ xa |
+| **Moat** | `261120-1905-keep-moat` | chat history persist + skill bank hai chiều + publish skills.sh — "đáng quay lại" |
+| **Bots** | `261120-2100-create-bot` | bot = tên + avatar + bộ skill theo nghề + connection — tạo từ template/phỏng vấn/nhập chia sẻ; trend "AI teammate", chưa gồm trigger |
+
+Ship trước (điều kiện tồn tại); Mobile và Moat chạy sau/song song tuỳ
+nguồn lực (điều kiện thắng). Bots sau Moat (dùng `merge_pack` +
+community pack) — nâng skill bank từ "chia sẻ công thức" lên "chia sẻ
+cả trợ lý".
 
 ## Ranh giới giữ nguyên (không làm)
 
