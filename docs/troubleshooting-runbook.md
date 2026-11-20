@@ -110,7 +110,27 @@ Log: `.logs/{portal,chat-bridge,ext-bridge,ttyd}.log` dưới root.
 | Viewer không sửa được phần tử | Phần tử thiếu marker `data-cs-*` — mở file, gắn marker đúng loại |
 | Sửa xong muốn về bản cũ | Copy `<file>.bak` đè lên file chính |
 
-## 6. Emergency
+## 6. Sandbox (macOS Seatbelt)
+
+- **Não không đọc/ghi được folder đã cấp quyền**: profile là snapshot
+  lúc spawn — sửa `permissions.json` xong phải spawn lại não (đổi não
+  trong Cài đặt hoặc restart bridge). `/api/permissions` regen sẵn
+  profile nhưng não ĐANG chạy vẫn theo profile cũ.
+- **Não chết ngay sau khi bật / báo "Operation not permitted" lạ**:
+  tool não cần nằm ngoài whitelist — thường là cache dir của toolchain
+  lạ (`~/.something`). Kiểm bằng tay: `sandbox-exec -f .devin/agent.sb
+  <lệnh>`; dir thiếu thì thêm vào `sysw`/`sysr` trong `gen-sandbox.py`.
+- **Debug tắt sandbox tạm**: `TROLY_NO_SANDBOX=1` rồi start lại — não
+  chạy thường như cũ. CHỈ dùng để chẩn đoán, không set mặc định.
+- **Não không mở được dev-server cho học viên xem preview**: cố ý —
+  `network-bind` bị deny. Portal :8080 serve file tĩnh được; nếu skill
+  thật sự cần bind, nới `(allow network-bind (local ip "localhost:*"))`
+  trong gen-sandbox.
+- **`Abort trap: 6` khi chạy sandbox-exec**: profile có `allow process*`
+  nhưng thiếu `file-read*` phủ `/` (quirk compiler trên macOS mới) —
+  tái sinh profile bằng `tools/gen-sandbox.py`, không sửa tay.
+
+## 7. Emergency
 
 - **Bridge chết giữa chừng**: process không tự restart — chạy lại
   `start.sh`/`start.bat`; file đang sửa không mất (lưu trên đĩa).
@@ -120,7 +140,7 @@ Log: `.logs/{portal,chat-bridge,ext-bridge,ttyd}.log` dưới root.
 - **File clone hỏng không mở được**: về `.bak`; kiểm tĩnh bằng
   `html.parser` đếm thẻ đóng/mở trước khi sửa tiếp.
 
-## 7. Cập nhật
+## 8. Cập nhật
 
 | Triệu chứng | Nguyên nhân | Xử lý |
 |---|---|---|

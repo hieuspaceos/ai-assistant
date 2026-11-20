@@ -24,7 +24,7 @@ Event (JSON trong mảng events):
   {"t":"done"}                       - agent nói xong một lượt
   {"t":"err","msg":"..."}
 """
-import hmac, json, os, re, secrets, shutil, subprocess, sys, threading, time, unicodedata, urllib.parse, urllib.request
+import hmac, json, os, re, runpy, secrets, shutil, subprocess, sys, threading, time, unicodedata, urllib.parse, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 7682
@@ -259,6 +259,35 @@ def broadcast(ev):
         new_event.notify_all()         # đánh thức long-poll đang chờ
     hist_write(ev)          # ghi ngoài lock — IO chậm không chặn stream
 
+def gen_sandbox_profile():
+    """Regen .devin/agent.sb từ permissions.json. Nạp gen-sandbox.py qua
+    runpy (không subprocess) — chạy được cả trong binary đóng gói không
+    có python ngoài. Trả về path profile hoặc None (non-darwin/lỗi)."""
+    if sys.platform != "darwin":
+        return None
+    gen = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                       "gen-sandbox.py")
+    try:
+        prof = runpy.run_path(gen)["build_profile"](CWD)
+        out = os.path.join(CWD, ".devin", "agent.sb")
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        with open(out, "w", encoding="utf-8") as f:
+            f.write(prof)
+        return out
+    except Exception:
+        return None
+
+def _sandbox_wrap(argv):
+    """macOS: bọc não trong Seatbelt — permissions.json thành enforcement
+    kernel thay vì văn xuôi nhờ não nghe. TROLY_NO_SANDBOX=1 = escape
+    hatch debug (ghi trong runbook), KHÔNG set mặc định."""
+    if sys.platform != "darwin" or os.environ.get("TROLY_NO_SANDBOX") == "1":
+        return argv
+    sb = gen_sandbox_profile()          # regen mỗi spawn → quyền mới cấp
+    if not sb or not shutil.which("sandbox-exec"):
+        return argv                     # thiếu tool → chạy thường, không kẹt
+    return ["/usr/bin/sandbox-exec", "-f", sb] + argv
+
 class Acp:
     def __init__(self, brain):
         self.next_id = 10
@@ -269,7 +298,8 @@ class Acp:
         self.brain_id = brain.get("id", brain["cmd"])
         try:
             self.proc = subprocess.Popen(
-                [brain["cmd"]] + [str(a) for a in brain.get("args") or []],
+                _sandbox_wrap([brain["cmd"]] +
+                              [str(a) for a in brain.get("args") or []]),
                 cwd=CWD, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL, text=True, bufsize=1)
         except OSError:
@@ -927,6 +957,7 @@ class Handler(BaseHTTPRequestHandler):
             q["folders"].append({"path": p, "access": access,
                                  "note": str(data.get("note", ""))[:120]})
             save_json(PERM_FP, q)
+            gen_sandbox_profile()   # quyền mới áp ngay spawn não kế tiếp
             self._json({"ok": True})
         elif path == "/api/remove-permission":
             p = os.path.expanduser(str(data.get("path", "")).strip())
@@ -934,6 +965,7 @@ class Handler(BaseHTTPRequestHandler):
             q["folders"] = [f for f in q["folders"]
                             if os.path.expanduser(str(f.get("path", ""))) != p]
             save_json(PERM_FP, q)
+            gen_sandbox_profile()   # thu hồi cũng phải regen
             self._json({"ok": True})
         elif path == "/api/connections":
             # Upsert một app vào registry kết nối — thay tại chỗ để giữ

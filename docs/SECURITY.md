@@ -113,6 +113,7 @@ trong options).
 | DNS rebinding → file trên :8080 | `serve.py` reject Host không phải loopback (403); `serve.ps1` đã an toàn sẵn nhờ http.sys prefix `localhost`/`127.0.0.1` |
 | Kẻ có token → tự duyệt quyền | `/api/respond` chỉ nhận `id` đang pending trong map (TTL 600s) + `optionId` phải khớp danh sách đã phát — option sai → 400 nhưng card không bị giết, id hợp lệ dùng một lần rồi tiêu. `__cancel__` cũng phải có id pending |
 | Prompt đan xen → rối session | `/api/prompt` giữ `prompt_lock` (`.ps1`: `$PromptBusy`) — prompt thứ hai trong lúc lượt đang chạy → 409; mở lại khi `done`/`err`/`ready` |
+| Não bị injection → đọc/ghi file ngoài quyền | macOS: não chạy trong Seatbelt (`agent.sb` — ghi whitelist, đọc chỉ vùng được phép, `network-bind` deny, `bridge.token` deny-ghi, secrets deny-đọc). Residual: `network-outbound` mở (não cần gọi LLM API) → exfil data đã đọc hợp lệ vẫn được; dir user mới tạo giữa 2 lần regen đọc được (deny enumeration là snapshot); extension/browser session nằm NGOÀI sandbox theo bản chất — kênh đó trông vào lớp duyệt + respond-gate. Windows: chưa enforce |
 
 ## permissions.json — ngăn tủ được phép
 
@@ -123,6 +124,13 @@ trong options).
 
 - Luôn được phép (không cần liệt kê): `my-course/`, `ai-assistant/` và
   folder con.
+- **Enforcement:** trên macOS, não được spawn trong Seatbelt
+  (`sandbox-exec -f .devin/agent.sb`, sinh từ `tools/gen-sandbox.py` mỗi
+  lần spawn + mỗi lần đổi permissions) — đọc/ghi ngoài danh sách bị
+  kernel từ chối thật, không còn là "nhờ não nghe". Terminal mode qua
+  `term-gate.sh` cũng bị bọc. Escape hatch debug: `TROLY_NO_SANDBOX=1`.
+  Trên Windows hiện vẫn là **policy** (user hạn chế + ACL đang triển
+  khai — `setup-agent-user.ps1`, spawn cross-user chưa verify).
 - Folder khác → đọc `permissions.json`; chưa có → **hỏi học viên**,
   được đồng ý mới `POST /api/permissions` (mặc định xin `read`; chỉ xin
   `read-write` khi thật sự cần ghi và báo trước việc ghi cụ thể).

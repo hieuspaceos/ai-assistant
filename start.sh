@@ -43,6 +43,13 @@ BRIDGE_TOKEN="$(cat "$TOKEN_FILE")"
 export BRIDGE_TOKEN
 export BRAIN_TERM          # term-gate.sh lay nao tu env, khong qua argv
 
+# --- Seatbelt profile (macOS): sinh san de term-gate/nao sandbox ngay
+# spawn dau tien; chat-bridge cung regen moi spawn nen day la phong bi
+# cho ca Terminal mode. Loi → bo qua, khong ket boot ---
+if [ "$(uname -s)" = "Darwin" ]; then
+  python3 tools/gen-sandbox.py "$ROOT" >/dev/null 2>&1 || true
+fi
+
 # --- 1. Portal tinh (cong 8080) — chan dotfiles (.devin chua secrets) ---
 python3 tools/serve.py 8080 "$ROOT" >"$LOGDIR/portal.log" 2>&1 &
 echo "  portal    : http://localhost:8080/web/"

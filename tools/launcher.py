@@ -131,6 +131,14 @@ def supervisor():
     """Spawn mọi child rồi chạy watchdog — gọi ở MAIN thread (signal chỉ
     đăng ký được ở main thread). Trả khi STOPPING, đã terminate hết con."""
     jobs = [("serve", 8080), ("chat-bridge", 7682), ("ext-bridge", 7684)]
+    if platform.system() == "Darwin":
+        # Sinh Seatbelt profile trước khi spawn — term-gate bọc não theo
+        # file này; chat-bridge regen mỗi spawn nên đây chỉ là phòng bị
+        # cho Terminal mode và spawn đầu. Lỗi → unsandboxed, không kẹt boot.
+        try:
+            run_tool("gen-sandbox", [DATA])
+        except Exception:
+            pass
     if shutil.which("ttyd"):
         # ttyd không tự xác thực được → spawn qua term-gate (đòi mã kết nối
         # trong shell trước khi exec não); -a để portal tự điền mã qua ?arg=.
