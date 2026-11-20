@@ -195,6 +195,30 @@ After all lessons, WRITE `my-course/manifest.json` per schema:
 When slide/video subagents report back, update `has_video`/`has_slides`
 as needed.
 
+## Phase 6 — Create the learner's personal assistant
+
+Once the course is done, offer one more thing: **naming and picking a
+role for their assistant** — like hiring a coworker who already knows
+one set of tasks.
+
+1. `GET /api/bots` → read `templates` (built-in roles: marketing, sales,
+   office, content) — remember the `?token=` or `X-Bridge-Token` header.
+2. Pick the template whose `skills` best match the work the learner
+   described. None fits → skip this step; the general assistant is fine.
+3. Ask the learner once: *"Let's name your assistant — e.g.
+   `<suggested_bot_name>`, or pick any name you like?"* (no answer → use
+   the suggestion).
+4. `POST /api/bot` twice:
+   - `{action:"create", name, role:<template id>, avatar, skills, needs,
+     recipes, instructions:<instructions in learner language>}`
+   - `{action:"activate", id:<new id>}` — the bridge installs missing
+     skills and writes `my-course/bot.md`.
+5. Tell the learner: *"This course teaches you to use <name>, the
+   assistant we just created — message <name> from now on."*
+
+Never pick the name or role without asking — it's personal. Bot `needs`
+are only suggested connections; don't force the learner to connect now.
+
 Finally, message the learner (cheerful, short):
 
 - Your course is ready — X lessons, matching exactly what you described.

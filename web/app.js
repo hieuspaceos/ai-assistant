@@ -69,6 +69,16 @@ const I18N = {
     hintNotReady: 'Trợ lý chưa sẵn sàng — mở lại file <code>start</code> rồi tải lại trang này. Nếu mới dùng lần đầu, bấm <a href="onboarding.html"><b>vào đây để cài đặt</b></a>.',
     hintNoLessons: 'Chưa có bài nào? Bấm <b>Hỏi trợ lý</b> và gõ <code>/phong-van</code>, nó sẽ hỏi vài câu rồi thiết kế khoá học riêng cho bạn.',
     hintReady: 'Chọn một bài bên trái để học — hoặc bấm <b>Hỏi trợ lý</b> để nhờ bất cứ việc gì, không cần mở bài học.',
+    botChipTitle: 'Đổi trợ lý',
+    botGeneral: 'Trợ lý chung',
+    botNew: 'Tạo trợ lý mới',
+    botNewTitle: 'Tạo trợ lý mới',
+    botNamePh: 'Tên trợ lý…',
+    botCreateBtn: 'Tạo',
+    botNeeds: 'Cần nối:',
+    botConnOk: 'đã nối', botConnWarn: 'chưa nối — nối sau cũng được',
+    botErr: 'Chưa đổi được trợ lý — thử lại nhé',
+    botCreating: 'Đang tạo…',
   },
   en: {
     loading: 'Loading…',
@@ -126,6 +136,16 @@ const I18N = {
     hintNotReady: 'The assistant isn\'t ready — run the <code>start</code> file again and reload. First time here? <a href="onboarding.html"><b>Click to set up</b></a>.',
     hintNoLessons: 'No lessons yet? Click <b>Ask the assistant</b> and type <code>/interview</code> — it will ask a few questions then design a course just for you.',
     hintReady: 'Pick a lesson on the left — or click <b>Ask the assistant</b> for anything, no lesson needed.',
+    botChipTitle: 'Switch assistant',
+    botGeneral: 'General assistant',
+    botNew: 'Create an assistant',
+    botNewTitle: 'Create an assistant',
+    botNamePh: 'Assistant name…',
+    botCreateBtn: 'Create',
+    botNeeds: 'Needs:',
+    botConnOk: 'connected', botConnWarn: 'not connected — you can connect later',
+    botErr: 'Couldn\'t switch assistants — try again',
+    botCreating: 'Creating…',
   },
 };
 function t(k) { return (I18N[LANG] && I18N[LANG][k]) || I18N.vi[k] || k; }
@@ -719,3 +739,127 @@ $('#folder-save').onclick = async () => {
 setInterval(() => {
   if (!settingsOverlay.hidden) { renderApps(); renderFolders(); }
 }, 15000);
+
+/* ---- Trợ lý theo nghề (bots) — chip trên header + gallery tạo mới ---- */
+let botsState = { active: null, bots: [], templates: [] };
+let connMap = {};
+
+async function loadBots() {
+  try {
+    const [b, k] = await Promise.all([
+      bfetch(BRIDGE_URL + '/api/bots').then(r => r.json()),
+      bfetch(BRIDGE_URL + '/api/connections').then(r => r.json()).catch(() => ({ apps: [] }))
+    ]);
+    botsState = { active: b.active, bots: b.bots || [], templates: b.templates || [] };
+    connMap = {}; (k.apps || []).forEach(a => connMap[a.id] = a);
+  } catch { /* bridge chưa chạy — giữ state cũ */ }
+  renderBotChip();
+}
+
+function renderBotChip() {
+  const chip = $('#bot-chip');
+  const active = botsState.bots.find(x => x.id === botsState.active);
+  $('#bot-chip-ava').textContent = active ? (active.avatar || '🤖') : '🤖';
+  $('#bot-chip-name').textContent = active ? active.name : t('botGeneral');
+  chip.hidden = false;
+}
+
+function botNeedsHtml(needs) {
+  return (needs || []).map(n => {
+    const a = connMap[n];
+    const ok = a && a.status === 'connected';
+    const nm = (a && a.name) || n;
+    return `<span class="need ${ok ? 'ok' : 'warn'}" title="${ok ? t('botConnOk') : t('botConnWarn')}">${escapeHtml(nm)} ${ok ? '✓' : '⚠'}</span>`;
+  }).join(' ');
+}
+
+$('#bot-chip').onclick = (e) => {
+  e.stopPropagation();
+  const menu = $('#bot-menu');
+  if (!menu.hidden) { menu.hidden = true; return; }
+  const items = botsState.bots.map(x =>
+    `<button class="bot-item${x.id === botsState.active ? ' on' : ''}" data-id="${escapeHtml(x.id)}">` +
+    `<span>${escapeHtml(x.avatar || '🤖')}</span> ${escapeHtml(x.name)}` +
+    (x.id === botsState.active ? ' <span class="need ok">✓</span>' : '') +
+    `</button>`).join('');
+  menu.innerHTML = items +
+    `<button class="bot-item${!botsState.active ? ' on' : ''}" data-id=""><span>🤖</span> ${escapeHtml(t('botGeneral'))}${!botsState.active ? ' <span class="need ok">✓</span>' : ''}</button>` +
+    `<div class="bot-sep"></div>` +
+    `<button class="bot-item" data-new="1"><span>＋</span> ${escapeHtml(t('botNew'))}</button>`;
+  menu.hidden = false;
+  menu.querySelectorAll('.bot-item').forEach(it => {
+    it.onclick = async () => {
+      menu.hidden = true;
+      if (it.dataset.new) { openBotGallery(); return; }
+      try {
+        await bfetch(BRIDGE_URL + '/api/bot', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'activate', id: it.dataset.id || null })
+        });
+        await loadBots();
+        loadManifest();   // recipes đổi theo trợ lý
+      } catch { uiAlert(t('botErr'), ''); }
+    };
+  });
+};
+document.addEventListener('click', () => { const m = $('#bot-menu'); if (m) m.hidden = true; });
+$('#bot-menu').onclick = e => e.stopPropagation();
+
+/* Gallery tạo trợ lý — tái dùng template của onboarding, render vào overlay */
+let galleryTpl = null;
+function openBotGallery() {
+  galleryTpl = null;
+  const g = $('#bot-gallery');
+  g.innerHTML = '';
+  botsState.templates.forEach(tp => {
+    const nm = (tp.suggested_bot_name && (tp.suggested_bot_name[LANG] || tp.suggested_bot_name.vi)) || '';
+    const card = document.createElement('div');
+    card.className = 'bot-gcard';
+    card.innerHTML =
+      `<span class="bot-gava">${escapeHtml(tp.avatar || '🤖')}</span>` +
+      `<div><b>${escapeHtml((tp.name && (tp.name[LANG] || tp.name.vi)) || tp.id)}</b>` +
+      `<small>${escapeHtml((tp.desc && (tp.desc[LANG] || tp.desc.vi)) || '')}</small>` +
+      `<div class="need-row">${botNeedsHtml(tp.needs)}</div></div>`;
+    card.onclick = () => {
+      galleryTpl = tp;
+      g.querySelectorAll('.bot-gcard').forEach(c => c.classList.remove('sel'));
+      card.classList.add('sel');
+      $('#bot-create-row').hidden = false;
+      const inp = $('#bot-create-name');
+      inp.value = nm; inp.focus();
+    };
+    g.appendChild(card);
+  });
+  $('#bot-create-row').hidden = true;
+  $('#bot-overlay').hidden = false;
+}
+$('#bot-close').onclick = () => { $('#bot-overlay').hidden = true; };
+$('#bot-overlay').onclick = e => { if (e.target.id === 'bot-overlay') e.target.hidden = true; };
+$('#bot-create-btn').onclick = async () => {
+  if (!galleryTpl) return;
+  const btn = $('#bot-create-btn');
+  btn.disabled = true; btn.textContent = t('botCreating');
+  try {
+    const name = $('#bot-create-name').value.trim() || galleryTpl.id;
+    const r = await bfetch(BRIDGE_URL + '/api/bot', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'create', name, role: galleryTpl.id, avatar: galleryTpl.avatar,
+        skills: galleryTpl.skills, needs: galleryTpl.needs, recipes: galleryTpl.recipes,
+        instructions: (galleryTpl.instructions && (galleryTpl.instructions[LANG] || galleryTpl.instructions.vi)) || ''
+      })
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.bot) throw 0;
+    await bfetch(BRIDGE_URL + '/api/bot', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'activate', id: d.bot.id })
+    });
+    $('#bot-overlay').hidden = true;
+    await loadBots();
+    loadManifest();
+  } catch { uiAlert(t('botErr'), ''); }
+  btn.disabled = false; btn.textContent = t('botCreateBtn');
+};
+
+loadBots();

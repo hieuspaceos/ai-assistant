@@ -1,5 +1,13 @@
 # Phase 2 — Onboarding gallery + portal bot UI
 
+> **Status: ✅ DONE** — bước gallery sau stepName (7 dots, card theo
+> nghề + badge need, pre-open "office", create+activate trong `finish`
+> SAU setup để có `config.language`); chip bot trên header + dropdown
+> (activate/deactivate/"Tạo trợ lý mới" → overlay gallery); `chat.html`
+> chào bằng tên bot; `phong-van`/`interview` Phase 6 sinh bot. Lưu ý
+> sai khác plan: create KHÔNG gọi ngay trong gallery (lang chưa ghi).
+> Test: 28 xanh, parity warn-only đúng gate, packs xanh.
+
 ## Mục tiêu
 
 Học viên nhìn thấy và chọn được "trợ lý theo nghề" ngay onboarding —
