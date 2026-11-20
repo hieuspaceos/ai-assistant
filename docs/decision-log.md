@@ -3,6 +3,39 @@
 Các quyết định kiến trúc và **tại sao** — để sau này không gỡ ngược lại
 vì quên lý do. Mới nhất lên đầu.
 
+## 2026 — Lock-down 6 phase (audit `plans/261120-1811-lock-down/`)
+
+**Gate token trong shell thay vì flag ttyd.** Vì: test handshake thật
+cho thấy `ttyd -O` chỉ so hostname bỏ qua port — `localhost:3000` vẫn
+được 101. `term-gate.sh`/`.cmd` đòi `BRIDGE_TOKEN` ngay trong process
+được spawn (autofill qua `ttyd -a` + `?arg=`, fallback prompt), áp cả
+3 đường spawn: `start.sh`, `chat-terminal.ps1`, và `launcher.py`
+(bản đóng gói — đường dễ sót nhất). Độc lập protocol ttyd, chặn cả
+rebinding.
+
+**CSP chỉ trên `/my-course/` + `/intro/`, không phải toàn server.** Vì:
+portal `/web/` phải gọi bridge — cùng origin thì CSP chặt sẽ giết chat.
+Nội dung agent/clone sinh ra mới là vùng không tin cậy; `connect-src
+'none'` cắt mọi kênh về bridge còn `img-src` mở cho ảnh bài học.
+
+**`/api/respond` validate pending thay vì tin client.** Vì: trước đây
+nhận `id`/`optionId` tuỳ ý — ai có token tự duyệt được quyền của học
+viên. Map `perm_pending` (TTL 600s, option theo đúng card đã phát)
+được consume một lần; quan trọng: pop SAU khi validate option — pop
+trước thì option rác cũng giết card (DoS nút bấm của học viên).
+
+**Long-poll `/api/poll`, client tự tương thích.** Vì: poll 900ms sinh
+~96 request/ phút cho event hiếm khi có. `wait=` tới 30s + `Condition`
+đánh thức khi broadcast → độ trễ ~0 và ~97% ít request. `.ps1` không
+implement `wait` — HttpListener đơn luồng giữ poll sẽ kẹt luôn
+`/api/prompt`; client phát hiện server trả rỗng ngay thì tự nghỉ 900ms
+như cũ — một giao thức, hai tốc độ, không phải hai phiên bản.
+
+**Serialize `/api/prompt` bằng lock non-blocking, không queue.** Vì:
+queue làm prompt thứ hai "thành công" rồi chạy khi học viên đã quên —
+đúng thứ khiến agent làm việc không ai xin. 409 rõ ràng bắt client
+đối mặt với "trợ lý đang bận" thay vì im lặng đan xen hai lượt.
+
 ## 2026 — Cập nhật: release banner + version handshake
 
 **Banner trong portal là "nút cập nhật" duy nhất.** Vì: học viên không

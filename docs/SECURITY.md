@@ -111,6 +111,8 @@ trong options).
 | Trang `localhost:*` → shell qua ttyd | WS vẫn nối nhưng chỉ gặp `term-gate` đòi mã trong shell — sai mã → exit. Không phụ thuộc flag ttyd nào |
 | Script trong nội dung `my-course/`/`intro/` → bridge | CSP `connect-src 'none'` trên mọi `.html` dưới hai prefix đó — fetch/XHR/WS/beacon đều chết, kể cả gọi `localhost`. Slide iframe thêm `sandbox="allow-scripts"` (opaque origin — tự nó cũng không đọc được localStorage). Clone-view giữ same-origin để edit, CSP gánh. Residual: exfil token qua `<img src=https://…>` vẫn được (`img-src` mở cho ảnh học viên chèn) nhưng token vô dụng ngoài loopback |
 | DNS rebinding → file trên :8080 | `serve.py` reject Host không phải loopback (403); `serve.ps1` đã an toàn sẵn nhờ http.sys prefix `localhost`/`127.0.0.1` |
+| Kẻ có token → tự duyệt quyền | `/api/respond` chỉ nhận `id` đang pending trong map (TTL 600s) + `optionId` phải khớp danh sách đã phát — option sai → 400 nhưng card không bị giết, id hợp lệ dùng một lần rồi tiêu. `__cancel__` cũng phải có id pending |
+| Prompt đan xen → rối session | `/api/prompt` giữ `prompt_lock` (`.ps1`: `$PromptBusy`) — prompt thứ hai trong lúc lượt đang chạy → 409; mở lại khi `done`/`err`/`ready` |
 
 ## permissions.json — ngăn tủ được phép
 

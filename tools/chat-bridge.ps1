@@ -125,6 +125,7 @@ $MaxEvents = 3000
 # Card xin phép chỉ được trả lời khi đang pending — giống chat-bridge.py:
 # /api/respond trước đây nhận id/optionId tuỳ ý → tự duyệt thay học viên.
 $script:PermPending = @{}      # id -> @{ options = @(optionId); ts = epoch }
+$script:PromptBusy = $false    # serialize /api/prompt — 2 prompt đồng thời → 409
 $PermTtl = 600                 # perm treo >10 phút coi như chết
 $PermMax = 200                 # trần chống phình
 
@@ -150,6 +151,7 @@ function Push-Event($ev) {
     [void]$script:EventStore.Add($ev)
     if ($ev.t -in @("ready", "done", "err")) {
         $script:PermPending.Clear()   # lượt mới/kết thúc/lỗi → perm cũ hết hạn
+        $script:PromptBusy = $false   # kết lượt (kể cả não chết → err) → mở prompt
     }
     if ($script:EventStore.Count -gt $MaxEvents) {
         $excess = $script:EventStore.Count - $MaxEvents
@@ -490,14 +492,20 @@ try {
                     Send-Json $ctx @{ err = "đang khởi động lại trợ lý — gửi lại sau vài giây" } 503
                 } elseif (-not $script:SessionId) {
                     Send-Json $ctx @{ err = "chưa có session" } 503
+                } elseif ($script:PromptBusy) {
+                    # loop single-threaded nên cờ này không cần lock — chỉ
+                    # được set bởi chính handler này, clear ở Push-Event
+                    Send-Json $ctx @{ err = "trợ lý đang xử lý câu trước" } 409
                 } else {
                     try {
+                        $script:PromptBusy = $true
                         Call-Acp "session/prompt" @{
                             sessionId = $script:SessionId
                             prompt = @(@{ type = "text"; text = $body.text })
                         } | Out-Null
                         Send-Json $ctx @{ ok = $true }
                     } catch {
+                        $script:PromptBusy = $false   # gửi hỏng → không kẹt busy
                         Send-Json $ctx @{ err = "trợ lý đã dừng — chạy lại file start" } 503
                     }
                 }

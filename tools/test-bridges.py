@@ -4,7 +4,7 @@
 Spawn mỗi bridge THẬT trên port động với CWD tạm (não giả → dead ngay
 nhưng bridge vẫn sống — đúng thiết kế). Không cần dep ngoài, không cần
 não thật. Chạy: python3 tools/test-bridges.py"""
-import json, os, secrets, shutil, socket, subprocess, sys, tempfile, time
+import json, os, secrets, shutil, socket, subprocess, sys, tempfile, threading, time
 import urllib.error, urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -92,6 +92,7 @@ def make_workdir():
 
 def main():
     wd = make_workdir()
+    wd2 = None
     procs = []
     try:
         # ---- chat-bridge ----
@@ -390,6 +391,78 @@ def main():
         check("29. pending-perm map cả hai nền tảng",
               "perm_pending" in src_cb and "PERM_TTL" in src_cb
               and "PermPending" in src_cbps and "PermTtl" in src_cbps)
+
+        # ---- lock-down ph-5: long-poll /api/poll + serialize /api/prompt ----
+        # 30: không có event mới → bridge giữ request đúng ~wait ms rồi trả rỗng
+        s, b, _ = http("GET", b3 + f"/api/poll?since=0&token={TOKEN}")
+        nxt = b.get("next", 0)
+        t0 = time.time()
+        s, b, _ = http("GET", b3 +
+                       f"/api/poll?since={nxt}&wait=300&token={TOKEN}")
+        el = time.time() - t0
+        check("30. long-poll chờ ~wait rồi trả rỗng",
+              s == 200 and 0.15 <= el <= 3
+              and not b.get("events") and not b.get("reset"),
+              f"{el:.2f}s {str(b)[:60]}")
+
+        # 31 + 32 cần não giả SỐNG (bridge với não chết không giữ busy được):
+        # workdir riêng, brain là script python trả lời ACP tối thiểu
+        wd2 = make_workdir()
+        fake = os.path.join(wd2, "fake-brain.py")
+        with open(fake, "w", encoding="utf-8") as f:
+            f.write(
+                "import json, sys\n"
+                "for line in sys.stdin:\n"
+                "    try: m = json.loads(line)\n"
+                "    except Exception: continue\n"
+                "    mid, meth = m.get('id'), m.get('method')\n"
+                "    if meth == 'initialize':\n"
+                "        print(json.dumps({'jsonrpc':'2.0','id':mid,"
+                "'result':{'protocolVersion':1}}), flush=True)\n"
+                "    elif meth == 'session/new':\n"
+                "        print(json.dumps({'jsonrpc':'2.0','id':mid,"
+                "'result':{'sessionId':'s1'}}), flush=True)\n"
+                "    elif meth == 'session/prompt':\n"
+                "        print(json.dumps({'jsonrpc':'2.0',"
+                "'method':'session/update','params':{'sessionId':'s1',"
+                "'update':{'sessionUpdate':'agent_message_chunk',"
+                "'content':{'type':'text','text':'pong'}}}}), flush=True)\n")
+        json.dump({"id": "fake", "cmd": sys.executable, "args": [fake]},
+                  open(os.path.join(wd2, "brain.json"), "w"))
+        cb4 = free_port()
+        procs.append(spawn("chat-bridge.py", cb4, wd2))
+        b4 = f"http://127.0.0.1:{cb4}"
+        check("31. não giả lên", wait_health(b4 + "/api/health"))
+
+        # chờ session sẵn (ready) rồi lấy cursor mới nhất
+        ready, nxt4 = False, 0
+        for _ in range(50):
+            s, b, _ = http("GET", b4 + f"/api/poll?since=0&token={TOKEN}")
+            if any(e.get("t") == "ready" for e in b.get("events", [])):
+                ready, nxt4 = True, b.get("next", 0)
+                break
+            time.sleep(0.1)
+        check("31a. não giả có session", ready)
+
+        # 31: long-poll đang chờ → prompt tới → event chunk đánh thức sớm
+        got = {}
+        def _longpoll():
+            got["r"] = http("GET", b4 +
+                            f"/api/poll?since={nxt4}&wait=3000&token={TOKEN}")
+        th = threading.Thread(target=_longpoll, daemon=True)
+        t0 = time.time(); th.start(); time.sleep(0.4)
+        s, b, _ = http("POST", b4 + f"/api/prompt?token={TOKEN}", {"text": "hi"})
+        check("31b. prompt đầu → 200", s == 200, str(s))
+        th.join(timeout=6); el = time.time() - t0
+        r = got.get("r") or (-1, {}, {})
+        check("31c. long-poll dậy sớm khi có event",
+              r[0] == 200 and el < 2.5
+              and any(e.get("text") == "pong" for e in r[1].get("events", [])),
+              f"{el:.2f}s {str(r[1])[:60]}")
+
+        # 32: não giả không bao giờ gửi stopReason → lượt vẫn mở → busy
+        s, b, _ = http("POST", b4 + f"/api/prompt?token={TOKEN}", {"text": "nữa"})
+        check("32. prompt thứ 2 trong lượt → 409", s == 409, str(s))
     finally:
         for p in procs:
             try:
@@ -397,6 +470,8 @@ def main():
             except Exception:
                 pass
         shutil.rmtree(wd, ignore_errors=True)
+        if wd2:
+            shutil.rmtree(wd2, ignore_errors=True)
 
     print(f"\n{'PASS' if not fails else 'FAIL'} — "
           f"{len(passed)} xanh, {len(fails)} đỏ")
