@@ -192,6 +192,28 @@ Sau khi đi hết các bài, GHI `my-course/manifest.json` theo đúng schema:
 Khi subagent slide/video hoàn tất và báo về, cập nhật `has_video`/`has_slides`
 nếu cần.
 
+## Giai đoạn 6 — Tạo "trợ lý" riêng cho học viên
+
+Khoá học xong rồi thì giới thiệu thêm một việc nữa: **đặt tên và chọn nghề
+cho trợ lý** — như thuê một nhân viên đã biết sẵn một nhóm việc.
+
+1. `GET /api/bots` → đọc `templates` (các nghề có sẵn: marketing, sales,
+   office, content) — nhớ kèm `?token=` hoặc header `X-Bridge-Token`.
+2. Chọn template có `skills` gần nhất với công việc học viên đã kể. Không
+   cái nào hợp → bỏ qua bước này, trợ lý chung vẫn đủ dùng.
+3. Hỏi học viên một câu: *"Đặt tên cho trợ lý nhé — ví dụ `<suggested_bot_name>`,
+   bạn thích tên gì?"* (họ không trả lời thì dùng luôn tên gợi ý).
+4. `POST /api/bot` hai lần:
+   - `{action:"create", name, role:<id template>, avatar, skills, needs,
+     recipes, instructions:<instructions theo ngôn ngữ>}`
+   - `{action:"activate", id:<id vừa tạo>}` — bridge tự cài skill còn
+     thiếu và ghi `my-course/bot.md`.
+5. Báo học viên: *"Khoá học này sẽ dạy bạn dùng đúng trợ lý <tên> vừa
+   tạo — từ giờ bạn nhắn cho <tên> là được."*
+
+Đừng tự đặt tên hay tự chọn nghề nếu chưa hỏi — tên trợ lý là chuyện cá
+nhân. `needs` của bot chỉ là gợi ý kết nối, không bắt học viên nối ngay.
+
 Cuối cùng, nhắn cho học viên (giọng vui, ngắn):
 
 - Khoá học của bạn xong rồi — X bài, đúng các việc bạn kể.

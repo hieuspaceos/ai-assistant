@@ -7,7 +7,7 @@
 <meta name="description" content="Trợ lý AI tiếng Việt làm việc thật trên máy bạn — đọc Zalo, xử lý file, cập nhật Sheet — và tự dạy bạn dùng nó qua một khoá học riêng.">
 <link rel="stylesheet" href="vendor/fonts.css">
 <link rel="icon" type="image/svg+xml" href="logo.svg">
-<link rel="stylesheet" href="styles.css?v=15">
+<link rel="stylesheet" href="styles.css?v=16">
 </head>
 <body>
 <header>
@@ -32,6 +32,8 @@
     <button data-tab="chat" class="tab chat-tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5c-1.6 0-3.1-.4-4.4-1.2L3 20l1.2-5.1A8.5 8.5 0 1 1 21 11.5z"/></svg><span data-i18n="tabAsk">Hỏi trợ lý</span></button>
   </div>
   <div id="learner-name"></div>
+  <button id="bot-chip" type="button" hidden title="Đổi trợ lý" data-i18n-title="botChipTitle"><span id="bot-chip-ava">🤖</span><span id="bot-chip-name">Trợ lý</span><span class="bot-chip-caret">▾</span></button>
+  <div id="bot-menu" hidden></div>
   <div id="ext-status" title="Trạng thái cánh tay trình duyệt (extension Trợ Lý AI)" data-i18n-title="extTitle"><span class="dot"></span><span id="ext-status-text">…</span></div>
 </header>
 
@@ -120,6 +122,21 @@
   </div>
 </div>
 
+<!-- Gallery tạo trợ lý theo nghề — mở từ menu chip trên header -->
+<div id="bot-overlay" hidden>
+  <div id="bot-panel" role="dialog" aria-label="Tạo trợ lý">
+    <div class="settings-head">
+      <span data-i18n="botNewTitle">Tạo trợ lý mới</span>
+      <button id="bot-close" type="button" title="Đóng" data-i18n-title="closeTitle">×</button>
+    </div>
+    <div id="bot-gallery"></div>
+    <div id="bot-create-row" hidden>
+      <input id="bot-create-name" data-i18n-ph="botNamePh" placeholder="Tên trợ lý…">
+      <button id="bot-create-btn" class="mini-btn" data-i18n="botCreateBtn">Tạo</button>
+    </div>
+  </div>
+</div>
+
 <!-- Hộp thoại xác nhận/báo lỗi — thay confirm/alert mặc định của trình duyệt -->
 <div id="dlg-overlay" hidden>
   <div id="dlg-panel" role="alertdialog" aria-modal="true">
@@ -143,6 +160,6 @@ bfetch('http://localhost:7682/api/config', { signal: cfgSignal })
   .then(c => { if (!c.language) location.replace('onboarding.html'); })
   .catch(() => { /* bridge chưa chạy → cứ hiện portal */ });
 </script>
-<script src="app.js?v=14"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>

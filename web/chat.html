@@ -171,6 +171,7 @@ const STR = {
             {label: 'Học một bài', text: '/hoc-bai'},
             {label: 'Giúp em việc này…', text: ''}],
     hello: 'Xin chào! Mình là trợ lý AI của bạn. Bạn cứ nhắn như nhắn tin cho một người giúp việc.\n\nChưa biết bắt đầu từ đâu thì gõ **`/phong-van`**, mình sẽ hỏi vài câu rồi thiết kế khoá học riêng cho bạn.',
+    helloBot: 'Xin chào! Mình là **{n}** — trợ lý của bạn. Bạn cứ nhắn như nhắn tin cho một người giúp việc.\n\nChưa biết bắt đầu từ đâu thì gõ **`/phong-van`**, mình sẽ hỏi vài câu rồi thiết kế khoá học riêng cho bạn.',
     ph: 'Nhắn cho trợ lý… (VD: /phong-van) · Enter gửi, Shift+Enter xuống dòng',
     send: 'Gửi', busy: 'Trợ lý đang làm việc', permSuffix: ' — bạn cho phép không?',
     noOpt: 'Không đồng ý', errPfx: 'Ừm, có lỗi nhỏ: ',
@@ -180,6 +181,7 @@ const STR = {
             {label: 'Learn a lesson', text: '/tutor'},
             {label: 'Help me with…', text: ''}],
     hello: 'Hi! I\'m your AI assistant — just message me like you\'d message a helpful coworker.\n\nNot sure where to start? Type **`/interview`** and I\'ll ask a few questions, then design a course just for you.',
+    helloBot: 'Hi! I\'m **{n}** — your assistant. Just message me like you\'d message a helpful coworker.\n\nNot sure where to start? Type **`/interview`** and I\'ll ask a few questions, then design a course just for you.',
     ph: 'Message the assistant… (e.g. /interview) · Enter sends, Shift+Enter new line',
     send: 'Send', busy: 'The assistant is working', permSuffix: ' — allow it?',
     noOpt: 'Decline', errPfx: 'Hmm, small hiccup: ',
@@ -199,9 +201,18 @@ function applyStrings() {
   statusEl.textContent = S.busy;
 }
 applyStrings();
+let botName = '';
 bfetch(BRIDGE + '/api/config').then(r => r.json()).then(c => {
   if (c.language === 'en') { S = STR.en; applyStrings(); }
 }).catch(() => {});
+// bot active → lời chào mang tên riêng ("Hằng nghe đây")
+bfetch(BRIDGE + '/api/bots').then(r => r.json()).then(b => {
+  const act = (b.bots || []).find(x => x.id === b.active);
+  if (act) botName = act.name;
+}).catch(() => {});
+function greeting() {
+  return botName ? S.helloBot.replace('{n}', botName) : S.hello;
+}
 
 let curBubble = null;
 function md(text) {
@@ -339,7 +350,7 @@ input.addEventListener('keydown', e => {
 function handleEvent(ev) {
   if (ev.t === 'ready') {
     if (!msgs.children.length) {
-      say(S.hello);
+      say(greeting());
       curBubble = null;   // lời agent đầu tiên phải ra bubble riêng, không nối vào lời chào
     }
   }

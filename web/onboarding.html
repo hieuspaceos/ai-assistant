@@ -48,6 +48,16 @@ button.btn { padding:12px 26px; border:none; border-radius:12px; font-size:15px;
 .badge.off { background:#f0f1f3; color:var(--mut); }
 .opt.dis { opacity:.55; cursor:default; }
 .opt.dis:hover { border-color:var(--line); }
+.bot-card { align-items:flex-start; }
+.bot-card .flag { font-size:26px; margin-top:2px; }
+.need-row { margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+.need-row .note { margin-top:0; }
+.need { font-size:11.5px; padding:2px 9px; border-radius:9px; font-weight:600; }
+.need.ok { background:#e8f5e9; color:#2e7d32; }
+.need.warn { background:#f0f1f3; color:#9a6a00; }
+.bot-pick { margin-top:10px; display:flex; gap:8px; align-items:center; }
+.bot-pick .note { margin-top:0; flex-shrink:0; }
+.bot-pick input { flex:1; margin-bottom:0; padding:9px 12px; font-size:14px; }
 </style>
 </head>
 <body>
@@ -114,6 +124,15 @@ const T = {
     brainCostFree:'miễn phí', brainCostByok:'app miễn phí', brainCostPaid:'trả phí',
     brainRec:'gợi ý',
     brainNeedInstall:'Não này chưa cài — bấm "Cài não này" bên dưới nó, xong bấm kiểm tra lại',
+    botPick:'Chọn trợ lý của bạn',
+    botPickLead:'Mỗi trợ lý giống một nhân viên đã biết sẵn một nhóm việc. Chọn người hợp công việc của bạn nhất — đổi sau được.',
+    botNeeds:'Cần nối:',
+    botConnOk:'đã nối', botConnWarn:'chưa nối — nối sau cũng được',
+    botNameLbl:'Đặt tên cho trợ lý',
+    botUse:'Chọn trợ lý này',
+    botSkip:'Bỏ qua — dùng trợ lý chung',
+    botCreating:'Đang tạo trợ lý…',
+    botErr:'Chưa tạo được trợ lý — bỏ qua bước này cũng được',
   },
   en: {
     sub:'first-time setup', welcome:'Hi there! Pick a language first',
@@ -147,6 +166,15 @@ const T = {
     brainCostFree:'free', brainCostByok:'free app', brainCostPaid:'paid',
     brainRec:'suggested',
     brainNeedInstall:'This brain isn\'t installed — use "Install this brain" below it, then check again',
+    botPick:'Pick your assistant',
+    botPickLead:'Each assistant is like a coworker who already knows one set of tasks. Pick whoever fits your work — you can switch later.',
+    botNeeds:'Needs:',
+    botConnOk:'connected', botConnWarn:'not connected — you can connect later',
+    botNameLbl:'Name your assistant',
+    botUse:'Pick this assistant',
+    botSkip:'Skip — use the general assistant',
+    botCreating:'Creating your assistant…',
+    botErr:'Couldn\'t create the assistant — skipping this step is fine too',
   },
 };
 
@@ -170,8 +198,8 @@ let brainData = null, selBrain = '', customBrain = '';
 
 function t(k){ return T[lang][k]; }
 function el(html){ const d=document.createElement('div'); d.innerHTML=html.trim(); return d.firstChild; }
-function dots(){ const d=document.getElementById('dots'); d.innerHTML=''; for(let i=0;i<6;i++) d.appendChild(el(`<div class="step-dot${i<=stepIdx?' on':''}"></div>`)); }
-function go(i){ stepIdx=i; dots(); [stepLang,stepName,stepBrain,stepFolder,stepApps,stepDone][i](); }
+function dots(){ const d=document.getElementById('dots'); d.innerHTML=''; for(let i=0;i<7;i++) d.appendChild(el(`<div class="step-dot${i<=stepIdx?' on':''}"></div>`)); }
+function go(i){ stepIdx=i; dots(); [stepLang,stepName,stepBot,stepBrain,stepFolder,stepApps,stepDone][i](); }
 
 function stepLang(){
   const s=document.getElementById('step');
@@ -198,6 +226,62 @@ function stepName(){
   const next=()=>{ learnerName=inp.value.trim(); go(2); };
   s.querySelector('.pri').onclick=next;
   inp.onkeydown=e=>{ if(e.key==='Enter') next(); };
+}
+
+// Gallery trợ lý theo nghề: thẻ = nhân viên đã biết một nhóm việc.
+// KHÔNG chặn vì connection thiếu — badge ⚠ chỉ để báo trước.
+let selTpl = null, botName = '';
+function stepBot(){
+  const s=document.getElementById('step');
+  s.innerHTML=`<h1>${t('botPick')}</h1><p class="lead">${t('botPickLead')}</p>
+    <div class="opts" id="bots"><p class="note">${t('brainLoading')}</p></div>
+    <p class="err" id="botErr"></p>
+    <div class="row" style="margin-top:22px"><button class="btn ghost">${t('back')}</button>
+      <button class="btn" id="skip">${t('botSkip')}</button>
+      <button class="btn pri" id="bnext">${t('next')}</button></div>`;
+  const box=s.querySelector('#bots');
+  Promise.all([
+    bfetch(BRIDGE+'/api/bots').then(r=>r.json()),
+    bfetch(BRIDGE+'/api/connections').then(r=>r.json()).catch(()=>({apps:[]}))
+  ]).then(([b,k])=>{
+    const conn={}; (k.apps||[]).forEach(a=>conn[a.id]=a);
+    box.innerHTML='';
+    (b.templates||[]).forEach(tp=>{
+      const needs=(tp.needs||[]).map(n=>{
+        const a=conn[n]; const ok=a&&a.status==='connected';
+        const nm=(a&&a.name)||n;
+        return `<span class="need ${ok?'ok':'warn'}" title="${ok?t('botConnOk'):t('botConnWarn')}">${nm} ${ok?'✓':'⚠'}</span>`;
+      }).join(' ');
+      const nm=(tp.suggested_bot_name&&tp.suggested_bot_name[lang])||tp.suggested_bot_name?.vi||'';
+      const card=el(`<div class="opt bot-card${selTpl===tp?' sel':''}">
+        <span class="flag">${tp.avatar||'🤖'}</span>
+        <div><b>${(tp.name&&tp.name[lang])||tp.id}</b>
+          <small>${(tp.desc&&tp.desc[lang])||''}</small>
+          <div class="need-row"><span class="note">${t('botNeeds')}</span> ${needs}</div>
+          <div class="bot-pick" style="display:none">
+            <label class="note">${t('botNameLbl')}</label>
+            <input type="text" class="bot-name" value="${nm}">
+          </div>
+        </div></div>`);
+      const pick=card.querySelector('.bot-pick');
+      const open=()=>{ selTpl=tp;
+        box.querySelectorAll('.bot-card').forEach(c=>{c.classList.remove('sel'); c.querySelector('.bot-pick').style.display='none';});
+        card.classList.add('sel'); pick.style.display='';
+        const inp=pick.querySelector('.bot-name'); inp.focus();
+        inp.oninput=e=>{ botName=e.target.value; };
+        botName=inp.value; };
+      card.onclick=open;
+      card._tpl=tp;
+      box.appendChild(card);
+    });
+    // gợi ý sẵn "office" cho ai không biết chọn — chỉ mở sẵn, không tự tạo
+    const off=[...box.querySelectorAll('.bot-card')].find(c=>c._tpl.id==='office');
+    if(!selTpl&&off) off.click();
+  }).catch(()=>{ box.innerHTML=`<p class="note">${t('errBridge')}</p>`; });
+  s.querySelector('.ghost').onclick=()=>go(1);
+  // "Bỏ qua" xoá lựa chọn rồi đi tiếp; "Tiếp" giữ lựa chọn (nếu có)
+  s.querySelector('#skip').onclick=()=>{ selTpl=null; go(3); };
+  s.querySelector('#bnext').onclick=()=>go(3);
 }
 
 function stepBrain(){
@@ -270,7 +354,7 @@ function stepBrain(){
   };
   bfetch(BRIDGE+'/api/brain').then(r=>r.json()).then(show)
     .catch(()=>{ bl.innerHTML=`<p class="note">${t('errBridge')}</p>`; });
-  s.querySelector('.ghost').onclick=()=>go(1);
+  s.querySelector('.ghost').onclick=()=>go(2);
   s.querySelector('#bn').onclick=async()=>{
     const err=s.querySelector('#be'); err.textContent='';
     let payload=null;
@@ -283,12 +367,12 @@ function stepBrain(){
       if(picked&&!picked.installed){ err.textContent=t('brainNeedInstall'); return; }
       payload={id:selBrain};
     }
-    if(!payload) return go(3);
+    if(!payload) return go(4);
     try{
       const r=await bfetch(BRIDGE+'/api/brain',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
       const d=await r.json().catch(()=>({}));
       if(!r.ok){ err.textContent=d.err||t('brainErr'); return; }
-      go(3);
+      go(4);
     }catch(e){ err.textContent=t('errBridge'); }
   };
 }
@@ -322,8 +406,8 @@ function stepFolder(){
   };
   s.querySelector('#cfbtn').onclick=addCustom;
   s.querySelector('#cf').onkeydown=e=>{ if(e.key==='Enter') addCustom(); };
-  s.querySelector('.ghost').onclick=()=>go(2);
-  s.querySelector('.row .pri').onclick=()=>go(4);
+  s.querySelector('.ghost').onclick=()=>go(3);
+  s.querySelector('.row .pri').onclick=()=>go(5);
 }
 
 function stepApps(){
@@ -349,7 +433,7 @@ function stepApps(){
       al.appendChild(c);
     });
   }
-  s.querySelector('.ghost').onclick=()=>go(3);
+  s.querySelector('.ghost').onclick=()=>go(4);
   s.querySelector('#fin').onclick=finish;
 }
 
@@ -375,9 +459,21 @@ async function finish(){
           body:JSON.stringify({app:{id,name:(p?p[lang]:id),type:(p&&p.type)||'browser',status:'not-connected'}})}).catch(()=>{});
       }
     }
+    // Trợ lý theo nghề chọn ở gallery — tạo + activate SAU setup vì
+    // activate đọc config.language để map skill vi→en đúng
+    if(selTpl){
+      const r=await bfetch(BRIDGE+'/api/bot',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'create',name:botName,role:selTpl.id,avatar:selTpl.avatar,
+          skills:selTpl.skills,needs:selTpl.needs,recipes:selTpl.recipes,
+          instructions:(selTpl.instructions&&selTpl.instructions[lang])||''})});
+      const d=await r.json().catch(()=>({}));
+      if(r.ok&&d.bot)
+        await bfetch(BRIDGE+'/api/bot',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({action:'activate',id:d.bot.id})}).catch(()=>{});
+    }
   }catch(e){ btn.disabled=false; btn.textContent=t('next'); return; }
   tryPairExt();   // setup xong → gửi mã kết nối cho extension (nếu đã cài)
-  go(5);
+  go(6);
 }
 
 function stepDone(){
