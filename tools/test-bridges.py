@@ -169,6 +169,43 @@ def main():
         check("16b. setup ghi recipes vi vào manifest",
               any(r.get("command") == "/clone-trang"
                   for r in mf.get("recipes", [])), str(mf.get("recipes"))[:80])
+
+        # ---- chat history persist: seed file → respawn → replay ----
+        procs[0].terminate(); procs[0].wait(timeout=8); procs.pop(0)
+        hist = os.path.join(wd, ".logs", "chat-history.jsonl")
+        os.makedirs(os.path.dirname(hist), exist_ok=True)
+        with open(hist, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"t": "text", "text": "lịch sử cũ"}) + "\n")
+            f.write(json.dumps({"t": "perm", "id": 1, "title": "card treo"}) + "\n")
+            f.write(json.dumps({"t": "done"}) + "\n")
+        cb2 = free_port()
+        procs.append(spawn("chat-bridge.py", cb2, wd))
+        b2 = f"http://127.0.0.1:{cb2}"
+        check("17. respawn sau khi có history", wait_health(b2 + "/api/health"))
+        s, b, _ = http("GET", b2 + f"/api/poll?since=0&token={TOKEN}")
+        evs = b.get("events", [])
+        check("17a. replay event cũ",
+              any(e.get("text") == "lịch sử cũ" for e in evs), str(evs)[:80])
+        check("17b. bỏ event perm treo",
+              not any(e.get("t") == "perm" for e in evs))
+
+        # ---- rotate: file > 2MB → startup giữ MAX_EVENTS dòng cuối ----
+        procs[-1].terminate(); procs[-1].wait(timeout=8); procs.pop()
+        line = json.dumps({"t": "text", "text": "x" * 330}) + "\n"   # ~360B
+        with open(hist, "w", encoding="utf-8") as f:
+            for _ in range(7000):            # ~2.5MB > 2MB; tail 3000 ≈ 1.1MB
+                f.write(line)
+            f.write(json.dumps({"t": "text", "text": "dòng cuối"}) + "\n")
+        cb3 = free_port()
+        procs.append(spawn("chat-bridge.py", cb3, wd))
+        b3 = f"http://127.0.0.1:{cb3}"
+        check("18. respawn rotate", wait_health(b3 + "/api/health"))
+        check("18a. file truncate ≤ 2MB",
+              os.path.getsize(hist) <= 2 * 1024 * 1024,
+              str(os.path.getsize(hist)))
+        s, b, _ = http("GET", b3 + f"/api/poll?since=0&token={TOKEN}")
+        check("18b. replay sau rotate",
+              any(e.get("text") == "dòng cuối" for e in b.get("events", [])))
     finally:
         for p in procs:
             try:

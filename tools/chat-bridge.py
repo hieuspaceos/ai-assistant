@@ -162,6 +162,60 @@ event_base = 0            # số event đã cắt khỏi đầu — cursor poll 
 MAX_EVENTS = 3000
 store_lock = threading.Lock()
 
+# Lịch sử chat persist: mỗi dòng một event JSON — restart bridge (tắt máy,
+# đổi não) replay lại để portal không mất ngữ cảnh. .logs/ chỉ launcher tạo
+# — chạy trực tiếp (start.sh) thì chưa chắc có, phải tự makedirs nếu không
+# history âm thầm không bao giờ ghi trên máy cài mới.
+HIST_FP = os.path.join(os.path.abspath(CWD), ".logs", "chat-history.jsonl")
+HIST_MAX_BYTES = 2 * 1024 * 1024
+os.makedirs(os.path.dirname(HIST_FP), exist_ok=True)
+_hist_permed = False
+
+def hist_write(ev):
+    global _hist_permed
+    try:
+        with open(HIST_FP, "a", encoding="utf-8") as f:
+            f.write(json.dumps(ev, ensure_ascii=False) + "\n")
+        if not _hist_permed:      # history chứa nội dung chat — chỉ chủ đọc
+            try: os.chmod(HIST_FP, 0o600)
+            except OSError: pass
+            _hist_permed = True
+    except OSError:
+        pass
+
+def rotate_history():
+    # file > 2MB → giữ MAX_EVENTS dòng cuối, không để phình mãi trên máy
+    try:
+        if os.path.getsize(HIST_FP) <= HIST_MAX_BYTES:
+            return
+        with open(HIST_FP, encoding="utf-8-sig") as f:
+            lines = f.readlines()[-MAX_EVENTS:]
+        with open(HIST_FP, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+    except OSError:
+        pass
+
+def replay_history():
+    global event_base
+    try:
+        with open(HIST_FP, encoding="utf-8-sig") as f:
+            for line in f:
+                try:
+                    ev = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if ev.get("t") == "perm":
+                    continue        # card xin phép là transient — bỏ
+                with store_lock:
+                    event_store.append(ev)
+    except OSError:
+        return
+    with store_lock:
+        excess = len(event_store) - MAX_EVENTS
+        if excess > 0:
+            del event_store[:excess]
+            event_base += excess
+
 # Chỉ trang local được gọi API từ browser: Origin có host là
 # localhost/127.0.0.1/[::1] ở BẤT KỲ port nào (portal có thể chạy port khác
 # khi 8080 bận). Request không có Origin (curl / Invoke-RestMethod từ agent)
@@ -182,6 +236,7 @@ def broadcast(ev):
         if excess > 0:
             del event_store[:excess]
             event_base += excess
+    hist_write(ev)          # ghi ngoài lock — IO chậm không chặn stream
 
 class Acp:
     def __init__(self, brain):
@@ -755,6 +810,8 @@ def spawn_brain():
         acp.call("session/new", {"cwd": CWD, "mcpServers": []})
 
 if __name__ == "__main__":
+    rotate_history()
+    replay_history()
     spawn_brain()
     print(f"chat-bridge: http://localhost:{PORT}  (cwd={CWD})")
     ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
