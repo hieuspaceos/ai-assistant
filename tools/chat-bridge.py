@@ -24,7 +24,7 @@ Event (JSON trong mảng events):
   {"t":"done"}                       - agent nói xong một lượt
   {"t":"err","msg":"..."}
 """
-import hmac, json, os, re, secrets, shutil, subprocess, sys, threading, time, urllib.parse, urllib.request
+import hmac, json, os, re, secrets, shutil, subprocess, sys, threading, time, unicodedata, urllib.parse, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 7682
@@ -359,6 +359,9 @@ CONN_FP = os.path.join(MC_DIR, "connections.json")
 CONFIG_FP = os.path.join(MC_DIR, "config.json")
 SKILL_PACKS = os.path.join(os.path.abspath(CWD), ".devin", "skill-packs")
 SKILLS_DIR = os.path.join(os.path.abspath(CWD), ".devin", "skills")
+ROLES_DIR = os.path.join(SKILL_PACKS, "roles")
+BOTS_FP = os.path.join(MC_DIR, "bots.json")
+BOT_MD_FP = os.path.join(MC_DIR, "bot.md")
 
 def load_json(fp, fallback):
     # utf-8-sig: file ghi bằng PowerShell (Set-Content UTF8) có BOM —
@@ -455,6 +458,84 @@ def run_probe(probe):
         return {"ok": False, "msg": "có lỗi khi kiểm tra — nhờ trợ lý xem giúp"}
     return {"ok": False, "msg": "kiểu kết nối lạ — nhờ trợ lý xem"}
 
+# --- Bot (trợ lý theo nghề) -------------------------------------------------
+# Bot = tên + avatar + tham chiếu skill + instructions. Skill pool
+# .devin/skills/ dùng chung — bot chỉ trỏ tên, không sở hữu, nên đổi/xoá bot
+# không mất skill. Template theo nghề nằm trong skill-packs/roles/*.json.
+
+def slug_id(s):
+    s = unicodedata.normalize("NFKD", str(s))
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    s = s.replace("đ", "d").replace("Đ", "D")
+    s = re.sub(r"[^a-zA-Z0-9]+", "-", s).strip("-").lower()
+    return s or "bot"
+
+def role_templates():
+    if not os.path.isdir(ROLES_DIR):
+        return []
+    out = []
+    for f in sorted(os.listdir(ROLES_DIR)):
+        if f.endswith(".json"):
+            t = load_json(os.path.join(ROLES_DIR, f), None)
+            if isinstance(t, dict) and t.get("id"):
+                out.append(t)
+    return out
+
+def write_bot_md(bot):
+    cfg = load_json(CONFIG_FP, {})
+    lang = cfg.get("language") or "vi"
+    ins = bot.get("instructions", "")
+    if isinstance(ins, dict):
+        ins = ins.get(lang) or ins.get("vi") or ""
+    os.makedirs(MC_DIR, exist_ok=True)
+    with open(BOT_MD_FP, "w", encoding="utf-8") as f:
+        f.write(f"# Trợ lý đang làm việc: {bot.get('name','')} "
+                f"({bot.get('role','')})\n\n{ins}\n\n"
+                "_Mọi luật an toàn trong AGENTS.md đứng trên file này._\n")
+
+def activate_bot(bot):
+    """Cài skill còn thiếu + ghi bot.md + gộp recipes vào manifest.
+    Trả về list tên skill không cài được (để báo học viên)."""
+    cfg = load_json(CONFIG_FP, {})
+    lang = cfg.get("language") or "vi"
+    smap = load_json(os.path.join(SKILL_PACKS, "skill-map.json"), {})
+    missing = []
+    os.makedirs(SKILLS_DIR, exist_ok=True)
+    for s in bot.get("skills") or []:
+        if lang == "en":
+            if s not in smap:
+                missing.append(s)   # không map được → báo rõ, không cài nhầm
+                continue
+            name = smap[s]
+        else:
+            name = s
+        dst = os.path.join(SKILLS_DIR, name)
+        src = os.path.join(SKILL_PACKS, lang, name)
+        if os.path.isdir(dst):
+            continue               # skill đang có — không bao giờ đè
+        if os.path.isdir(src):
+            shutil.copytree(src, dst)
+        else:
+            missing.append(name)
+    write_bot_md(bot)
+    # gộp recipes của bot vào manifest — giữ recipes chung, không đè
+    mf = os.path.join(MC_DIR, "manifest.json")
+    m = load_json(mf, {})
+    rec = m.get("recipes") if isinstance(m.get("recipes"), list) else []
+    have = {r.get("command") for r in rec if isinstance(r, dict)}
+    for r in bot.get("recipes") or []:
+        if isinstance(r, dict) and r.get("command") not in have:
+            rec.append(r)
+    m["recipes"] = rec
+    save_json(mf, m)
+    return missing
+
+def deactivate_bot():
+    try:
+        os.remove(BOT_MD_FP)
+    except OSError:
+        pass
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -536,6 +617,11 @@ class Handler(BaseHTTPRequestHandler):
             self._json(load_json(CONN_FP, {"apps": []}))
         elif path == "/api/config":
             self._json(load_json(CONFIG_FP, {}))
+        elif path == "/api/bots":
+            b = load_json(BOTS_FP, {"active": None, "bots": []})
+            self._json({"active": b.get("active"),
+                        "bots": b.get("bots") or [],
+                        "templates": role_templates()})
         else:
             self._json({"err": "not found"}, 404)
 
@@ -779,6 +865,79 @@ class Handler(BaseHTTPRequestHandler):
             app["check_message"] = res["msg"]
             save_json(CONN_FP, k)
             self._json(res)
+        elif path == "/api/bot":
+            action = str(data.get("action", ""))
+            b = load_json(BOTS_FP, {"active": None, "bots": []})
+            bots = b.setdefault("bots", [])
+            if action == "create":
+                name = str(data.get("name", "")).strip()[:60]
+                role = str(data.get("role", "")).strip()[:40]
+                ins = str(data.get("instructions", "")).strip()
+                if not name:
+                    self._json({"err": "thiếu tên bot"}, 400); return
+                if len(ins) > 500:
+                    self._json({"err": "lời dặn quá 500 chữ — viết ngắn lại giúp"}, 400); return
+                bid = slug_id(name + "-" + role)
+                base, n = bid, 2
+                while any(x.get("id") == bid for x in bots):
+                    bid = f"{base}-{n}"; n += 1
+                bot = {"id": bid, "name": name, "role": role,
+                       "avatar": str(data.get("avatar", ""))[:8],
+                       "skills": [str(s)[:40] for s in
+                                  (data.get("skills") if isinstance(data.get("skills"), list) else [])],
+                       "needs": [str(s)[:40] for s in
+                                 (data.get("needs") if isinstance(data.get("needs"), list) else [])],
+                       "recipes": data.get("recipes") if isinstance(data.get("recipes"), list) else [],
+                       "instructions": ins,
+                       "triggers": []}
+                bots.append(bot)
+                save_json(BOTS_FP, b)
+                self._json({"ok": True, "bot": bot})
+            elif action == "activate":
+                bid = data.get("id")
+                if bid in (None, ""):
+                    # bỏ chọn → trợ lý chung, xoá bot.md
+                    b["active"] = None
+                    deactivate_bot()
+                    save_json(BOTS_FP, b)
+                    self._json({"ok": True, "active": None}); return
+                bot = next((x for x in bots if x.get("id") == bid), None)
+                if not bot:
+                    self._json({"err": "không thấy bot này"}, 404); return
+                missing = activate_bot(bot)
+                b["active"] = bot["id"]
+                save_json(BOTS_FP, b)
+                out = {"ok": True, "active": bot["id"]}
+                if missing:
+                    out["warn"] = ("chưa cài được: " + ", ".join(missing)
+                                   + " — nhờ trợ lý trong chat cài thêm")
+                self._json(out)
+            elif action == "delete":
+                bid = str(data.get("id", ""))
+                before = len(bots)
+                b["bots"] = [x for x in bots if x.get("id") != bid]
+                if b.get("active") == bid:
+                    b["active"] = None
+                    deactivate_bot()   # không để bot.md mồ côi
+                if len(b["bots"]) == before:
+                    self._json({"err": "không thấy bot này"}, 404); return
+                save_json(BOTS_FP, b)
+                self._json({"ok": True})
+            elif action == "rename":
+                bid = str(data.get("id", ""))
+                bot = next((x for x in bots if x.get("id") == bid), None)
+                if not bot:
+                    self._json({"err": "không thấy bot này"}, 404); return
+                if data.get("name"):
+                    bot["name"] = str(data["name"]).strip()[:60]
+                if data.get("avatar") is not None:
+                    bot["avatar"] = str(data["avatar"])[:8]
+                save_json(BOTS_FP, b)
+                if b.get("active") == bid:
+                    write_bot_md(bot)   # bot.md theo tên mới
+                self._json({"ok": True, "bot": bot})
+            else:
+                self._json({"err": "action phải là create/activate/delete/rename"}, 400)
         else:
             self._json({"err": "not found"}, 404)
 

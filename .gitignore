@@ -6,6 +6,7 @@
 
 # Runtime artifacts
 my-course/.shots/
+my-course/bot.md
 .logs/
 __pycache__/
 *.pyc

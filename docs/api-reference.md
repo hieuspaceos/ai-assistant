@@ -94,6 +94,7 @@ có ảnh base64).
 | `/api/permissions` | nội dung `permissions.json` |
 | `/api/connections` | nội dung `connections.json` |
 | `/api/config` | nội dung `config.json` |
+| `/api/bots` | `{active, bots, templates}` — bot đã tạo + template nghề từ `skill-packs/roles/` |
 
 ### POST
 
@@ -111,6 +112,7 @@ có ảnh base64).
 | `/api/secrets` | `{app, fields}` | lưu field bí mật (ô `secret:true` trong connections) |
 | `/api/setup` | `{language, learner_name, ...}` | onboarding: ghi config, cài skill pack đúng ngôn ngữ |
 | `/api/check-connection` | `{id}` | probe trạng thái app (http/tabs) |
+| `/api/bot` | `{action, ...}` | `create`/`activate`/`delete`/`rename` bot; activate → cài skill thiếu + ghi `my-course/bot.md`; `id:null` → bỏ chọn |
 
 ---
 

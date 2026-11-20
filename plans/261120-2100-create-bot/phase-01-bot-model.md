@@ -1,5 +1,10 @@
 # Phase 1 — Data model `bots.json` + API + role templates
 
+> **Status: ✅ DONE** — `/api/bots` + `/api/bot` (create/activate/delete/
+> rename), 4 role templates, `skill-map.json` là nguồn chung cho
+> test-packs + bridge. `bot.md` gitignored. Parity: `.ps1` không port
+> (frozen) — `/api/bot(s)` khai trong `PY_ONLY_OK`. Test: 28 xanh.
+
 ## Mục tiêu
 
 Nền dữ liệu cho bot: file lưu nhiều bot (một active), manifest
