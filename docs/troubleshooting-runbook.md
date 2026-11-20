@@ -2,6 +2,21 @@
 
 Sự cố đã gặp thật + cách xử lý. Cập nhật khi gặp lỗi mới.
 
+## 0. Chạy test trước khi release/sửa bridge
+
+Ba script stdlib, không cần dep — chạy trên máy dev trước khi đóng gói
+hoặc sau khi đụng `tools/*.py`, `tools/*.ps1`, `.devin/skill*/`:
+
+```bash
+python3 tools/test-bridges.py   # endpoint-level: auth, save-page, brain…
+python3 tools/test-parity.py    # endpoint .py ↔ .ps1 phải khớp
+python3 tools/test-packs.py     # skill active ↔ packs ↔ recipes
+```
+
+Bất kỳ test nào đỏ → KHÔNG release. `test-parity` đỏ thường là quên port
+endpoint sang bản bridge kia; `test-packs` đỏ là skill mới/sửa chưa đồng
+bộ vào `skill-packs/`.
+
 ## 1. Health check nhanh
 
 ```bash

@@ -665,6 +665,11 @@ class Handler(BaseHTTPRequestHandler):
             creds[app] = {**(creds.get(app) or {}), **clean}
             os.makedirs(os.path.dirname(fp), exist_ok=True)
             save_json(fp, creds)
+            try:
+                # credential của học viên — quyền như bridge.token
+                os.chmod(fp, 0o600)
+            except OSError:
+                pass                     # Windows không có chmod — bỏ qua
             self._json({"ok": True})
         elif path == "/api/setup":
             # Onboarding lần đầu: ngôn ngữ + tên → config.json + skill pack đúng ngôn ngữ
@@ -674,12 +679,17 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"err": "language phải là vi hoặc en"}, 400); return
             os.makedirs(MC_DIR, exist_ok=True)
             save_json(CONFIG_FP, {"language": lang, "learner_name": name})
-            # Đồng bộ tên vào manifest khoá học
+            # Đồng bộ tên + recipes (công thức nhanh) vào manifest khoá học —
+            # recipes đi kèm pack ngôn ngữ nên sidebar đúng lệnh, đúng tiếng
             mf = os.path.join(MC_DIR, "manifest.json")
             try:
                 m = json.load(open(mf, encoding="utf-8"))
                 if name:
                     m["learner_name"] = name
+                rec = load_json(os.path.join(SKILL_PACKS, "recipes",
+                                             lang + ".json"), {})
+                if rec.get("recipes"):
+                    m["recipes"] = rec["recipes"]
                 json.dump(m, open(mf, "w", encoding="utf-8"),
                           ensure_ascii=False, indent=2)
             except Exception:

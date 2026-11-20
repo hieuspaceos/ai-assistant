@@ -1,0 +1,32 @@
+{
+  "recipes": [
+    {
+      "command": "/web-images",
+      "meaning": "Rename + compress a batch of Canva exports into web-ready images — originals untouched"
+    },
+    {
+      "command": "/compress-images",
+      "meaning": "Compress + resize many images at once, originals untouched"
+    },
+    {
+      "command": "/summarize-file",
+      "meaning": "Read a file and explain what's inside"
+    },
+    {
+      "command": "/gather-files",
+      "meaning": "Sort a messy folder (Downloads, Desktop) into tidy folders"
+    },
+    {
+      "command": "/split-customers",
+      "meaning": "Split one big customer list into separate files by region — original untouched"
+    },
+    {
+      "command": "/read-zalo",
+      "meaning": "Open your Zalo Web inbox — list unread chats, read and summarize a conversation"
+    },
+    {
+      "command": "/clone-page",
+      "meaning": "Rebuild a page that looks like one you like — with your content, not theirs"
+    }
+  ]
+}

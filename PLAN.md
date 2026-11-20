@@ -41,7 +41,7 @@ Nháp thiết kế gốc:
 
 5. **Extension "Trợ Lý AI" — web không có API (Zalo Web, wp-admin, Outlook web, trích xuất)** ✅
    - Extension MV3 riêng trong `extension/` — cài unpacked, kết nối WS về `ext-bridge` localhost
-   - `tools/ext-bridge.py` (:7683): HTTP API cho agent (`/api/browser/*`) + WS cho extension
+   - `tools/ext-bridge.py` (:7684): HTTP API cho agent (`/api/browser/*`) + WS cho extension
    - Agent gọi API qua terminal (curl/Invoke-RestMethod) — không cần MCP
    - Dùng browser THẬT của học viên — Zalo/Outlook/wp-admin đang login sẵn, không phải đăng nhập lại
    - Lệnh v1: `tabs / open / activate / close / snapshot / click / type / scroll / scrollables / query / read / screenshot / wait / reload`

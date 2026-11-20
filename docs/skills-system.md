@@ -7,15 +7,21 @@ việc lặp lại. Không có skill agent vẫn làm được — có skill th�
 ## Vị trí và vòng đời
 
 ```
-.devin/skill-packs/vi/   18 skill tiếng Việt   (kho mẫu)
-.devin/skill-packs/en/   17 skill English      (kho mẫu)
+.devin/skill-packs/vi/   20 skill tiếng Việt   (kho mẫu)
+.devin/skill-packs/en/   20 skill English      (kho mẫu)
+.devin/skill-packs/recipes/<lang>.json   recipes sidebar theo ngôn ngữ
         │ onboarding (/api/setup) copy đúng pack theo config.language
+        │        + ghi recipes vào manifest.json
         ▼
 .devin/skills/<tên>/SKILL.md   ← skill ACTIVE, agent đọc thư mục này
 ```
 
 - **Sửa skill → sửa ở `.devin/skills/`** (bản active). `skill-packs/` là
   kho gốc để onboard máy mới — sửa cả hai nếu muốn thay đổi lan ra.
+- **Skill mới muốn phát cho học viên → copy vào CẢ HAI pack.** Skill chỉ
+  nằm ở `.devin/skills/` sẽ KHÔNG có trong bản đóng gói `troly`
+  (launcher chỉ bundle `skill-packs/`) — đã từng mất `/clone-trang`
+  vì lỗi này. `tools/test-packs.py` kiểm tự động.
 - Skill mới do agent tự viết khi học viên lặp một lời nhờ nhiều lần —
   đặt thẳng vào `.devin/skills/`, không cần đăng ký thêm.
 - `/gom-skill` (`pack-skill` en) nén skill tự sinh để chia sẻ cho người

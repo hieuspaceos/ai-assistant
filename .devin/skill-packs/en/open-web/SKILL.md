@@ -61,6 +61,10 @@ curl -s -X POST "http://localhost:7684/api/browser?token=$TOKEN" -d '{"action":"
 | `fetch` | `tabId?`, `url` | Fetch a URL using the tab's logged-in session (same origin) — reads private pages/files, e.g. Google Sheets CSV via `gviz/tq?tqx=out:csv` |
 | `screenshot` | `tabId?` | Capture the tab → returns `file` (PNG path to read back) |
 | `wait` | `tabId?`, `ms` | Wait for the page (max 5s per call) |
+| `dom` | `tabId?`, `sel?`, `max?` | Get the LIVE HTML of the page/region (JS-rendered, scripts stripped) — for cloning pages, seeing real structure |
+| `styles` | `tabId?`, `sel`, `deep?`, `depth?` | Get REAL computed styles (color/font/px/box) of elements; `deep=true` walks the subtree — the data `/clone-page` measures with |
+| `assets` | `tabId?` | Inventory of images, inline SVG icons, web fonts, CSS links, background-images on the page |
+| `css` | `tabId?` | Contents of the page's stylesheets (CSSOM); CORS-blocked sheets return `href` for `fetch` |
 | `reload` | — | Reload the extension after code edits — reconnects itself |
 | `tclick` | `tabId?`, `sel`/`ref` or `x`,`y` | **REAL mouse click** (via CDP) — for apps ignoring synthetic clicks (Zalo, FB, picky editors). Brings the tab forward |
 | `tright` | same as `tclick` | **REAL right-click** — opens the app's context menu |
