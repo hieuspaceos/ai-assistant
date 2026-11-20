@@ -1,5 +1,10 @@
 # Phase 3 — Não miễn phí trong onboarding
 
+> **Status: code xong — chưa verify E2E với Gemini thật** (mục 3c vẫn cần
+> một vòng chat `gemini --acp` qua bridge). Thêm giá trị `byok` ngoài
+> `free`/`paid` cho opencode/goose — app miễn phí nhưng cần tự nối model,
+> gọi "free" là quá lời.
+
 ## Mục tiêu
 
 Học viên KHÔNG có sẵn subscription AI nào vẫn chọn được một não dùng

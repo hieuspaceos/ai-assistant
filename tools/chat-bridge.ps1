@@ -82,18 +82,18 @@ function Get-ExtVersion {
 # PATH thì preset mới coi là "đã cài" (adapter qua npx vẫn cần CLI gốc để
 # đăng nhập — vd codex-acp cần `codex`).
 $BrainPresets = @(
-    [pscustomobject]@{ id="devin";   label="Devin";                   cmd="devin";   args=@("acp","--process-model","in-process");        terminal="devin";   requires=@("devin");
+    [pscustomobject]@{ id="devin";   label="Devin";                   cmd="devin";   args=@("acp","--process-model","in-process");        terminal="devin";   requires=@("devin");   cost="paid";
         desc=@{ vi="Não mặc định — đi kèm bộ trợ lý này";                              en="Default brain — ships with this assistant" } }
-    [pscustomobject]@{ id="gemini";  label="Gemini CLI (Google)";     cmd="gemini";  args=@("--acp");                                      terminal="gemini";  requires=@("gemini");
-        desc=@{ vi="Nói ACP trực tiếp — cần cài Gemini CLI trước";                     en="Speaks ACP natively — needs Gemini CLI installed" } }
-    [pscustomobject]@{ id="codex";   label="Codex CLI (OpenAI)";      cmd="npx";     args=@("-y","@agentclientprotocol/codex-acp");        terminal="codex";   requires=@("npx","codex");
+    [pscustomobject]@{ id="gemini";  label="Gemini CLI (Google)";     cmd="gemini";  args=@("--acp");                                      terminal="gemini";  requires=@("gemini");  cost="free";
+        desc=@{ vi="Miễn phí với tài khoản Google cá nhân — não gợi ý cho người mới";  en="Free with a personal Google account — suggested brain for new users" } }
+    [pscustomobject]@{ id="codex";   label="Codex CLI (OpenAI)";      cmd="npx";     args=@("-y","@agentclientprotocol/codex-acp");        terminal="codex";   requires=@("npx","codex"); cost="paid";
         desc=@{ vi="Qua adapter codex-acp — cần cài + đăng nhập Codex CLI";            en="Via codex-acp adapter — needs Codex CLI installed and signed in" } }
-    [pscustomobject]@{ id="claude";  label="Claude Code (Anthropic)"; cmd="npx";     args=@("-y","@agentclientprotocol/claude-agent-acp"); terminal="claude";  requires=@("npx","claude");
+    [pscustomobject]@{ id="claude";  label="Claude Code (Anthropic)"; cmd="npx";     args=@("-y","@agentclientprotocol/claude-agent-acp"); terminal="claude";  requires=@("npx","claude"); cost="paid";
         desc=@{ vi="Qua adapter claude-agent-acp — cần cài + đăng nhập Claude Code";   en="Via claude-agent-acp adapter — needs Claude Code installed and signed in" } }
-    [pscustomobject]@{ id="opencode"; label="OpenCode";               cmd="opencode"; args=@("acp");                                       terminal="opencode"; requires=@("opencode");
-        desc=@{ vi="Nói ACP trực tiếp — cần cài OpenCode";                             en="Speaks ACP natively — needs OpenCode installed" } }
-    [pscustomobject]@{ id="goose";   label="Goose (Block)";           cmd="goose";   args=@("acp");                                        terminal="goose";   requires=@("goose");
-        desc=@{ vi="Nói ACP trực tiếp — cần cài Goose";                                en="Speaks ACP natively — needs Goose installed" } }
+    [pscustomobject]@{ id="opencode"; label="OpenCode";               cmd="opencode"; args=@("acp");                                       terminal="opencode"; requires=@("opencode"); cost="byok";
+        desc=@{ vi="App miễn phí — cần tự nối model (API key) của bạn";                en="Free app — needs your own model (API key) connected" } }
+    [pscustomobject]@{ id="goose";   label="Goose (Block)";           cmd="goose";   args=@("acp");                                        terminal="goose";   requires=@("goose");   cost="byok";
+        desc=@{ vi="App miễn phí — cần tự nối model (API key) của bạn";                en="Free app — needs your own model (API key) connected" } }
 )
 
 function Get-Brain {
@@ -426,6 +426,7 @@ try {
                     }
                     $pres += [ordered]@{
                         id = $p.id; label = $p.label; desc = $p.desc
+                        cost = $p.cost
                         cmd_display = ("$($p.cmd) $($p.args -join ' ')").Trim()
                         installed = $inst
                     }
