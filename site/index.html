@@ -3,81 +3,243 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Trợ Lý AI — trợ lý thông minh cho người đi làm</title>
-<meta name="description" content="Trợ lý AI tiếng Việt chạy trên máy của bạn: học cách dùng AI qua khoá học riêng, đọc tóm tắt Zalo, điều khiển trình duyệt, làm việc với file — không cần biết code.">
-<style>
-  :root{
-    --ink:#1c1917; --ink-2:#57534e; --paper:#fdfcf8; --paper-2:#f5f2ea;
-    --brand:#0f766e; --brand-deep:#115e59; --brand-soft:#ccfbf1;
-    --line:#e7e2d9; --radius:18px;
-  }
-  *{margin:0;box-sizing:border-box}
-  body{font-family:"Segoe UI",system-ui,-apple-system,sans-serif;background:var(--paper);color:var(--ink);line-height:1.65}
-  .wrap{max-width:880px;margin:0 auto;padding:0 24px}
-  header{padding:56px 0 40px;text-align:center}
-  .badge{display:inline-block;background:var(--brand-soft);color:var(--brand-deep);font-size:13px;font-weight:600;padding:6px 14px;border-radius:999px;margin-bottom:18px}
-  h1{font-size:clamp(32px,5vw,52px);line-height:1.15;letter-spacing:-.02em}
-  .sub{max-width:560px;margin:18px auto 0;font-size:18px;color:var(--ink-2)}
-  .cta{display:inline-block;margin-top:32px;background:var(--brand);color:#fff;text-decoration:none;font-weight:700;font-size:17px;padding:15px 36px;border-radius:12px;box-shadow:0 4px 14px rgba(15,118,110,.25)}
-  .cta:hover{background:var(--brand-deep)}
-  .cta-note{margin-top:12px;font-size:13px;color:var(--ink-2)}
-  section{padding:44px 0}
-  h2{font-size:26px;margin-bottom:22px;letter-spacing:-.01em}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
-  .card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:22px}
-  .card h3{font-size:17px;margin-bottom:8px}
-  .card p{font-size:14.5px;color:var(--ink-2)}
-  .icon{font-size:24px;margin-bottom:10px}
-  .steps{counter-reset:s;display:grid;gap:14px}
-  .step{display:flex;gap:16px;align-items:flex-start;background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px}
-  .step::before{counter-increment:s;content:counter(s);flex:0 0 34px;height:34px;border-radius:50%;background:var(--brand);color:#fff;font-weight:700;display:grid;place-items:center}
-  .step b{display:block}
-  .step span{color:var(--ink-2);font-size:14.5px}
-  .privacy{background:var(--paper-2);border-radius:var(--radius);padding:26px;text-align:center}
-  .privacy p{max-width:560px;margin:0 auto;color:var(--ink-2);font-size:15px}
-  footer{border-top:1px solid var(--line);padding:28px 0 48px;text-align:center;font-size:13.5px;color:var(--ink-2)}
-  footer a{color:var(--brand)}
-</style>
+<title>Trợ lý AI: trợ lý tiếng Việt trong máy bạn</title>
+<meta name="description" content="Trợ lý AI tiếng Việt chạy ngay trên máy tính của bạn: dạy bạn dùng AI qua khoá học riêng, đọc hộ tin Zalo, điều khiển trình duyệt, làm việc với file, không cần biết code.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="wrap">
-  <div class="badge">Dành cho người đi làm — không cần biết code</div>
-  <h1>Trợ Lý AI<br>trên máy tính của bạn</h1>
-  <p class="sub">Một trợ lý tiếng Việt sống trong máy bạn: dạy bạn dùng AI qua khoá học riêng, đọc tóm tắt tin nhắn, điều khiển trình duyệt và làm việc với file — như một người giúp việc đã đọc hết sách hướng dẫn.</p>
-  <a class="cta" href="https://github.com/hieuspaceos/ai-assistant/releases/latest">Tải về miễn phí</a>
-  <div class="cta-note">Hiện có bản macOS · Bản Windows sắp ra</div>
+
+<header class="masthead container">
+  <a class="wordmark" href="/" aria-label="Trợ lý AI">Trợ lý AI</a>
+  <nav aria-label="Mục chính">
+    <a href="#noi-vao">Nó nối vào đâu</a>
+    <a href="#xem">Xem nó làm</a>
+    <a href="#can-gi">Cần gì</a>
+    <a href="#tai">Tải về</a>
+  </nav>
 </header>
 
-<section class="wrap">
-  <h2>Bạn nhận được gì</h2>
-  <div class="grid">
-    <div class="card"><div class="icon">🎓</div><h3>Khoá học riêng cho bạn</h3><p>Phỏng vấn 10 phút → trợ lý xây khoá học theo đúng công việc của bạn: marketing, content, SEO, thiết kế.</p></div>
-    <div class="card"><div class="icon">💬</div><h3>Đọc hộ tin nhắn</h3><p>Tóm tắt hội thoại Zalo dài, lọc khách hàng tiềm năng — nội dung chỉ là dữ liệu, không bao giờ bị lừa làm điều lạ.</p></div>
-    <div class="card"><div class="icon">🌐</div><h3>Điều khiển trình duyệt</h3><p>Nhờ trợ lý mở web, điền form, sao chép trang thành bản có thể chỉnh sửa — qua extension Chrome/Edge.</p></div>
-    <div class="card"><div class="icon">📁</div><h3>Làm việc với file</h3><p>Đổi tên hàng loạt, nén ảnh, đọc folder — chỉ những folder bạn cho phép, như ngăn tủ đã trao khoá.</p></div>
-  </div>
-</section>
+<main>
 
-<section class="wrap">
-  <h2>Cài trong 3 bước</h2>
-  <div class="steps">
-    <div class="step"><div><b>Tải file <code>troly</code></b><span>Bấm nút tải ở trên, lấy file về máy — không cần cài Python hay công cụ gì thêm.</span></div></div>
-    <div class="step"><div><b>Chạy file</b><span>Double-click (hoặc gõ <code>./troly</code> trong Terminal). Trợ lý tự dựng nhà trong <code>~/TroLyAI</code> và mở cổng học trên trình duyệt.</span></div></div>
-    <div class="step"><div><b>Làm theo màn hình chào</b><span>Onboarding tiếng Việt dẫn từng bước: chọn "não" AI, kết nối extension, bắt đầu phỏng vấn khoá học.</span></div></div>
-  </div>
-</section>
+  <!-- hero + the system map -->
+  <section class="hero container" id="noi-vao">
+    <div class="hero__grid">
+      <div class="hero__text settle">
+        <h1>Trợ lý tiếng Việt trong máy bạn</h1>
+        <p class="lead">Học dùng AI và nhờ nó làm việc, ngay trong máy mình.</p>
+        <div class="hero__actions">
+          <a class="btn btn--primary" href="https://github.com/hieuspaceos/ai-assistant/releases/latest">Tải cho macOS</a>
+          <a class="btn btn--secondary" href="https://github.com/hieuspaceos/ai-assistant">Mã nguồn trên GitHub</a>
+        </div>
+      </div>
 
-<section class="wrap">
-  <div class="privacy">
-    <h2>🔒 Riêng tư theo thiết kế</h2>
-    <p>Mọi dịch vụ chạy trong máy bạn, không gửi dữ liệu ra ngoài. Mỗi kết nối đều khoá bằng "mã kết nối" riêng của máy — trang web lạ hay tab khác không chạm được vào trợ lý của bạn.</p>
-  </div>
-</section>
+      <figure class="mapwell hero__map" id="mapwell">
+        <div class="mapscroll">
+        <svg viewBox="0 0 600 520" role="img" aria-label="Bản đồ kết nối: não AI nối vào Trợ lý AI, trợ lý nối tới Zalo, Outlook, WordPress, Google Sheets, Excel, Word, Canva, trình duyệt và file trên máy">
+          <!-- edges: brain → hub -->
+          <g class="map-node" style="--i:1">
+            <line class="map-edge--hot" x1="300" y1="284" x2="300" y2="452"/>
+            <rect class="map-box" x="160" y="452" width="280" height="56" rx="12"/>
+            <text class="map-label" x="300" y="476" text-anchor="middle">Não AI bạn chọn</text>
+            <text class="map-label--sub" x="300" y="494" text-anchor="middle" font-size="11">Devin, Gemini, Codex, Claude, OpenCode, Goose</text>
+          </g>
+          <!-- edges: hub → apps -->
+          <g class="map-node" style="--i:0">
+            <rect class="map-box map-box--hub" x="200" y="222" width="200" height="62" rx="12"/>
+            <text class="map-label--hub" x="300" y="250" text-anchor="middle">Trợ lý AI</text>
+            <text class="map-label--sub" x="300" y="268" text-anchor="middle">chạy trong máy bạn</text>
+          </g>
+          <g class="map-node" style="--i:2">
+            <line class="map-edge" x1="200" y1="240" x2="142" y2="110"/>
+            <line class="map-edge" x1="200" y1="253" x2="142" y2="236"/>
+            <line class="map-edge" x1="200" y1="266" x2="142" y2="362"/>
+            <rect class="map-box" x="24" y="80" width="118" height="56" rx="12"/>
+            <text class="map-label" x="83" y="105" text-anchor="middle">Zalo</text>
+            <text class="map-label--sub" x="83" y="122" text-anchor="middle">đọc, tóm tắt</text>
+            <rect class="map-box" x="24" y="208" width="118" height="56" rx="12"/>
+            <text class="map-label" x="83" y="233" text-anchor="middle">Outlook</text>
+            <text class="map-label--sub" x="83" y="250" text-anchor="middle">đọc mail</text>
+            <rect class="map-box" x="24" y="334" width="118" height="56" rx="12"/>
+            <text class="map-label" x="83" y="359" text-anchor="middle">WordPress</text>
+            <text class="map-label--sub" x="83" y="376" text-anchor="middle">đăng bài, SEO</text>
+          </g>
+          <g class="map-node" style="--i:3">
+            <line class="map-edge" x1="400" y1="240" x2="458" y2="110"/>
+            <line class="map-edge" x1="400" y1="253" x2="458" y2="236"/>
+            <line class="map-edge" x1="400" y1="266" x2="458" y2="362"/>
+            <rect class="map-box" x="458" y="80" width="118" height="56" rx="12"/>
+            <text class="map-label" x="517" y="105" text-anchor="middle">Google Sheets</text>
+            <text class="map-label--sub" x="517" y="122" text-anchor="middle">đọc, cập nhật</text>
+            <rect class="map-box" x="458" y="208" width="118" height="56" rx="12"/>
+            <text class="map-label" x="517" y="233" text-anchor="middle">Excel, Word</text>
+            <text class="map-label--sub" x="517" y="250" text-anchor="middle">làm file hàng loạt</text>
+            <rect class="map-box" x="458" y="334" width="118" height="56" rx="12"/>
+            <text class="map-label" x="517" y="359" text-anchor="middle">Canva</text>
+            <text class="map-label--sub" x="517" y="376" text-anchor="middle">gom, nén ảnh</text>
+          </g>
+          <g class="map-node" style="--i:4">
+            <line class="map-edge" x1="265" y1="222" x2="188" y2="52"/>
+            <line class="map-edge--hot" x1="335" y1="222" x2="412" y2="52"/>
+            <rect class="map-box" x="112" y="20" width="152" height="56" rx="12"/>
+            <text class="map-label" x="188" y="45" text-anchor="middle">File &amp; folder</text>
+            <text class="map-label--sub" x="188" y="62" text-anchor="middle">chỉ ngăn bạn cho phép</text>
+            <rect class="map-box" x="336" y="20" width="152" height="56" rx="12"/>
+            <text class="map-label" x="412" y="45" text-anchor="middle">Trình duyệt</text>
+            <text class="map-label--sub" x="412" y="62" text-anchor="middle">extension Chrome/Edge</text>
+          </g>
+        </svg>
+        </div>
+        <figcaption>Não bạn chọn cắm vào trợ lý; trợ lý nối ra app bạn đang dùng.</figcaption>
+      </figure>
+    </div>
+  </section>
 
-<footer class="wrap">
-  Mã nguồn mở trên <a href="https://github.com/hieuspaceos/ai-assistant">GitHub</a> ·
-  <a href="https://github.com/hieuspaceos/ai-assistant/blob/main/SETUP.md">Hướng dẫn cài đặt</a> ·
-  <a href="https://github.com/hieuspaceos/ai-assistant/issues">Báo lỗi</a>
+  <!-- platforms / what it needs -->
+  <section class="section container" id="can-gi">
+    <div class="headblock">
+      <h2>Chạy nó cần gì</h2>
+      <p class="lead">Một file, một trình duyệt, một não.</p>
+    </div>
+    <dl class="rows">
+      <div class="row">
+        <dt>Máy tính</dt>
+        <dd>macOS tải được hôm nay. <span class="muted">Bản Windows đang xây.</span></dd>
+      </div>
+      <div class="row">
+        <dt>Trình duyệt</dt>
+        <dd>Chrome hoặc Edge, cài extension <strong>Trợ Lý AI</strong> để trợ lý lái web</dd>
+      </div>
+      <div class="row">
+        <dt>Não AI</dt>
+        <dd>Chọn một trong sáu: Devin, Gemini CLI, Codex, Claude Code, OpenCode, Goose. <span class="muted">Onboarding dẫn cài từng cái.</span></dd>
+      </div>
+      <div class="row">
+        <dt>Kết nối</dt>
+        <dd>Mã kết nối riêng của máy, sinh một lần. Trang lạ không chạm được.</dd>
+      </div>
+    </dl>
+  </section>
+
+  <!-- named moments in real screens -->
+  <section class="section container" id="xem">
+    <div class="headblock">
+      <h2>Nó làm việc thế này</h2>
+      <p class="lead">Quay thật từ bài học thật, không dàn dựng.</p>
+    </div>
+    <div class="switcher-tabs" role="tablist" aria-label="Chọn màn hình">
+      <button type="button" class="switcher-tab" role="tab" aria-selected="true" data-panel="p1">Đọc hộ Zalo</button>
+      <button type="button" class="switcher-tab" role="tab" aria-selected="false" data-panel="p2">Dựng trang theo mẫu</button>
+      <button type="button" class="switcher-tab" role="tab" aria-selected="false" data-panel="p3">Khoá học của riêng bạn</button>
+    </div>
+    <div id="p1" role="tabpanel">
+      <figure class="shot">
+        <video controls preload="none" playsinline poster="assets/poster-zalo.jpg">
+          <source src="assets/demo-zalo.mp4" type="video/mp4">
+          <track kind="captions" src="assets/demo-zalo.vtt" srclang="vi" label="Tiếng Việt" default>
+        </video>
+        <figcaption>Bài 1: một câu nhờ, trợ lý liệt kê sáu hội thoại Zalo đang chờ kèm xem trước.</figcaption>
+      </figure>
+    </div>
+    <div id="p2" role="tabpanel">
+      <figure class="shot">
+        <video controls preload="none" playsinline poster="assets/poster-clone.jpg">
+          <source src="assets/demo-clone.mp4" type="video/mp4">
+          <track kind="captions" src="assets/demo-clone.vtt" srclang="vi" label="Tiếng Việt" default>
+        </video>
+        <figcaption>Bài 2: trợ lý học khuôn của trang mẫu, chữ và giá là của bạn hết.</figcaption>
+      </figure>
+    </div>
+    <div id="p3" role="tabpanel">
+      <figure class="shot">
+        <img src="assets/portal.png" alt="Cổng học Trợ lý AI: danh sách bài học và công thức nhanh, toàn tiếng Việt" width="788" height="818" loading="lazy">
+        <figcaption>Cổng học sau khi phỏng vấn: bài học bên trái, công thức nhanh bên dưới.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- before / after -->
+  <section class="section container">
+    <div class="headblock">
+      <h2>Trước và sau một câu nhờ</h2>
+    </div>
+    <table class="compare">
+      <thead><tr><th scope="col">Trước</th><th scope="col">Sau</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="before">Sáng mở Zalo, chấm đỏ khắp nơi, không biết ai gấp</td>
+          <td class="after">Một bản tóm tắt: ai đang chờ, chuyện gì, ai trả lời trước</td>
+        </tr>
+        <tr>
+          <td class="before">Thèm trang giống trang đối thủ mà không biết bắt đầu</td>
+          <td class="after">Trang mới cùng khuôn, chữ và giá của bạn hết</td>
+        </tr>
+        <tr>
+          <td class="before">Năm trăm ảnh nằm rải trong Downloads</td>
+          <td class="after">Gọn vào folder, tên chuẩn web, file gốc còn nguyên</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- privacy statement -->
+  <section class="statement">
+    <div class="container">
+      <p class="big">Không gì rời máy bạn khi bạn không cho phép.</p>
+      <p class="small">Mỗi kết nối khoá bằng mã riêng trên máy. Folder nào trợ lý được mở do bạn cấp từng cái; nó luôn hỏi trước khi gửi tin hay xoá gì.</p>
+    </div>
+  </section>
+
+  <!-- close -->
+  <section class="section container" id="tai">
+    <div class="close__grid">
+      <div class="close__text">
+        <h2>Tải về. Mở. Học.</h2>
+        <p class="lead">Chạy một file. Màn hình chào tiếng Việt dẫn từng bước: chọn não, kết nối trình duyệt, phỏng vấn khoá học.</p>
+        <div class="close__actions">
+          <a class="btn btn--primary" href="https://github.com/hieuspaceos/ai-assistant/releases/latest">Tải cho macOS</a>
+          <a class="btn btn--secondary" href="https://github.com/hieuspaceos/ai-assistant/blob/main/SETUP.md">Hướng dẫn cài đặt</a>
+        </div>
+      </div>
+      <figure class="shot close__shot">
+        <img src="assets/onboarding.png" alt="Màn hình chào của Trợ lý AI: chọn ngôn ngữ Tiếng Việt hoặc English" width="788" height="818" loading="lazy" fetchpriority="low">
+        <figcaption>Màn hình đầu tiên sau khi mở file <code>troly</code>.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+</main>
+
+<footer class="colophon container">
+  <p>Trợ lý AI, dự án mã nguồn mở của <a href="https://github.com/hieuspaceos">hieuspaceos</a>. Video và ảnh quay từ sản phẩm thật.</p>
+  <p class="links">
+    <a href="https://github.com/hieuspaceos/ai-assistant">Mã nguồn</a>
+    <a href="https://github.com/hieuspaceos/ai-assistant/releases/latest">Tải về</a>
+    <a href="https://github.com/hieuspaceos/ai-assistant/blob/main/SETUP.md">Hướng dẫn cài</a>
+    <a href="https://github.com/hieuspaceos/ai-assistant/issues">Báo lỗi</a>
+  </p>
 </footer>
+
+<script>
+// switcher: hide non-active panels once JS is up (all visible without it)
+const tabs = document.querySelectorAll('.switcher-tab');
+const panels = [...tabs].map(t => document.getElementById(t.dataset.panel));
+panels.slice(1).forEach(p => p.hidden = true);
+tabs.forEach(tab => tab.addEventListener('click', () => {
+  tabs.forEach(t => t.setAttribute('aria-selected', t === tab ? 'true' : 'false'));
+  panels.forEach(p => p.hidden = p.id !== tab.dataset.panel);
+  panels.forEach(p => p.querySelector('video')?.pause());
+}));
+// map reveal: nodes ink on once as the map enters the viewport
+const mw = document.getElementById('mapwell');
+if ('IntersectionObserver' in window) {
+  new IntersectionObserver((es, o) => es.forEach(e => {
+    if (e.isIntersecting) { mw.classList.add('revealed'); o.disconnect(); }
+  }), { threshold: 0.3 }).observe(mw);
+}
+</script>
+
 </body>
 </html>
