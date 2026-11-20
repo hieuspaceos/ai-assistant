@@ -22,6 +22,9 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 | `ext-bridge.py` | HTTP `/api/browser` ↔ WS extension — lái trình duyệt thật |
 | `clone-compare.py` | So clone vs nguồn: `harvest`/`styles`/`shot` — pha 4 của /clone-trang |
 | `scene-player.html` | Player cho `scene.json` của bài học (demo có điều khiển) |
+| `test-bridges.py` | Smoke test endpoint: auth 401, save-page sandbox, brain whitelist — spawn bridge thật trên port động |
+| `test-parity.py` | Diff tập endpoint `/api/*` giữa chat-bridge `.py` ↔ `.ps1` — bắt drift |
+| `test-packs.py` | Diff `.devin/skills/` ↔ `skill-packs/` + kiểm recipes trỏ đúng skill — bắt "quên đồng bộ pack" |
 
 ## extension/ — MV3 "Trợ Lý AI"
 
@@ -46,8 +49,9 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 | Đường | Vai trò |
 |---|---|
 | `skills/<tên>/SKILL.md` | Skill đang active — onboarding copy từ skill-packs |
-| `skill-packs/vi/` | 18 skill tiếng Việt (/phong-van /hoc-bai /doc-zalo /clone-trang …) |
-| `skill-packs/en/` | 17 skill English tương ứng (/interview /tutor /read-zalo …) |
+| `skill-packs/vi/` | 20 skill tiếng Việt (/phong-van /hoc-bai /doc-zalo /clone-trang …) |
+| `skill-packs/en/` | 20 skill English tương ứng (/interview /tutor /read-zalo /clone-page …) |
+| `skill-packs/recipes/` | `<lang>.json` — recipes sidebar theo ngôn ngữ, `/api/setup` ghi vào manifest |
 | `agents/slide-builder.md` | Subagent dựng `slides.html` từ nội dung bài |
 | `agents/video-builder.md` | Subagent: `video-script.md` (luôn) + `video.mp4` (bonus) |
 
