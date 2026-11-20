@@ -40,6 +40,16 @@ viên (bản quyền). Skill ghi rõ ngoại lệ này.
 
 ## Trước đó — nền hệ thống
 
+**`brain.json` tách não khỏi bridge; `/api/brain` đổi nóng.** Vì: bridge
+đã nói ACP chuẩn — não thực chất chỉ là "process biết nói ACP qua
+stdin/stdout". Devin biến mất hoặc học viên có sẵn CLI khác (Gemini,
+Codex, Claude) thì hệ thống vẫn sống; onboarding có bước chọn não nên
+không cần sửa file tay. `cmd` tự nhập bị giới hạn ở tên lệnh trần
+(`[A-Za-z0-9_.-]+`, không path) — trang local bị nhiễm vẫn không spawn
+được script lạ. Adapter não (codex-acp, claude-agent-acp) chạy qua npx
+nhưng `requires` vẫn kiểm cả CLI gốc — thiếu `codex`/`claude` thì báo
+"chưa cài" ngay tại onboarding.
+
 **`devin acp` cho chế độ Chat, ttyd cho Terminal.** Vì: Chat cần render
 markdown + tin nhắn kiểu app cho người không biết terminal; Terminal là
 fallback khi học viên lớn hơn muốn CLI thật.

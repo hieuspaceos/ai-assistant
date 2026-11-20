@@ -5,7 +5,9 @@ việc hoặc đổi ưu tiên.
 
 ## Đang vững — không cần động
 
-- Portal + Chat/Terminal qua `devin acp` + ttyd
+- Portal + Chat/Terminal qua não ACP (mặc định `devin acp`) + ttyd
+- Não đổi được: `brain.json` + `/api/brain` + bước chọn não trong
+  onboarding và panel Cài đặt (Gemini/Codex/Claude/OpenCode/Goose)
 - Onboarding + skill packs vi/en
 - Extension + ext-bridge (~25 action, nhóm t* qua CDP)
 - Clone pipeline đầu-cuối (đo → khảo sát → token → dựng → so → giao)

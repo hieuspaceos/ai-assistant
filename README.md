@@ -15,15 +15,15 @@ macOS/Linux chạy được bằng `start.sh`. Hỗ trợ **tiếng Việt và E
 
 1. Cài một lần theo `SETUP.md` (Windows Terminal + Devin CLI + ttyd).
 2. Double-click `start.bat` (hoặc `bash start.sh`) → browser mở portal.
-3. **Onboarding lần đầu**: chọn ngôn ngữ (vi/en) → điền tên → chọn folder
-   trợ lý được đọc → chọn app muốn kết nối. Ghi vào
-   `my-course/config.json` + `permissions.json`; cài đúng skill pack
-   (`/phong-van` cho vi, `/interview` cho en).
+3. **Onboarding lần đầu**: chọn ngôn ngữ (vi/en) → điền tên → chọn
+   **"não" AI** (xem mục dưới) → chọn folder trợ lý được đọc → chọn app
+   muốn kết nối. Ghi vào `my-course/config.json` + `permissions.json`;
+   cài đúng skill pack (`/phong-van` cho vi, `/interview` cho en).
 4. Mở tab **💬 Hỏi trợ lý** → gõ `/phong-van`.
    Tab này có 2 chế độ: **Chat** (mặc định — bong bóng tin nhắn,
-   chữ đậm/nghiêng/heading như Word) và **Terminal** (CLI Devin thật
-   qua ttyd). Chat chạy qua `tools/chat-bridge.ps1` → `devin acp`
-   (`tools/chat-bridge.py` trên macOS/Linux).
+   chữ đậm/nghiêng/heading như Word) và **Terminal** (CLI của não qua
+   ttyd). Chat chạy qua `tools/chat-bridge.ps1` → não ACP theo
+   `brain.json` (`tools/chat-bridge.py` trên macOS/Linux).
 5. Agent hỏi: bạn dùng tool nào? Việc nào lặp lại tốn thời gian?
    → draft giáo trình → học viên chốt.
 6. Agent sinh từng bài vào `my-course/lesson-XX-*/`: `guide.md`,
@@ -33,6 +33,23 @@ macOS/Linux chạy được bằng `start.sh`. Hỗ trợ **tiếng Việt và E
 7. `manifest.json` cập nhật → portal refresh là thấy khoá học riêng.
 8. Học: xem slide → đọc guide → làm bài tập → kẹt thì hỏi lại trong tab
    chat (`/hoc-bai` = chế độ gia sư dẫn từng bước).
+
+## Đổi "não" của trợ lý (brain.json)
+
+Trợ lý không gắn chết một hãng AI — não là **bất kỳ agent CLI nào nói
+chuẩn ACP** (JSON-RPC qua stdin/stdout). `brain.json` ở gốc project ghi
+não đang dùng: `cmd`+`args` = lệnh mở chế độ ACP (chat), `terminal` =
+lệnh cho chế độ Terminal.
+
+- Preset sẵn trong onboarding: **Devin** (`devin acp`), **Gemini**
+  (`gemini --acp`), **OpenCode**, **Goose** — ACP native; **Codex** và
+  **Claude Code** qua adapter `npx -y @agentclientprotocol/codex-acp` /
+  `claude-agent-acp` (vẫn cần CLI gốc đã đăng nhập).
+- Đổi ở **onboarding** hoặc **panel ⚙ Cài đặt** (dropdown chỉ liệt kê
+  não đã cài trên máy); não khác nhập lệnh tự do ở onboarding.
+  Đổi xong bridge restart agent ngay — không cần chạy lại `start`.
+- Não chưa cài hoặc process rớt: chat báo lỗi rõ thay vì treo, và tự
+  thử bật lại ở lượt gửi sau.
 
 ## Clone một trang web thành trang của học viên
 
@@ -60,10 +77,11 @@ với vòng so tự động (`tools/clone-compare.py`: style-diff theo
 ai-assistant/
 ├── AGENTS.md                  # persona "giáo viên ELI10" + quy tắc an toàn (áp cho mọi session)
 ├── SETUP.md                   # hướng dẫn cài đặt cho học viên (Windows)
+├── brain.json                 # "não" đang dùng — agent CLI nói ACP (đổi trong onboarding / ⚙ Cài đặt, mặc định devin)
 ├── start.bat                  # launcher: chat-bridge (7682) + ttyd (7681) + ext-bridge (7684) + portal (8080) + mở browser
 ├── tools/serve.ps1            # static server PowerShell thuần, chặn dotfiles (serve.py cho macOS/Linux)
-├── tools/ext-bridge.py        # cầu nối extension: HTTP API cho agent + WS cho extension (7683)
-├── tools/chat-bridge.ps1      # cầu nối browser ↔ `devin acp` (Windows; .py cho macOS/Linux)
+├── tools/ext-bridge.py        # cầu nối extension: HTTP API cho agent + WS cho extension (7684)
+├── tools/chat-bridge.ps1      # cầu nối browser ↔ não ACP (Windows; .py cho macOS/Linux)
 ├── tools/chat-terminal.ps1    # chạy ttyd theme sáng + font lớn (chế độ Terminal)
 ├── intro/slides.html          # deck giới thiệu tĩnh (Bài 0)
 ├── web/                       # portal: index.html + app.js + styles.css + clone-view.html (viewer sửa trang clone)
@@ -103,9 +121,9 @@ ai-assistant/
 
 ## Nâng cấp sau này (note)
 
-- Chế độ **Chat** đã dùng `devin acp` (Agent Client Protocol) nên render
-  được markdown; nâng cấp sau: Devin Desktop/editor ACP thay toàn bộ
-  stack nhúng nếu muốn trải nghiệm "app" hơn nữa.
+- Chế độ **Chat** nói ACP chuẩn nên não đổi được (`brain.json` —
+  Gemini/Codex/Claude…); nâng cấp sau: Devin Desktop/editor ACP thay
+  toàn bộ stack nhúng nếu muốn trải nghiệm "app" hơn nữa.
 - **Devin Cloud** (app.devin.ai): sandbox an toàn cho người mới, đổi lại
   phải upload file + cloud credits.
 - `video-builder` hiện chỉ chắc chắn xuất `video-script.md` — để quay

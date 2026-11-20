@@ -69,8 +69,9 @@ có ảnh base64).
 
 | Path | Trả về |
 |---|---|
-| `/api/health` | `{"ok":true}` |
-| `/api/poll` | output mới từ session `devin acp` (chat.html poll) |
+| `/api/health` | `{"ok":true, "brain":"<id não>"}` |
+| `/api/brain` | não hiện tại + danh sách preset (kèm cờ `installed`) |
+| `/api/poll` | output mới từ session não ACP (chat.html poll) |
 | `/api/permissions` | nội dung `permissions.json` |
 | `/api/connections` | nội dung `connections.json` |
 | `/api/config` | nội dung `config.json` |
@@ -79,7 +80,8 @@ có ảnh base64).
 
 | Path | Body | Tác dụng |
 |---|---|---|
-| `/api/prompt` | `{text}` | gửi prompt vào `devin acp` |
+| `/api/prompt` | `{text}` | gửi prompt vào não ACP (não chết → bridge tự bật lại, trả 503 "gửi lại sau") |
+| `/api/brain` | `{id}` hoặc `{cmd, args?, terminal?, label?}` | đổi não: ghi `brain.json` + restart agent; preset không đủ `requires` → 404 kèm `missing`; `cmd` chỉ nhận tên lệnh trần `[A-Za-z0-9_.-]+` |
 | `/api/respond` | `{id, optionId}` | trả lời câu hỏi agent đang hỏi (`__cancel__` = huỷ) |
 | `/api/delete-lesson` | `{folder}` | xoá bài + gỡ khỏi manifest |
 | `/api/save-page` | `{file, html}` | ghi `.html` **chỉ dưới `my-course/`**; tự tạo `<file>.bak` trước khi ghi đè; chặn `..` |

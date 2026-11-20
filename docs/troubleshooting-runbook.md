@@ -19,7 +19,9 @@ Log: `.logs/{portal,chat-bridge,ext-bridge,ttyd}.log` dưới root.
 |---|---|---|
 | Portal không lên | port 8080 bị chiếm | `lsof -i :8080` (macOS) / `netstat -ano \| findstr 8080` (Win); xem `.logs/portal.log` |
 | `{"connected":false}` mọi action | extension chưa nạp | Mở `chrome://extensions` → bật "Trợ Lý AI"; sau khi sửa `extension/*.js` → `{"action":"reload"}` |
-| Chat không trả lời | `devin acp` chết / license | Chạy `devin` tay xem lỗi; xem `.logs/chat-bridge.log` |
+| Chat không trả lời | não ACP chết / license / chưa đăng nhập | Chạy lệnh não tay (`brain.json` → `cmd`) xem lỗi; xem `.logs/chat-bridge.log`; bridge tự thử bật lại ở lượt gửi sau |
+| Chat báo "không chạy được 'X'" | não `X` trong `brain.json` chưa cài | Panel ⚙ Cài đặt → Bộ não → chọn não khác; hoặc cài `X` rồi gửi lại |
+| Đổi não mà chat vẫn não cũ | bridge chưa reload | `POST /api/brain` tự restart agent; kiểm `GET /api/health` → trường `brain` |
 | Tab Terminal trống | ttyd chưa cài | Chế độ Chat vẫn dùng được; cài ttyd hoặc bỏ qua |
 
 ## 3. Extension / lái trình duyệt

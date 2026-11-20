@@ -10,14 +10,20 @@ echo.
 echo  Dang mo khoa hoc, cho mot chut nhe...
 echo.
 
-rem --- Kiem tra devin CLI ---
-where devin >nul 2>nul
+rem --- Doc "nao" tu brain.json (mac dinh devin, doi duoc trong onboarding) ---
+set "BRAIN_CMD=devin"
+set "BRAIN_TERM=devin"
+if exist brain.json (
+  for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try{(Get-Content brain.json -Raw -Encoding UTF8 ^| ConvertFrom-Json).cmd}catch{'devin'}"`) do set "BRAIN_CMD=%%i"
+  for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try{(Get-Content brain.json -Raw -Encoding UTF8 ^| ConvertFrom-Json).terminal}catch{'devin'}"`) do set "BRAIN_TERM=%%i"
+)
+
+rem --- Kiem tra CLI cua nao ---
+where %BRAIN_CMD% >nul 2>nul
 if errorlevel 1 (
-  echo  [X] Chua co Devin CLI. Ban can cai truoc - xem file SETUP.md
-  echo      Mo PowerShell va chay: irm https://cli.devin.ai/install.ps1 ^| iex
+  echo  [!] Chua co '%BRAIN_CMD%' - nao tro ly. Che do Chat se khong chay.
+  echo      Cai no, hoac mo portal roi doi sang nao khac trong muc thiet lap.
   echo.
-  pause
-  exit /b 1
 )
 
 rem --- Kiem tra ttyd (de nhung terminal vao trang web) ---
@@ -38,7 +44,7 @@ if not errorlevel 1 (
 ) else (
   echo  [!] Khong cai duoc ttyd. Che do "Terminal" se khong hoat dong,
   echo      nhung che do "Chat" van dung binh thuong.
-  echo      Ban cung co the mo Windows Terminal va go "devin" de hoc.
+  echo      Ban cung co the mo Windows Terminal va go "%BRAIN_TERM%" de hoc.
 )
 
 rem --- Cau noi cho extension "Tro Ly AI" trong trinh duyet (cong 7684) ---

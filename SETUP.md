@@ -119,7 +119,8 @@ khẩu/token vào ô chat** — ghi vào file theo hướng dẫn của trợ l�
 |---|---|
 | `'devin' is not recognized` | Đóng hết PowerShell, mở lại. Chưa được thì cài lại Bước 2. |
 | Không chạy được lệnh `irm` | Bạn đang ở CMD/Git Bash chứ không phải PowerShell. Gõ `powershell` trước. |
-| `start.bat` báo thiếu devin | Làm lại Bước 2. |
+| `start.bat` báo thiếu devin | Làm lại Bước 2. (Nếu bạn cố ý dùng não AI khác — `brain.json` — thì thông báo này chỉ là nhắc não đó chưa cài.) |
+| Trợ lý bảo "không chạy được 'X'" | Não `X` chưa cài. Mở portal → ⚙ Cài đặt → Bộ não → chọn lại Devin hoặc não khác đã cài. |
 | Tab Chat trống trơn | Đóng rồi mở lại `start.bat` — cửa sổ "Tro ly AI chat" chạy nền phải còn nguyên. |
 | Chế độ Terminal trống | ttyd chưa chạy — chạy `tools\chat-terminal.ps1` trong PowerShell, hoặc dùng chế độ Chat. |
 | Bài học không có video | Thiếu Python hoặc ffmpeg — làm Bước 4 rồi nhờ trợ lý quay lại. |

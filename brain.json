@@ -1,0 +1,7 @@
+{
+  "id": "devin",
+  "label": "Devin",
+  "cmd": "devin",
+  "args": ["acp", "--process-model", "in-process"],
+  "terminal": "devin"
+}

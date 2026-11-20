@@ -2,7 +2,8 @@
 
 **Bản chất:** không có backend tập trung. Hệ thống là 4 process local do
 `start.sh`/`start.bat` dựng lên + một MV3 extension trong trình duyệt
-thật của học viên + Devin CLI làm não.
+thật của học viên + một agent CLI nói chuẩn ACP làm não (mặc định Devin,
+đổi được qua `brain.json`).
 
 ## Architecture Overview
 
@@ -14,7 +15,7 @@ thật của học viên + Devin CLI làm não.
 |   +-- Portal tab  http://localhost:8080/web/                  |
 |   |     |                                                     |
 |   |     +--> Chat mode   POST :7682/api/prompt  (chat-bridge) |
-|   |     +--> Term mode   ws    :7681            (ttyd+devin)  |
+|   |     +--> Term mode   ws    :7681            (ttyd+não)    |
 |   |     +--> Static      GET   :8080/...        (serve.py)    |
 |   |                                                           |
 |   +-- Tab web thường (Zalo, Outlook, site bất kỳ)             |
@@ -25,10 +26,10 @@ thật của học viên + Devin CLI làm não.
 |   ext-bridge :7684  <--- POST /api/browser {"action":...} ---+|
 |   (tools/ext-bridge.py)                                      ||
 |                                                              ||
-|   chat-bridge :7682  --->  devin acp  (Agent Client Protocol)||
+|   chat-bridge :7682  --->  não ACP  (Agent Client Protocol)  ||
 |   (tools/chat-bridge.py)        |                            ||
 |                                 v                            ||
-|                            Devin CLI  <======================++
+|                            Agent CLI  <======================++
 |                            (đọc .devin/skills, gọi API
 |                             /api/browser để lái trình duyệt) |
 |                                                               |
@@ -36,9 +37,9 @@ thật của học viên + Devin CLI làm não.
 +---------------------------------------------------------------+
 ```
 
-Vai trò: **Devin CLI = não** · portal = mặt hiển thị · chat-bridge = cổng
-chat · ttyd = cổng terminal · ext-bridge + extension = cánh tay trên
-trình duyệt · serve.py = file tĩnh.
+Vai trò: **agent CLI = não** (đổi được — xem mục 6) · portal = mặt hiển
+thị · chat-bridge = cổng chat · ttyd = cổng terminal · ext-bridge +
+extension = cánh tay trên trình duyệt · serve.py = file tĩnh.
 
 ## Các thành phần
 
@@ -50,17 +51,24 @@ trình duyệt · serve.py = file tĩnh.
 - Không build step — HTML/CSS/JS thuần.
 
 ### 2. chat-bridge — `tools/chat-bridge.py` / `.ps1` :7682
-- **Mục đích:** chế độ Chat của portal — biến `devin acp` thành API tin
-  nhắn cho `web/chat.html`.
+- **Mục đích:** chế độ Chat của portal — spawn "não" (agent CLI nói ACP,
+  JSON-RPC qua stdin/stdout) rồi biến nó thành API tin nhắn cho
+  `web/chat.html`.
+- Não nào chạy đọc từ `brain.json` ở gốc project; `GET /api/brain`
+  liệt kê preset + cờ đã cài, `POST /api/brain` đổi não (ghi file +
+  khởi động lại agent nóng, không cần chạy lại start).
+- Agent chết/chưa cài: bridge không chết theo — báo lỗi về UI và tự
+  thử bật lại ở prompt kế tiếp.
 - Gửi prompt vào session ACP, poll output, quản lý permissions/
   connections/config/secrets, lưu trang clone (`/api/save-page`).
 - Sandbox ghi file: chỉ `.html` dưới `my-course/`; tự tạo `.bak` trước
   khi ghi đè. Chi tiết endpoint: `api-reference.md`.
 
 ### 3. ttyd — :7681 (tuỳ chọn)
-- **Mục đích:** chế độ Terminal — `ttyd -p 7681 -W devin` nhúng CLI Devin
-  thật vào portal. Windows dùng `tools/chat-terminal.ps1` (theme sáng,
-  font lớn cho người mới).
+- **Mục đích:** chế độ Terminal — `ttyd -p 7681 -W <não>` nhúng CLI
+  thật vào portal; `<não>` = trường `terminal` trong `brain.json`.
+  Windows dùng `tools/chat-terminal.ps1` (theme sáng, font lớn cho
+  người mới).
 - Thiếu ttyd thì portal vẫn chạy chế độ Chat bình thường.
 
 ### 4. ext-bridge — `tools/ext-bridge.py` :7684
@@ -82,17 +90,30 @@ trình duyệt · serve.py = file tĩnh.
 - Chạy trong trình duyệt THẬT → thừa hưởng mọi phiên đăng nhập của học
   viên; đây là lý do đọc được Zalo/Outlook không cần mật khẩu.
 
-### 6. Devin CLI
-- `devin` (terminal mode) và `devin acp` (chat mode) — cùng một agent.
-- Đọc `AGENTS.md` (persona + an toàn) và `.devin/skills/` (công thức).
-- Gọi `POST :7684/api/browser` khi skill cần lái trình duyệt; gọi
+### 6. Não — agent CLI qua ACP (đổi được)
+- Não là **bất kỳ agent CLI nào nói chuẩn ACP** — không gắn chết Devin.
+  Cấu hình trong `brain.json` ở gốc: `{"id","label","cmd","args","terminal"}`
+  — `cmd`+`args` là lệnh mở chế độ ACP, `terminal` là lệnh cho chế độ
+  Terminal (ttyd).
+- Preset có sẵn trong bridge (`GET /api/brain`): Devin `devin acp`,
+  Gemini `gemini --acp`, OpenCode `opencode acp`, Goose `goose acp`
+  (ACP native); Codex và Claude Code qua adapter `npx -y
+  @agentclientprotocol/codex-acp` / `claude-agent-acp` (vẫn cần CLI
+  gốc để đăng nhập). Onboarding có bước chọn não — chỉ preset "đã cài"
+  mới chọn được, còn có ô nhập lệnh tự do cho não khác.
+- Học viên dùng Devin: `devin` (terminal) và `devin acp` (chat) — cùng
+  một agent.
+- Agent đọc `AGENTS.md` (persona + an toàn) và `.devin/skills/` (công
+  thức) — skill nằm trong file nên não nào đọc AGENTS.md cũng dùng được.
+- Agent gọi `POST :7684/api/browser` khi skill cần lái trình duyệt; gọi
   `POST :7682/api/save-page` khi viewer lưu trang clone.
 
 ## Luồng dữ liệu chính
 
 | Luồng | Đường đi |
 |---|---|
-| Học viên chat | chat.html → :7682/api/prompt → devin acp → poll /api/poll → render |
+| Học viên chat | chat.html → :7682/api/prompt → não ACP → poll /api/poll → render |
+| Đổi não | onboarding/Cài đặt → :7682/api/brain → brain.json + restart agent |
 | Agent đọc Zalo | agent → :7684/api/browser {snapshot} → WS → content.js → cây phần tử → agent |
 | Clone trang | agent → open/dom/styles/css/assets/screenshot (7684) → ref-* trong clone-work/<site>/ → dựng .html → portal viewer |
 | Viewer lưu trang | clone-view.html → :7682/api/save-page → .bak + ghi file |

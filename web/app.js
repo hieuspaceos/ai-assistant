@@ -31,6 +31,10 @@ const I18N = {
     extTitle: 'Trạng thái cánh tay trình duyệt (extension Trợ Lý AI)',
     extOn: 'Đã nối trình duyệt', extOff: 'Chưa nối trình duyệt',
     settings: 'Cài đặt', closeTitle: 'Đóng',
+    brainTitle: 'Bộ não của trợ lý',
+    brainHint: 'Trợ lý nghĩ và làm việc bằng chương trình AI này — chỉ đổi khi máy bạn có sẵn chương trình khác (đổi xong trợ lý khởi động lại trong vài giây).',
+    brainCurrent: 'đang dùng', brainSwitching: 'Đang đổi…',
+    brainDone: 'Đã đổi xong', brainFail: 'Chưa đổi được',
     appsTitle: 'Kết nối ứng dụng',
     appsHint: 'Chấm xanh = trợ lý dùng được ngay · Chấm xám = cần thêm một bước nhỏ — cứ hỏi trợ lý trong chat, nó dẫn từng bước.',
     foldersTitle: 'Folder trợ lý được đọc',
@@ -78,6 +82,10 @@ const I18N = {
     extTitle: 'Browser arm status (Trợ Lý AI extension)',
     extOn: 'Browser connected', extOff: 'Browser not connected',
     settings: 'Settings', closeTitle: 'Close',
+    brainTitle: 'Assistant brain',
+    brainHint: 'The assistant thinks and works through this AI program — only change it if another one is already installed (it restarts in a few seconds).',
+    brainCurrent: 'in use', brainSwitching: 'Switching…',
+    brainDone: 'Switched', brainFail: 'Couldn\'t switch',
     appsTitle: 'App connections',
     appsHint: 'Green dot = ready to use · Gray dot = needs one small step — just ask the assistant in chat, it will walk you through.',
     foldersTitle: 'Folders the assistant may read',
@@ -351,10 +359,14 @@ async function ping(url, path, cors) {
   } catch { return false; }
 }
 
+let brainTerminal = 'devin';   // lệnh mở CLI của não — đọc từ /api/brain
 async function initChat() {
   chatChecked = true;
   $('#mode-chat').onclick = () => setChatMode('chat');
   $('#mode-cli').onclick = () => setChatMode('cli');
+  fetch(BRIDGE_URL + '/api/brain').then(r => r.json())
+    .then(d => { brainTerminal = (d.current && d.current.terminal) || 'devin'; })
+    .catch(() => {});
   setChatMode('chat');
 }
 
@@ -380,7 +392,7 @@ async function setChatMode(mode) {
       if (!termFrame.src) termFrame.src = TTYD_URL;
       status.innerHTML = '';
     } else {
-      status.innerHTML = `<span class="warn">${t('warnCli')}</span>`;
+      status.innerHTML = `<span class="warn">${t('warnCli').replace('devin', brainTerminal)}</span>`;
     }
   }
 }
@@ -410,6 +422,7 @@ const settingsOverlay = $('#settings-overlay');
 
 $('#settings-btn').onclick = async () => {
   settingsOverlay.hidden = false;
+  renderBrain();
   renderFolders();
   const apps = await renderApps();
   // kiểm tra lại trạng thái THẬT của từng app ngầm — panel cập nhật dần,
@@ -427,6 +440,48 @@ settingsOverlay.onclick = (e) => { if (e.target === settingsOverlay) settingsOve
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !settingsOverlay.hidden) settingsOverlay.hidden = true;
 });
+
+// "Bộ não" — dropdown preset ĐÃ CÀI (não chưa cài không cho chọn từ đây;
+// não lạ do nhập tay ở onboarding vẫn hiện dòng "đang dùng" để không mất chọn)
+async function renderBrain() {
+  try {
+    const d = await (await fetch(BRIDGE_URL + '/api/brain')).json();
+    const row = $('#brain-row');
+    const opts = (d.presets || []).filter(p => p.installed);
+    const have = new Set(opts.map(o => o.id));
+    row.innerHTML = '';
+    const sel = document.createElement('select');
+    sel.className = 'brain-sel';
+    if (d.current && d.current.id && !have.has(d.current.id)) {
+      const o = document.createElement('option');
+      o.value = d.current.id;
+      o.textContent = (d.current.label || d.current.id) + ' (' + t('brainCurrent') + ')';
+      sel.appendChild(o);
+    }
+    opts.forEach(p => {
+      const o = document.createElement('option');
+      o.value = p.id; o.textContent = p.label;
+      sel.appendChild(o);
+    });
+    sel.value = (d.current && d.current.id) || 'devin';
+    const msg = document.createElement('span');
+    msg.className = 'brain-msg';
+    sel.onchange = async () => {
+      sel.disabled = true; msg.textContent = t('brainSwitching');
+      try {
+        const r = await (await fetch(BRIDGE_URL + '/api/brain', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: sel.value })
+        })).json();
+        msg.textContent = r.ok ? t('brainDone') : (r.err || t('brainFail'));
+        if (r.ok && r.brain && r.brain.terminal) brainTerminal = r.brain.terminal;
+      } catch { msg.textContent = t('brainFail'); }
+      sel.disabled = false;
+      setTimeout(() => { msg.textContent = ''; }, 5000);
+    };
+    row.appendChild(sel); row.appendChild(msg);
+  } catch { /* bridge chưa chạy — giấu mục này */ }
+}
 
 async function renderApps() {
   let apps = [];
