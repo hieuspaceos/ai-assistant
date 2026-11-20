@@ -34,6 +34,8 @@ button.btn { padding:12px 26px; border:none; border-radius:12px; font-size:15px;
 .btn.pri:hover { background:var(--accent-d); }
 .btn.pri:disabled { background:#b9c9c0; cursor:default; }
 .btn.ghost { background:transparent; color:var(--mut); }
+.mini-btn { padding:5px 12px; border:1.5px solid var(--accent); border-radius:8px; background:transparent; color:var(--accent); font-size:12.5px; font-weight:600; font-family:inherit; cursor:pointer; }
+.mini-btn:hover { background:rgba(20,122,79,.07); }
 .check { padding:10px 14px; border:2px solid var(--line); border-radius:10px; cursor:pointer; display:flex; gap:8px; align-items:center; font-size:14px; }
 .check.sel { border-color:var(--accent); background:#f0faf4; }
 .check input { accent-color:var(--accent); }
@@ -100,6 +102,8 @@ const T = {
     brainLead:'Trợ lý nói chuyện và làm việc nhờ một chương trình AI cài sẵn trên máy — gọi là "não". Não nào có nhãn "đã cài" là dùng được ngay. Không chắc thì cứ giữ mặc định nhé.',
     brainLoading:'Đang tìm não trên máy…',
     brainIn:'đã cài', brainOut:'chưa cài',
+    brainInstall:'Cài não này', brainRecheck:'Tôi đã cài xong — kiểm tra lại',
+    brainInstalledNow:'Đã thấy não mới — chọn nó để dùng luôn!',
     brainNow:'Não đang dùng',
     brainCustom:'Não khác (nâng cao)',
     brainCustomSub:'tự nhập lệnh chạy não chế độ ACP',
@@ -128,6 +132,8 @@ const T = {
     brainLead:'The assistant talks and works through an AI program installed on this machine — its "brain". Anything tagged "installed" works right away. Not sure? Keep the default.',
     brainLoading:'Looking for brains on this machine…',
     brainIn:'installed', brainOut:'not installed',
+    brainInstall:'Install this brain', brainRecheck:'Done installing — check again',
+    brainInstalledNow:'New brain detected — pick it to use it!',
     brainNow:'Current brain',
     brainCustom:'Another brain (advanced)',
     brainCustomSub:'type the command that runs the brain in ACP mode',
@@ -215,6 +221,25 @@ function stepBrain(){
         <span class="flag">${p.installed?'🧠':'⚪'}</span>
         <div><b>${p.label}</b><span class="badge${p.installed?'':' off'}">${p.installed?t('brainIn'):t('brainOut')}</span><small>${(p.desc&&p.desc[lang])||''}</small></div></div>`);
       o.onclick=()=>{ if(!p.installed) return; selBrain=p.id; show(d); };
+      // chưa cài + có trang hướng dẫn → nút "Cài não này" mở đúng trang
+      // hãng (không chạy lệnh hộ — cài CLI cần quyền/UAC), kèm nút kiểm
+      // tra lại để badge lật sang "đã cài" sau khi học viên cài xong
+      if(!p.installed && p.install){
+        const hint=(p.install.hint&&(p.install.hint[lang]||p.install.hint.vi))||'';
+        const row=el(`<div style="margin:6px 0 0 26px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="mini-btn" type="button">${t('brainInstall')} ↗</button>
+          <button class="mini-btn" type="button" data-re>${t('brainRecheck')}</button></div>
+          <small class="note" style="margin:2px 0 8px 26px;display:block">${hint}</small>`);
+        row.querySelector('button').onclick=e=>{ e.stopPropagation(); window.open(p.install.url,'_blank'); };
+        row.querySelector('[data-re]').onclick=e=>{ e.stopPropagation();
+          bfetch(BRIDGE+'/api/brain').then(r=>r.json()).then(d2=>{
+            if((d2.presets||[]).some(x=>x.id===p.id&&x.installed))
+              selBrain=p.id;      // tự chọn luôn — badge lật xanh là dấu hiệu
+            show(d2);
+          });
+        };
+        o.appendChild(row);
+      }
       bl.appendChild(o);
     });
     const c=el(`<div class="opt${selBrain==='custom'?' sel':''}"><span class="flag">🛠️</span><div><b>${t('brainCustom')}</b><small>${t('brainCustomSub')}</small></div></div>`);
