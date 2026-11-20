@@ -31,6 +31,8 @@ POST http://localhost:7684/api/browser?token=<mã>
 
 Extension kết nối `ws://localhost:7684/ext?token=<mã>&v=<version>`
 — `connected:false` nghĩa là extension chưa mở/chưa nạp/chưa pair.
+WS auth check **trước** handshake (sai/thiếu token → HTTP 401, không
+phải 101 rồi đóng); một message WS tích luỹ quá 64 MB → cắt kết nối.
 `extVersion` trong response status là version extension tự báo; portal
 so với `extVersion` của `/api/health` (manifest trong payload) để hiện
 pill "Extension bản cũ" khi lệch.
@@ -90,7 +92,7 @@ có ảnh base64).
 |---|---|
 | `/api/health` | `{"ok":true, "brain":"<id não>", "version":"<VERSION>", "extVersion":"<version extension kỳ vọng>"}` — **miễn token** |
 | `/api/brain` | não hiện tại + danh sách preset (kèm cờ `installed`) |
-| `/api/poll` | output mới từ session não ACP (chat.html poll) |
+| `/api/poll` | output mới từ session não ACP. `?since=<n>` con trỏ; `since<0` = reset (replay toàn bộ + `reset:true`). `?wait=<ms>` = long-poll: chờ tới khi có event mới hoặc hết `wait` (cap 30s) — chỉ `.py`, `.ps1` bỏ qua `wait` (HttpListener tuần tự, giữ request sẽ kẹt mọi call khác) |
 | `/api/permissions` | nội dung `permissions.json` |
 | `/api/connections` | nội dung `connections.json` |
 | `/api/config` | nội dung `config.json` |
@@ -100,13 +102,13 @@ có ảnh base64).
 
 | Path | Body | Tác dụng |
 |---|---|---|
-| `/api/prompt` | `{text}` | gửi prompt vào não ACP (não chết → bridge tự bật lại, trả 503 "gửi lại sau") |
+| `/api/prompt` | `{text}` | gửi prompt vào não ACP. Não đang bận một lượt khác → `409 {"err":"đang bận"}`. Não chết → bridge tự bật lại, trả 503 "gửi lại sau" |
 | `/api/brain` | `{id}` hoặc `{cmd, args?, terminal?, label?}` | đổi não: ghi `brain.json` + restart agent; preset không đủ `requires` → 404 kèm `missing`; `cmd` chỉ nhận tên lệnh trần `[A-Za-z0-9_.-]+` |
-| `/api/respond` | `{id, optionId}` | trả lời câu hỏi agent đang hỏi (`__cancel__` = huỷ) |
+| `/api/respond` | `{id, optionId}` | trả lời câu hỏi agent đang hỏi. `id` phải đang nằm trong pending map (ghi khi bridge dispatch `session/request_permission`, TTL 600s): không khớp/hết hạn/đã trả → `404`; `optionId` lạ → `400` (không huỷ card). Hợp lệ → consume một lần + forward. `optionId:"__cancel__"` = huỷ (vẫn cần `id` pending) |
 | `/api/delete-lesson` | `{folder}` | xoá bài + gỡ khỏi manifest |
 | `/api/save-page` | `{file, html}` | ghi `.html` **chỉ dưới `my-course/`**; tự tạo `<file>.bak` trước khi ghi đè; chặn `..` |
-| `/api/permissions` | `{path, access, note?}` | thêm folder được phép (`read`/`read-write`) |
-| `/api/remove-permission` | `{path}` | gỡ quyền |
+| `/api/permissions` | `{path, access, note?}` | thêm folder được phép (`read`/`read-write`); regen `.devin/agent.sb` (macOS) |
+| `/api/remove-permission` | `{path}` | gỡ quyền; regen `.devin/agent.sb` (macOS) |
 | `/api/connections` | `{app, ...}` | cập nhật trạng thái kết nối app |
 | `/api/remove-connection` | `{id}` | gỡ kết nối |
 | `/api/secrets` | `{app, fields}` | lưu field bí mật (ô `secret:true` trong connections) |
@@ -122,12 +124,35 @@ có ảnh base64).
 
 Không có API — chỉ GET file tĩnh. Đặc điểm:
 
+- **Host check**: chỉ nhận `Host:` thuộc `localhost`/`127.0.0.1`/`[::1]`
+  (mọi port) — chống DNS rebinding; Host khác/thiếu → 403. `serve.ps1`
+  miễn lo (http.sys chỉ bind prefix localhost).
 - Chặn đường dẫn chứa dotfiles (`.devin`, `.git`) — secrets của học viên
   nằm trong `.devin/`, không được lộ ra HTTP.
+- **CSP** trên mọi `.html` dưới `/my-course/` và `/intro/` (so path
+  lower-case — FS case-insensitive không được bypass): `default-src
+  'self'; img-src 'self' data: https:; media-src 'self' https:;
+  style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'
+  https:; frame-src 'self' https:; connect-src 'none'` — trang
+  clone/content không gọi được ra ngoài.
+- HTTP/1.1 keep-alive; `/web/vendor/*` cache `max-age=3600`, còn lại
+  `no-store`; `Range` single-range → `206` + `Content-Range`
+  (`bytes=-N` = suffix), vượt biên → `416`, multi-range → `200` trọn.
 - `GET /web/` → portal · `/my-course/trang-*.html` → file clone ·
   `/web/clone-view.html?src=/my-course/<file>.html` → viewer sửa trang.
 
 ## 4. ttyd :7681 — terminal (tuỳ chọn)
 
-`ttyd -p 7681 -i 127.0.0.1 -W devin` — websocket terminal, portal nhúng
-qua iframe. Không có HTTP API cho agent.
+Không spawn não trần — mọi đường đều qua **term-gate**
+(`tools/term-gate.sh` / `.cmd`, áp ở `start.sh`, `chat-terminal.ps1`,
+`tools/launcher.py`):
+
+```
+ttyd -p 7681 -i 127.0.0.1 -W -a <gate>
+```
+
+`-a` cho ttyd append `?arg=` của URL iframe vào cuối lệnh gate; portal
+(`app.js`) tự gắn `?arg=<BRIDGE_TOKEN>`. Gate đòi nhập đúng mã kết nối
+trong shell (sai 3 lần/timeout 90s → thoát) rồi mới `exec <não>` —
+macOS bọc thêm `sandbox-exec -f .devin/agent.sb`. Trang web lạ mở được
+WS ttyd nhưng chỉ gặp prompt mã, không chạm được shell.

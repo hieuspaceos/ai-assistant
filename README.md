@@ -92,13 +92,18 @@ ai-assistant/
 ├── AGENTS.md                  # "ELI10 teacher" persona + safety rules (applies to every session)
 ├── SETUP.md                   # install guide for learners (Windows)
 ├── brain.json                 # active brain — an ACP-speaking agent CLI (change in onboarding / ⚙ Settings, default devin)
-├── start.bat                  # launcher: chat-bridge (7682) + ttyd (7681) + ext-bridge (7684) + portal (8080) + open browser
-├── tools/serve.ps1            # pure-PowerShell static server, blocks dotfiles (serve.py on macOS/Linux)
-├── tools/ext-bridge.py        # extension bridge: HTTP API for the agent + WS for the extension (7684)
-├── tools/chat-bridge.ps1      # browser ↔ ACP brain bridge (Windows; .py on macOS/Linux)
+├── start.bat / start.sh       # launcher: chat-bridge (7682) + ttyd via term-gate (7681) + ext-bridge (7684) + portal (8080) + open browser
+├── tools/serve.ps1            # pure-PowerShell static server: dotfile block, CSP on course pages, Range (serve.py on macOS/Linux — + Host check, keep-alive)
+├── tools/ext-bridge.py        # extension bridge: HTTP API for the agent + token-authed WS for the extension (7684)
+├── tools/chat-bridge.ps1      # browser ↔ ACP brain bridge: long-poll, respond-gate, prompt lock (Windows; .py on macOS/Linux, also spawns the brain under macOS Seatbelt)
+├── tools/term-gate.*          # gate between ttyd and the brain — requires the connection code before exec (all spawn paths: start, chat-terminal, launcher)
+├── tools/gen-sandbox.py       # generates .devin/agent.sb from permissions.json — macOS enforcement
+├── tools/launcher.py          # supervisor inside the packaged binary — builds ~/TroLyAI, spawns all processes
 ├── tools/chat-terminal.ps1    # ttyd launcher, light theme + large font (Terminal mode)
 ├── tools/test-*.py            # stdlib smoke tests: bridge endpoints, .py↔.ps1 parity, skill-pack sync
 ├── intro/slides.html          # static intro deck (Lesson 0)
+├── site/                      # landing page troly.hieuspace.com (deployed via the gh-pages branch + CNAME)
+├── plans/                     # multi-phase work plans (executed and in-flight)
 ├── web/                       # portal: index.html + app.js + styles.css + clone-view.html (clone editor)
 ├── tools/clone-compare.py     # /clone-trang "compare" phase: style-diff + pixel-diff, no Pillow
 ├── templates/                 # lesson / exercise / video-script / slide-deck scaffolds
@@ -128,7 +133,12 @@ ai-assistant/
   a new skill.
 - **Safe by default.** The agent is the last line of defense: always
   announces before touching files, works on copies, blocks pasted
-  secrets.
+  secrets. Belt-and-suspenders on top: every bridge requires the
+  connection code, Terminal mode asks for it again inside the shell
+  (`term-gate`), permission cards only accept live pending requests,
+  course/clone pages run under `connect-src 'none'`, and on macOS the
+  brain runs inside a Seatbelt sandbox generated from
+  `permissions.json` — see `docs/SECURITY.md`.
 
 ## Onboarding a colleague
 

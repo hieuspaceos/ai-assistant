@@ -16,10 +16,15 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 
 | File | Vai trò |
 |---|---|
-| `serve.py` / `serve.ps1` | Static server, chặn dotfiles |
-| `chat-bridge.py` / `.ps1` | Chat portal ↔ não ACP (`brain.json` chọn não, `/api/brain` đổi nóng); API config/permissions/connections/secrets/save-page |
-| `chat-terminal.ps1` | Chạy ttyd theme sáng font lớn (Windows) |
-| `ext-bridge.py` | HTTP `/api/browser` ↔ WS extension — lái trình duyệt thật |
+| `serve.py` / `serve.ps1` | Static server: chặn dotfiles, Host check chống rebinding, CSP `/my-course/`+`/intro/`, Range, keep-alive |
+| `chat-bridge.py` / `.ps1` | Chat portal ↔ não ACP (`brain.json` chọn não, `/api/brain` đổi nóng); API config/permissions/connections/secrets/save-page; long-poll + prompt_lock + respond-gate; spawn não qua Seatbelt (macOS) |
+| `term-gate.sh` / `.cmd` | Cửa gác giữa ttyd và não — đòi mã kết nối (từ `?arg=`) trước khi exec não; macOS bọc sandbox-exec |
+| `gen-sandbox.py` | Sinh `.devin/agent.sb` từ `permissions.json` — whitelist write + deny-enumerate read (quirk Darwin) |
+| `setup-agent-user.ps1` | Khung Windows: user hạn chế `troly-agent` + icacls theo permissions (phần spawn cross-user chưa verify) |
+| `launcher.py` | Supervisor của bản đóng gói (`troly`/`TroLyAI.exe`) — tự dựng `~/TroLyAI`, spawn 4 process |
+| `build.sh` | Đóng gói binary một file (PyInstaller) |
+| `chat-terminal.ps1` | Chạy ttyd theme sáng font lớn (Windows), qua term-gate |
+| `ext-bridge.py` | HTTP `/api/browser` ↔ WS extension — lái trình duyệt thật; WS auth trước handshake, cap 64MB |
 | `clone-compare.py` | So clone vs nguồn: `harvest`/`styles`/`shot` — pha 4 của /clone-trang |
 | `scene-player.html` | Player cho `scene.json` của bài học (demo có điều khiển) |
 | `test-bridges.py` | Smoke test endpoint: auth 401, save-page sandbox, brain whitelist — spawn bridge thật trên port động |
@@ -75,3 +80,14 @@ Khung bài học: `lesson.md`, `exercise.md`, `video-script` template,
 ## intro/
 
 `slides.html` — deck giới thiệu tĩnh (Bài 0) trước khi có khoá học riêng.
+
+## site/ — landing page troly.hieuspace.com
+
+HTML/CSS/JS thuần (`index.html`, `privacy.html`, `*.css`, `assets/` —
+video demo + poster). Deploy = copy ra branch `gh-pages` (+ `CNAME`),
+GitHub Pages phục vụ. `.hallmark/` giữ ảnh chụp review, không deploy.
+
+## plans/
+
+Kế hoạch nhiều phase đã/thực thi — mỗi folder `YYMMDD-HHMM-<tên>/` có
+`plan.md` + `phase-NN-*.md`.

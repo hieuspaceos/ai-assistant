@@ -48,6 +48,12 @@ extension = cánh tay trên trình duyệt · serve.py = file tĩnh.
   `intro/`, `templates/` — mọi thứ hiển thị được trong browser.
 - **Chặn dotfiles**: không phục vụ đường dẫn chứa `.devin`/`.git` (trong
   `.devin/` có secrets của học viên).
+- **Host check** chống DNS rebinding: chỉ `localhost`/`127.0.0.1`/`[::1]`.
+- **CSP `connect-src 'none'`** trên `.html` dưới `/my-course/`+`/intro/` —
+  nội dung clone/bài học không exfil được ra net. Slide trong portal nhúng
+  qua iframe `sandbox="allow-scripts"` (opaque origin).
+- HTTP/1.1 keep-alive + `Range` (video bài học tua được); `/web/vendor/*`
+  cache 1h.
 - Không build step — HTML/CSS/JS thuần.
 
 ### 2. chat-bridge — `tools/chat-bridge.py` / `.ps1` :7682
@@ -59,16 +65,24 @@ extension = cánh tay trên trình duyệt · serve.py = file tĩnh.
   khởi động lại agent nóng, không cần chạy lại start).
 - Agent chết/chưa cài: bridge không chết theo — báo lỗi về UI và tự
   thử bật lại ở prompt kế tiếp.
-- Gửi prompt vào session ACP, poll output, quản lý permissions/
+- Gửi prompt vào session ACP (`prompt_lock` — một lượt tại một thời
+  điểm, tranh chấp → 409), long-poll output, quản lý permissions/
   connections/config/secrets, lưu trang clone (`/api/save-page`).
+- `/api/respond` chỉ nhận `id` còn pending trong map (TTL 600s,
+  one-shot) — không trả lời được câu hỏi của session cũ.
 - Sandbox ghi file: chỉ `.html` dưới `my-course/`; tự tạo `.bak` trước
   khi ghi đè. Chi tiết endpoint: `api-reference.md`.
 
 ### 3. ttyd — :7681 (tuỳ chọn)
-- **Mục đích:** chế độ Terminal — `ttyd -p 7681 -W <não>` nhúng CLI
+- **Mục đích:** chế độ Terminal — `ttyd -p 7681 -W -a <gate>` nhúng CLI
   thật vào portal; `<não>` = trường `terminal` trong `brain.json`.
   Windows dùng `tools/chat-terminal.ps1` (theme sáng, font lớn cho
   người mới).
+- **term-gate** (`term-gate.sh`/`.cmd`) đứng giữa ttyd và não ở mọi
+  đường spawn (start.sh, chat-terminal.ps1, launcher.py — bản đóng
+  gói): ttyd `-a` truyền `?arg=<mã kết nối>` từ URL iframe, gate đòi
+  đúng mã trong shell (sai 3 lần/timeout 90s → thoát) rồi mới `exec
+  <não>` — ai mở được WS ttyd cũng chỉ gặp prompt mã, không chạm shell.
 - Thiếu ttyd thì portal vẫn chạy chế độ Chat bình thường.
 
 ### 4. ext-bridge — `tools/ext-bridge.py` :7684
@@ -105,6 +119,13 @@ extension = cánh tay trên trình duyệt · serve.py = file tĩnh.
   một agent.
 - Agent đọc `AGENTS.md` (persona + an toàn) và `.devin/skills/` (công
   thức) — skill nằm trong file nên não nào đọc AGENTS.md cũng dùng được.
+- **macOS: não chạy trong Seatbelt** — `tools/gen-sandbox.py` sinh
+  `.devin/agent.sb` từ `permissions.json` rồi chat-bridge spawn qua
+  `sandbox-exec -f`. Đọc = allow `/` trừ sibling bị deny-enumerate
+  (quirk compiler Darwin: `process*` chỉ compile khi `file-read*` phủ
+  `/`); ghi = whitelist CWD + folder `read-write`. `bridge.token`
+  đọc-được-không-ghi; `secrets*.json` deny-read. Windows chưa có
+  enforcement tương đương (`tools/setup-agent-user.ps1` là khung).
 - Agent gọi `POST :7684/api/browser` khi skill cần lái trình duyệt; gọi
   `POST :7682/api/save-page` khi viewer lưu trang clone.
 
@@ -112,7 +133,7 @@ extension = cánh tay trên trình duyệt · serve.py = file tĩnh.
 
 | Luồng | Đường đi |
 |---|---|
-| Học viên chat | chat.html → :7682/api/prompt → não ACP → poll /api/poll → render |
+| Học viên chat | chat.html → :7682/api/prompt → não ACP → long-poll /api/poll?wait= → render |
 | Đổi não | onboarding/Cài đặt → :7682/api/brain → brain.json + restart agent |
 | Agent đọc Zalo | agent → :7684/api/browser {snapshot} → WS → content.js → cây phần tử → agent |
 | Clone trang | agent → open/dom/styles/css/assets/screenshot (7684) → ref-* trong clone-work/<site>/ → dựng .html → portal viewer |
