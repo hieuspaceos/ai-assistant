@@ -1,8 +1,10 @@
 # Cài đặt một lần — xong dùng mãi
 
-> **Cách nhanh nhất (khuyến nghị):** tải file `TroLyAI.exe` (Windows) hoặc
-> `troly` (macOS) → double-click → xong. File tự dựng mọi thứ trong
-> `~/TroLyAI` rồi mở portal — không cần Python, không cần các bước dưới.
+> **Cách nhanh nhất (khuyến nghị):** tải file `troly` từ trang phát hành
+> → https://github.com/hieuspaceos/ai-assistant/releases/latest → chạy
+> là xong. File tự dựng mọi thứ trong `~/TroLyAI` rồi mở portal — không
+> cần Python, không cần các bước dưới.
+> *(Hiện có bản macOS; bản Windows `TroLyAI.exe` sẽ bổ sung sau.)*
 >
 > Các bước thủ công bên dưới dành cho máy dev hoặc khi chưa có file `troly`
 > cho nền tảng của bạn.
