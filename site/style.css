@@ -7,6 +7,7 @@
 
 /* ————— chrome ————— */
 .masthead { padding-top: var(--space-lg); }
+.tagline { display: block; text-align: center; font-size: var(--text-sm); color: var(--color-muted); margin-top: var(--space-2xs); }
 .wordmark { display: block; text-align: center; font-size: var(--text-title); font-weight: var(--display-weight); letter-spacing: var(--tracking-display); text-decoration: none; }
 .masthead nav { margin-top: var(--space-md); border-top: var(--rule-hair) solid var(--color-rule); display: flex; align-items: center; justify-content: center; gap: var(--space-xl); padding-block: var(--space-sm); }
 .masthead nav a { font-size: var(--text-sm); color: var(--color-ink-2); text-decoration: none; }
@@ -41,10 +42,24 @@
 .mapwell.revealed .map-node { opacity: 0; animation: inkon var(--dur-long) var(--ease-out) both; animation-delay: calc(var(--i) * 90ms); }
 @keyframes inkon { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
+/* ————— the learning loop ————— */
+.loopwell { background: var(--color-paper-2); border-radius: var(--radius-card); padding: var(--space-xl); }
+.loopwell svg { max-width: 38rem; margin-inline: auto; display: block; }
+.loop-edge { stroke: var(--color-rule-2); stroke-width: 1.5; fill: none; }
+.loop-arrowhead { fill: var(--color-rule-2); }
+.loop-cap { text-align: center; margin: var(--space-lg) 0 0; font-size: var(--text-sm); color: var(--color-muted); }
+
 /* ————— sections ————— */
 .section { padding-block: var(--section-gap-s); }
 .headblock { margin-bottom: var(--space-2xl); max-width: 40rem; }
 .headblock .lead { margin-top: var(--space-md); color: var(--color-ink-2); }
+
+.plugs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--gap-columns); }
+.plug { background: var(--color-paper-2); border-radius: var(--radius-card); padding: var(--space-lg); }
+.plug dt { font-weight: 600; font-size: var(--text-md); display: flex; flex-direction: column; gap: var(--space-md); }
+.plug dd { margin: var(--space-sm) 0 0; color: var(--color-ink-2); font-size: var(--text-sm); }
+.plug .muted { color: var(--color-muted); font-weight: 400; font-size: var(--text-sm); }
+.plug svg { color: var(--color-accent-deep); }
 
 .rows { border-top: var(--rule-hair) solid var(--color-rule); }
 .row { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: var(--gap-columns); padding-block: var(--space-lg); border-bottom: var(--rule-hair) solid var(--color-rule); }
@@ -102,6 +117,7 @@
   .hero__text, .hero__map, .close__text, .close__shot { grid-column: 1 / -1; }
   .hero__map { margin-top: var(--space-xl); }
   .row { grid-template-columns: 1fr; gap: var(--space-xs); }
+  .plugs { grid-template-columns: 1fr 1fr; }
   .compare td, .compare th { display: block; padding-right: 0; }
   .compare thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .compare td.before { padding-bottom: var(--space-2xs); }

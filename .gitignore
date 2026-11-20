@@ -20,4 +20,4 @@ Thumbs.db
 build/
 dist/
 *.spec
-site/.hallmark/
+.hallmark/

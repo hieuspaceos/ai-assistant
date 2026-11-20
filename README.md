@@ -11,6 +11,10 @@ design — Google Sheets, WordPress, Canva, CapCut). Windows là chính;
 macOS/Linux chạy được bằng `start.sh`. Hỗ trợ **tiếng Việt và English**
 — onboarding lần đầu hỏi ngôn ngữ.
 
+**Trang giới thiệu:** https://troly.hieuspace.com — giải thích bằng
+video demo thật, có nút tải bản macOS (file `troly` một file duy nhất,
+xem `tools/build.sh`).
+
 ## Trải nghiệm của học viên
 
 1. Cài một lần theo `SETUP.md` (Windows Terminal + Devin CLI + ttyd).
@@ -114,10 +118,11 @@ ai-assistant/
 
 ## Onboard một đồng nghiệp
 
-1. Copy cả folder `ai-assistant/` sang máy họ (hoặc clone repo).
-2. Gửi họ `SETUP.md` (hoặc nhờ IT cài hộ 3 thứ: Windows Terminal, Devin
-   CLI với license, ttyd).
-3. Xong. Mọi thứ còn lại agent tự lo với học viên.
+1. Gửi họ **troly.hieuspace.com** — nút tải trỏ GitHub Release mới
+   nhất. Trên macOS chỉ cần file `troly` một file; Windows dùng
+   `start.bat` theo `SETUP.md` (bản `.exe` đóng gói bằng
+   `tools/build.sh` trên máy Windows).
+2. Xong. Mọi thứ còn lại agent tự lo với học viên.
 
 ## Nâng cấp sau này (note)
 
