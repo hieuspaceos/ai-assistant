@@ -1,10 +1,13 @@
-# AI Assistant — a self-generating personalized course system
+# Trợ Lý AI — an assistant that does real work, and teaches you to use it
 
-Not a pre-written course. This is a **course-generating machine** built
-on Devin CLI: the learner is interviewed about their real job → the
-agent designs a custom syllabus → generates lessons (guide + exercises
-+ slides + video script) that solve their actual pain points → serves
-them through a local web portal with an embedded terminal.
+An AI assistant that **does real work on your machine**: reads Zalo,
+updates Google Sheets, processes files, posts to WordPress, builds web
+pages — using your own signed-in browser, no code required.
+
+And it's the only assistant that **teaches you how to use it**: on first
+run it interviews you about your actual job → designs a personal course
+→ generates lessons (guide + exercises + slides + video script) that
+solve your real pain points, served through a local web portal.
 
 Audience: office workers who don't code (marketing, content, SEO,
 design — Google Sheets, WordPress, Canva, CapCut). Windows is the
@@ -12,8 +15,8 @@ primary platform; macOS/Linux works via `start.sh`. Supports
 **Vietnamese and English** — first-run onboarding asks for a language.
 
 **Landing page:** https://troly.hieuspace.com — explains with a real
-demo video and has a download button for the macOS build (a single
-`troly` file, see `tools/build.sh`).
+demo video and has download buttons (single file per OS — `troly` for
+macOS, `TroLyAI.exe` for Windows, see `tools/build.sh`).
 
 ## The learner experience
 
