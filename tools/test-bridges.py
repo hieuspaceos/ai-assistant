@@ -368,6 +368,28 @@ def main():
         s, h = http_raw(f"http://127.0.0.1:{sv}/site/t.html")
         check("26. .html ngoài vùng nội dung KHÔNG có CSP",
               s == 200 and "Content-Security-Policy" not in h)
+
+        # ---- lock-down ph-3: /api/respond siết pending ----
+        s, _, _ = http("POST", b3 + f"/api/respond?token={TOKEN}",
+                       {"id": 999999, "optionId": "allow"})
+        check("27. respond id bịa → 404", s == 404, str(s))
+
+        # __cancel__ miễn check optionId nhưng id vẫn phải pending —
+        # nếu không kẻ có token bơm id rác vào kênh điều khiển agent
+        s, _, _ = http("POST", b3 + f"/api/respond?token={TOKEN}",
+                       {"id": 888888, "optionId": "__cancel__"})
+        check("28. respond __cancel__ id bịa → 404", s == 404, str(s))
+
+        # respond trả optionId ngoài danh sách → 400; một lần hợp lệ → 404
+        # lần sau. Cả hai cần perm thật (não giả không phát được) → kiểm
+        # static: cả .py lẫn .ps1 đều có pending map + validate
+        src_cb = open(os.path.join(TOOLS, "chat-bridge.py"),
+                      encoding="utf-8").read()
+        src_cbps = open(os.path.join(TOOLS, "chat-bridge.ps1"),
+                        encoding="utf-8-sig").read()
+        check("29. pending-perm map cả hai nền tảng",
+              "perm_pending" in src_cb and "PERM_TTL" in src_cb
+              and "PermPending" in src_cbps and "PermTtl" in src_cbps)
     finally:
         for p in procs:
             try:
