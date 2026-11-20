@@ -21,3 +21,4 @@ build/
 dist/
 *.spec
 .hallmark/
+troly-ext.zip
