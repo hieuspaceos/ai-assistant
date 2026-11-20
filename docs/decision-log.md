@@ -3,6 +3,26 @@
 Các quyết định kiến trúc và **tại sao** — để sau này không gỡ ngược lại
 vì quên lý do. Mới nhất lên đầu.
 
+## 2026 — Cập nhật: release banner + version handshake
+
+**Banner trong portal là "nút cập nhật" duy nhất.** Vì: học viên không
+mở GitHub được — portal tự hỏi Releases API (public, không token),
+so semver với `VERSION` đang chạy, chỉ hiện khi thật sự có bản mới.
+Mất mạng thì im lặng — portal local không phụ thuộc internet.
+
+**Extension báo `?v=` trong WS handshake, không phải endpoint.** Vì:
+lúc nối là thời điểm duy nhất ext-bridge chắc chắn biết bản extension
+thật — polling manifest phía portal chỉ thấy bản "kỳ vọng" trong
+payload, không thấy bản đang chạy trong profile trình duyệt.
+`?v=` đi kèm `?token=` nên không mở thêm cửa nào. Expected lấy từ
+`extension/manifest.json` của payload qua `/api/health` — nguồn sự
+thật duy nhất, không cần constant nhớ tay.
+
+**Stale pill chỉ cảnh báo, không tự update.** Vì: extension unpacked
+không có cơ chế tự cập nhật — đường đúng là Web Store (auto-update
+miễn phí); đến lúc đó pill vàng + hướng dẫn trong Cài đặt là đủ cho
+người dùng thật.
+
 ## 2026 — `troly` single-binary + self-install
 
 **Một binary nhiều vai qua argv, payload tự bung ra `~/TroLyAI`.** Vì:

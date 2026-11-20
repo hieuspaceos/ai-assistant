@@ -29,12 +29,15 @@ POST http://localhost:7684/api/browser?token=<mã>
 → {"ok": true, ...} | {"ok": false, "err": "..."}
 ```
 
-Extension kết nối `ws://localhost:7684/ext?token=<mã>` —
-`connected:false` nghĩa là extension chưa mở/chưa nạp/chưa pair.
+Extension kết nối `ws://localhost:7684/ext?token=<mã>&v=<version>`
+— `connected:false` nghĩa là extension chưa mở/chưa nạp/chưa pair.
+`extVersion` trong response status là version extension tự báo; portal
+so với `extVersion` của `/api/health` (manifest trong payload) để hiện
+pill "Extension bản cũ" khi lệch.
 
 | action | params | Trả về |
 |---|---|---|
-| `status` | — | extension có nối không |
+| `status` | — | `{connected, extVersion}` — extension có nối không + bản của nó |
 | `tabs` | — | danh sách tab `{id, url, title}` |
 | `open` | `url` | `tabId` tab mới |
 | `activate` | `tabId` | focus tab |
@@ -85,7 +88,7 @@ có ảnh base64).
 
 | Path | Trả về |
 |---|---|
-| `/api/health` | `{"ok":true, "brain":"<id não>", "version":"<VERSION>"}` — **miễn token** |
+| `/api/health` | `{"ok":true, "brain":"<id não>", "version":"<VERSION>", "extVersion":"<version extension kỳ vọng>"}` — **miễn token** |
 | `/api/brain` | não hiện tại + danh sách preset (kèm cờ `installed`) |
 | `/api/poll` | output mới từ session não ACP (chat.html poll) |
 | `/api/permissions` | nội dung `permissions.json` |
