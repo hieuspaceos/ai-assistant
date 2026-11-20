@@ -15,6 +15,7 @@ bằng "cỗ máy sinh khoá học" khiến người nghe tưởng đây là LMS
 | `SETUP.md` | modify | đoạn giới thiệu đầu file |
 | `docs/project-overview-pdr.md` | modify | Executive Summary đổi trật tự: assistant trước, course machine là cách nó onboard |
 | `docs/extension-store-listing.md` | modify | mô tả listing nhấn "trợ lý làm việc" |
+| `web/index.html` | modify | **surface lớn nhất plan gốc sót** — `<title>` + `brand-sub` + `hero-sub` đang lead "khoá học của riêng bạn"; đổi sang assistant-first |
 | `web/onboarding.html` | modify | câu chào/welcome text nếu còn lead bằng khoá học |
 
 ## Chi tiết

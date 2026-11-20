@@ -1,9 +1,12 @@
 # Phase 1 — CI build `troly.exe` cho Windows
 
-> **Status: code xong (commit `005a07f`) — chờ push + tag để CI chạy thật.**
-> Build.sh verify trên macOS: build xanh, exe chạy được. Phần còn lại của
-> phase là E2E trên GitHub Actions + verify exe Windows (gộp chung với
-> fix-audit ph-5).
+> **Status: CI xanh E2E — Release `v1.0.2` có đủ `troly` + `TroLyAI.exe`
+> (run 44725484816).** Còn lại: verify exe trên Windows thật (gộp chung
+> với fix-audit ph-5). Lỗi đã gặp và vá: snippet gốc dùng
+> `{ shell: ${{ matrix.shell }} }` — `${{` trong flow mapping làm YAML
+> parser gãy, run chết 0s; bản thật dùng block `shell: bash` (cả hai
+> runner đều có Git Bash). Tag `v1.0.1` mồ côi trỏ commit lỗi — xoá bằng
+> `git push --delete origin v1.0.1` khi tiện.
 
 ## Mục tiêu
 
@@ -46,11 +49,12 @@ jobs:
     strategy:
       matrix:
         include:
-          - { os: macos-latest,  name: troly,       shell: bash }
-          - { os: windows-latest, name: TroLyAI.exe, shell: bash }
+          - { os: macos-latest,   name: troly }
+          - { os: windows-latest, name: TroLyAI.exe }
     runs-on: ${{ matrix.os }}
     defaults:
-      run: { shell: ${{ matrix.shell }} }
+      run:
+        shell: bash   # Git Bash có sẵn trên windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -82,7 +86,9 @@ jobs:
             echo "tag $GITHUB_REF_NAME != VERSION $(cat VERSION)"; exit 1; }
           gh release create "$GITHUB_REF_NAME" \
             troly/troly "TroLyAI.exe/TroLyAI.exe" \
-            --generate-notes --verify-tag
+            --generate-notes --verify-tag \
+          || gh release upload "$GITHUB_REF_NAME" \
+            troly/troly "TroLyAI.exe/TroLyAI.exe" --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```

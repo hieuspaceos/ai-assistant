@@ -56,6 +56,14 @@ chỉ có `/api/browser/status` — đổi path thành `/ext-api/browser/status`
 (prefix do connector map, phase 2) → chỉ làm việc khi local (remote thì
 `/ext-api` connector trả từ :7684 — vẫn được nếu cần).
 
+**Extension auto-pair không chạy được khi remote** — `app.js`/`onboarding.html`
+gọi `chrome.runtime.sendMessage(EXT_ID,…)` nhưng `externally_connectable`
+chỉ cho `localhost`/`127.0.0.1` origins, và trình duyệt mobile hầu như
+không chạy được extension. Khi `!IS_LOCAL`: feature-detect (`typeof
+chrome!=='undefined' && chrome.runtime && chrome.runtime.sendMessage`)
+trước mọi call và bỏ qua phần auto-pair/badge extension — portal remote
+là chat/file-only, không điều khiển browser trên điện thoại.
+
 ## 2. Pairing UI — hai phía
 
 **Desktop (portal ⚙):** mục mới "Truy cập từ điện thoại":
