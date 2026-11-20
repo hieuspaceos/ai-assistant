@@ -32,6 +32,16 @@ if ! command -v "$BRAIN_CMD" >/dev/null 2>&1; then
   echo "      Cai no, hoac mo portal roi doi sang nao khac trong muc thiet lap."
 fi
 
+# --- "Chia khoa nha" dung chung cho cac bridge — sinh 1 lan truoc khi
+# launch (tranh race giua cac process), export de ttyd/nao ke thua ---
+TOKEN_FILE="$ROOT/.devin/bridge.token"
+mkdir -p "$ROOT/.devin"
+if [ ! -s "$TOKEN_FILE" ]; then
+  (umask 077; python3 -c "import secrets;print(secrets.token_hex(24))" > "$TOKEN_FILE")
+fi
+BRIDGE_TOKEN="$(cat "$TOKEN_FILE")"
+export BRIDGE_TOKEN
+
 # --- 1. Portal tinh (cong 8080) — chan dotfiles (.devin chua secrets) ---
 python3 tools/serve.py 8080 "$ROOT" >"$LOGDIR/portal.log" 2>&1 &
 echo "  portal    : http://localhost:8080/web/"
@@ -57,8 +67,8 @@ curl -sf -o /dev/null http://127.0.0.1:8080/web/ || \
 curl -sf -o /dev/null http://127.0.0.1:7682/api/health || \
   echo "  [!] Chat bridge chua len - che do Chat se trong. Xem $LOGDIR/chat-bridge.log"
 
-# --- Mo trang web khoa hoc ---
-URL="http://localhost:8080/web/"
+# --- Mo trang web khoa hoc (kem ma ket noi de portal goi duoc bridge) ---
+URL="http://localhost:8080/web/?t=$BRIDGE_TOKEN"
 if command -v open >/dev/null 2>&1; then
   open "$URL"          # macOS
 elif command -v xdg-open >/dev/null 2>&1; then

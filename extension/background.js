@@ -6,19 +6,22 @@
 const WS_URL = 'ws://127.0.0.1:7684/ext';
 let ws = null;
 let reconnectTimer = null;
+let extToken = null;   // "mã kết nối" — ext-bridge chỉ nhận WS kèm ?token=
 
-function setBadge(on) {
-  // Chữ nhỏ trên icon: ON = đang kết nối với trợ lý
-  chrome.action.setBadgeText({ text: on ? 'ON' : '' });
+function setBadge(state) {
+  // Chữ nhỏ trên icon: ON = đã nối · ! = đang chờ mã kết nối · trống = chưa nối
+  const txt = state === 'on' ? 'ON' : state === 'need-token' ? '!' : '';
+  chrome.action.setBadgeText({ text: txt });
   chrome.action.setBadgeBackgroundColor({ color: '#147a4f' });
 }
 
 function connect() {
+  if (!extToken) { setBadge('need-token'); return; }
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
-  ws = new WebSocket(WS_URL);
-  ws.onopen = () => setBadge(true);
+  ws = new WebSocket(WS_URL + '?token=' + encodeURIComponent(extToken));
+  ws.onopen = () => setBadge('on');
   ws.onclose = ws.onerror = () => {
-    setBadge(false);
+    setBadge('off');
     ws = null;
     if (!reconnectTimer) {
       reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, 3000);
@@ -34,12 +37,42 @@ function connect() {
   };
 }
 
+// Auto-pair: trang portal (localhost — xem externally_connectable trong
+// manifest) gửi mã kết nối một lần, extension lưu rồi nối lại ngay.
+// Trang web khác không gọi được; kẻ lạ trên localhost chỉ ghi đè được
+// token (DoS reconnect), không đánh cắp được gì.
+chrome.runtime.onMessageExternal.addListener((m, sender, reply) => {
+  if (m && m.t === 'set-token' && typeof m.token === 'string' && m.token) {
+    extToken = m.token;
+    chrome.storage.local.set({ bridge_token: m.token });
+    try { ws && ws.close(); } catch (e) {}
+    connect();
+    if (reply) reply({ ok: true });
+  }
+});
+
+// Options page (đường dự phòng khi auto-pair không tới được) lưu thẳng
+// vào chrome.storage — message nội bộ này để reconnect ngay, khỏi reload.
+chrome.runtime.onMessage.addListener((m) => {
+  if (m && m.t === 'set-token' && typeof m.token === 'string') {
+    extToken = m.token;
+    try { ws && ws.close(); } catch (e) {}
+    connect();
+  }
+});
+
 // Service worker hay ngủ — alarm giữ nó thức và kết nối lại
 chrome.alarms.create('keepalive', { periodInMinutes: 0.5 });
 chrome.alarms.onAlarm.addListener(() => { if (!ws) connect(); });
-chrome.runtime.onStartup.addListener(connect);
-chrome.runtime.onInstalled.addListener(connect);
-connect();
+chrome.runtime.onStartup.addListener(boot);
+chrome.runtime.onInstalled.addListener(boot);
+function boot() {
+  chrome.storage.local.get('bridge_token', d => {
+    extToken = d.bridge_token || null;
+    connect();
+  });
+}
+boot();
 
 async function activeTabId() {
   const [t] = await chrome.tabs.query({ active: true, currentWindow: true });

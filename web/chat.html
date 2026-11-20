@@ -146,6 +146,7 @@ body {
     <textarea id="input" rows="1" placeholder="Nhắn cho trợ lý… (VD: /phong-van)" autocomplete="off"></textarea>
     <button id="send">Gửi</button>
   </div>
+<script src="bridge-token.js"></script>
 <script>
 // chỉ cho phép trỏ bridge về localhost — tham số lạ (link độc) bị bỏ qua
 const BRIDGE = (() => {
@@ -198,7 +199,7 @@ function applyStrings() {
   statusEl.textContent = S.busy;
 }
 applyStrings();
-fetch(BRIDGE + '/api/config').then(r => r.json()).then(c => {
+bfetch(BRIDGE + '/api/config').then(r => r.json()).then(c => {
   if (c.language === 'en') { S = STR.en; applyStrings(); }
 }).catch(() => {});
 
@@ -284,7 +285,7 @@ function addPerm(ev) {
     if (i === 0) b.className = 'primary';
     b.onclick = async () => {
       d.remove();
-      await fetch(BRIDGE + '/api/respond', {method: 'POST',
+      await bfetch(BRIDGE + '/api/respond', {method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({id: ev.id, optionId: o.optionId})});
     };
@@ -321,7 +322,7 @@ async function send() {
   addUser(t);
   setBusy(true);
   try {
-    await fetch(BRIDGE + '/api/prompt', {method: 'POST',
+    await bfetch(BRIDGE + '/api/prompt', {method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({text: t})});
   } catch (e) {
@@ -353,7 +354,7 @@ let since = 0;
 let connected = false;
 async function poll() {
   try {
-    const res = await fetch(BRIDGE + '/api/poll?since=' + since);
+    const res = await bfetch(BRIDGE + '/api/poll?since=' + since);
     if (!res.ok) throw new Error('bad');
     const data = await res.json();
     if (data.reset) {

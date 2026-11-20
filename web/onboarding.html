@@ -63,8 +63,20 @@ button.btn { padding:12px 26px; border:none; border-radius:12px; font-size:15px;
   <div class="steps" id="dots"></div>
   <div id="step"></div>
 </div>
+<script src="bridge-token.js"></script>
 <script>
 const BRIDGE = 'http://localhost:7682';
+// ID cố định của extension nhờ "key" trong manifest — auto-pair: gửi mã
+// kết nối thẳng cho extension, khỏi bắt học viên dán tay (còn ô dán dự
+// phòng trong trang options của extension).
+const EXT_ID = 'mdalidmkajiinlpdefjchbgcejjjmpeh';
+function tryPairExt() {
+  try {
+    if (!window.chrome || !chrome.runtime || !chrome.runtime.sendMessage) return;
+    chrome.runtime.sendMessage(EXT_ID,
+      { t: 'set-token', token: window.BRIDGE_TOKEN }, () => void chrome.runtime.lastError);
+  } catch (e) { /* chưa cài extension — cờ "!" trên icon nhắc dán mã sau */ }
+}
 let lang = 'vi', learnerName = '', folders = [], stepIdx = 0;
 
 const T = {
@@ -213,7 +225,7 @@ function stepBrain(){
     s.querySelector('#bcnote').style.display=custom?'':'none';
     if(custom){ const i=s.querySelector('#bc'); i.value=customBrain; i.oninput=e=>customBrain=e.target.value; i.focus(); }
   };
-  fetch(BRIDGE+'/api/brain').then(r=>r.json()).then(show)
+  bfetch(BRIDGE+'/api/brain').then(r=>r.json()).then(show)
     .catch(()=>{ bl.innerHTML=`<p class="note">${t('errBridge')}</p>`; });
   s.querySelector('.ghost').onclick=()=>go(1);
   s.querySelector('#bn').onclick=async()=>{
@@ -228,7 +240,7 @@ function stepBrain(){
     }
     if(!payload) return go(3);
     try{
-      const r=await fetch(BRIDGE+'/api/brain',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      const r=await bfetch(BRIDGE+'/api/brain',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
       const d=await r.json().catch(()=>({}));
       if(!r.ok){ err.textContent=d.err||t('brainErr'); return; }
       go(3);
@@ -257,7 +269,7 @@ function stepFolder(){
     const v=s.querySelector('#cf').value.trim();
     if(!v){ s.querySelector('#fe').textContent=t('errEmpty'); return; }
     try{
-      const r=await fetch(BRIDGE+'/api/permissions',{method:'POST',headers:{'Content-Type':'application/json'},
+      const r=await bfetch(BRIDGE+'/api/permissions',{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({path:v,access:'read'})});
       if(r.ok){ folders.push(v); selFolders.add(v); s.querySelector('#cf').value=''; s.querySelector('#fe').textContent=''; render(); }
       else s.querySelector('#fe').textContent=t('errFolder');
@@ -276,7 +288,7 @@ function stepApps(){
     <div class="row" style="margin-top:22px"><button class="btn ghost">${t('back')}</button><button class="btn pri" id="fin">${t('next')}</button></div>`;
   const al=s.querySelector('#al');
   // Danh sách preset + app nào trong connections.json mà preset chưa liệt kê thì hiện thêm
-  fetch(BRIDGE+'/api/connections').then(r=>r.json()).then(k=>{
+  bfetch(BRIDGE+'/api/connections').then(r=>r.json()).then(k=>{
     const have = new Set(APP_PRESETS.map(a=>a.id));
     (k.apps||[]).forEach(a=>{
       if(!have.has(a.id)) APP_PRESETS.push({id:a.id, vi:a.name||a.id, en:a.name||a.id});
@@ -299,26 +311,27 @@ function stepApps(){
 async function finish(){
   const btn=document.getElementById('fin'); btn.disabled=true; btn.textContent=t('saving');
   try{
-    await fetch(BRIDGE+'/api/setup',{method:'POST',headers:{'Content-Type':'application/json'},
+    await bfetch(BRIDGE+'/api/setup',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({language:lang,learner_name:learnerName})});
     for(const p of selFolders)
-      await fetch(BRIDGE+'/api/permissions',{method:'POST',headers:{'Content-Type':'application/json'},
+      await bfetch(BRIDGE+'/api/permissions',{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({path:p,access:'read'})}).catch(()=>{});
     // App đã có trong connections.json → chạy probe; app chưa có → upsert đăng ký mới
     // (upsert mới dùng /api/connections — check-connection 404 với app chưa đăng ký)
-    const k=await fetch(BRIDGE+'/api/connections').then(r=>r.json()).catch(()=>({apps:[]}));
+    const k=await bfetch(BRIDGE+'/api/connections').then(r=>r.json()).catch(()=>({apps:[]}));
     const have=new Set((k.apps||[]).map(a=>a.id));
     for(const id of selApps){
       if(have.has(id)){
-        await fetch(BRIDGE+'/api/check-connection',{method:'POST',headers:{'Content-Type':'application/json'},
+        await bfetch(BRIDGE+'/api/check-connection',{method:'POST',headers:{'Content-Type':'application/json'},
           body:JSON.stringify({id})}).catch(()=>{});
       }else{
         const p=APP_PRESETS.find(a=>a.id===id);
-        await fetch(BRIDGE+'/api/connections',{method:'POST',headers:{'Content-Type':'application/json'},
+        await bfetch(BRIDGE+'/api/connections',{method:'POST',headers:{'Content-Type':'application/json'},
           body:JSON.stringify({app:{id,name:(p?p[lang]:id),type:(p&&p.type)||'browser',status:'not-connected'}})}).catch(()=>{});
       }
     }
   }catch(e){ btn.disabled=false; btn.textContent=t('next'); return; }
+  tryPairExt();   // setup xong → gửi mã kết nối cho extension (nếu đã cài)
   go(5);
 }
 
@@ -331,6 +344,7 @@ function stepDone(){
 }
 
 go(0);
+tryPairExt();   // extension đã cài sẵn → nhận mã ngay, khỏi chờ bước cuối
 </script>
 </body>
 </html>

@@ -26,6 +26,18 @@ if errorlevel 1 (
   echo.
 )
 
+rem --- "Chia khoa nha" dung chung cho cac bridge — sinh 1 lan truoc khi
+rem launch (tranh race giua cac process); set env de ttyd/nao ke thua ---
+if not exist .devin mkdir .devin
+rem file ton tai nhap nhung rong (ai do tao file trong) thi xoa de sinh lai
+if exist .devin\bridge.token (
+  for %%A in (.devin\bridge.token) do if %%~zA EQU 0 del .devin\bridge.token
+)
+if not exist .devin\bridge.token (
+  powershell -NoProfile -Command "[IO.File]::WriteAllText('.devin\bridge.token', -join ((1..48) | %% { '{0:x}' -f (Get-Random -Max 16) }))"
+)
+for /f "usebackq delims=" %%i in (".devin\bridge.token") do set "BRIDGE_TOKEN=%%i"
+
 rem --- Kiem tra ttyd (de nhung terminal vao trang web) ---
 where ttyd >nul 2>nul
 if errorlevel 1 (
@@ -65,7 +77,7 @@ rem --- Mo trang web khoa hoc (cong 8080) ---
 start "Khoa hoc - dung dong cua so nay" /min powershell -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0tools\serve.ps1"
 
 timeout /t 2 /nobreak >nul
-start http://localhost:8080/web/
+start http://localhost:8080/web/?t=%BRIDGE_TOKEN%
 
 echo  Xong! Trang web khoa hoc da mo trong trinh duyet.
 echo  Muon tat: dong cac cua so "Tro ly AI ..." dang chay nen la duoc.

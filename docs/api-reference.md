@@ -1,20 +1,36 @@
 # ai-assistant — API Reference
 
-Ba endpoint group, tất cả bind `127.0.0.1`, JSON thuần, không auth
-(trust boundary = loopback — xem `SECURITY.md`).
+Ba endpoint group, tất cả bind `127.0.0.1`, JSON thuần.
+
+## Auth — bắt buộc từ v1.0
+
+Mọi call phải kèm "mã kết nối" `.devin/bridge.token`:
+
+- Header `X-Bridge-Token: <mã>` — hoặc
+- Query `?token=<mã>` — tiện cho lệnh một dòng / WebSocket.
+
+```bash
+TOKEN=$(cat .devin/bridge.token)
+curl -s "http://localhost:7682/api/poll?since=0&token=$TOKEN"
+curl -s -H "X-Bridge-Token: $TOKEN" http://localhost:7684/api/browser/status
+```
+
+Thiếu/sai → `401 {"err":"thiếu hoặc sai mã kết nối"}`. Miễn:
+`GET /api/health` (liveness) và `OPTIONS` (preflight CORS). Chi tiết mô
+hình khoá: `SECURITY.md`.
 
 ---
 
 ## 1. ext-bridge :7684 — lái trình duyệt (`tools/ext-bridge.py`)
 
 ```
-POST http://localhost:7684/api/browser
+POST http://localhost:7684/api/browser?token=<mã>
 {"action": "<action>", "tabId": <id>, ...params}
 → {"ok": true, ...} | {"ok": false, "err": "..."}
 ```
 
-Extension kết nối `ws://localhost:7684/ws/ext` — `connected:false` nghĩa
-là extension chưa mở/chưa nạp.
+Extension kết nối `ws://localhost:7684/ext?token=<mã>` —
+`connected:false` nghĩa là extension chưa mở/chưa nạp/chưa pair.
 
 | action | params | Trả về |
 |---|---|---|
@@ -69,7 +85,7 @@ có ảnh base64).
 
 | Path | Trả về |
 |---|---|
-| `/api/health` | `{"ok":true, "brain":"<id não>"}` |
+| `/api/health` | `{"ok":true, "brain":"<id não>", "version":"<VERSION>"}` — **miễn token** |
 | `/api/brain` | não hiện tại + danh sách preset (kèm cờ `installed`) |
 | `/api/poll` | output mới từ session não ACP (chat.html poll) |
 | `/api/permissions` | nội dung `permissions.json` |

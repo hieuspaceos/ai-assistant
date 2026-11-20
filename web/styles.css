@@ -389,6 +389,12 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: va
 }
 .mini-btn:hover { background: rgba(20,122,79,.07); }
 
+#conn-row { display: flex; align-items: center; gap: 8px; margin: 6px 0 18px; }
+.conn-code {
+  font-size: 12px; background: var(--paper-2, #f4f6f5); border: 1px solid var(--line, #dfe5e1);
+  border-radius: 6px; padding: 5px 10px; word-break: break-all; user-select: all;
+}
+
 /* ---------- nút Cài đặt — chân sidebar ---------- */
 #nav-foot {
   flex-shrink: 0;

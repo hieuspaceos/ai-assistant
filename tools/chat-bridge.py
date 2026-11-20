@@ -24,7 +24,7 @@ Event (JSON trong mảng events):
   {"t":"done"}                       - agent nói xong một lượt
   {"t":"err","msg":"..."}
 """
-import json, os, re, shutil, subprocess, sys, threading, urllib.parse, urllib.request
+import hmac, json, os, re, secrets, shutil, subprocess, sys, threading, time, urllib.parse, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 7682
@@ -32,6 +32,52 @@ CWD = sys.argv[2] if len(sys.argv) > 2 else "."
 DEVIN = sys.argv[3] if len(sys.argv) > 3 else "devin"   # tên binary khi không có brain.json
 
 BRAIN_FP = os.path.join(os.path.abspath(CWD), "brain.json")
+
+TOKEN_FP = os.path.join(os.path.abspath(CWD), ".devin", "bridge.token")
+
+def load_token():
+    # "chìa khoá nhà" dùng chung cho mọi bridge — start script sinh trước;
+    # đây chỉ là fallback atomic (O_EXCL: thằng thua race đọc token của
+    # thằng thắng, không ghi đè)
+    try:
+        with open(TOKEN_FP, encoding="utf-8") as f:
+            t = f.read().strip()
+            if t:
+                return t
+    except OSError:
+        pass
+    t = secrets.token_hex(24)
+    try:
+        os.makedirs(os.path.dirname(TOKEN_FP), exist_ok=True)
+        fd = os.open(TOKEN_FP, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        os.write(fd, t.encode())
+        os.close(fd)
+        return t
+    except FileExistsError:
+        # Thua race → thằng thắng đang ghi file, chờ nó xong rồi đọc.
+        # File tồn tại mà rỗng (ai đó tạo file trống) → ghi thẳng, file
+        # rỗng không chứa gì để mất.
+        time.sleep(0.05)
+        try:
+            with open(TOKEN_FP, encoding="utf-8") as f:
+                t2 = f.read().strip()
+                if t2:
+                    return t2
+        except OSError:
+            pass
+        with open(TOKEN_FP, "w", encoding="utf-8") as f:
+            f.write(t)
+        return t
+
+BRIDGE_TOKEN = load_token()
+os.environ.setdefault("BRIDGE_TOKEN", BRIDGE_TOKEN)  # cho process não kế thừa
+
+def app_version():
+    try:
+        with open(os.path.join(os.path.abspath(CWD), "VERSION"), encoding="utf-8") as f:
+            return f.read().strip() or "0"
+    except OSError:
+        return "0"
 
 # Các "não" biết nói ACP mà onboarding gợi ý. requires = binary phải có
 # trên PATH thì preset mới coi là "đã cài" (adapter chạy qua npx nên vẫn
@@ -267,7 +313,8 @@ def run_probe(probe):
             req = urllib.request.Request(
                 "http://127.0.0.1:7684/api/browser",
                 data=json.dumps({"action": "tabs"}).encode(),
-                headers={"Content-Type": "application/json"})
+                headers={"Content-Type": "application/json",
+                         "X-Bridge-Token": BRIDGE_TOKEN})
             with urllib.request.urlopen(req, timeout=6) as r:
                 d = json.loads(r.read())
             if not d.get("ok"):
@@ -336,7 +383,18 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", o)
             self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers",
+                         "Content-Type, X-Bridge-Token")
+
+    def _authed(self):
+        # Mọi API ngoại trừ /api/health phải trình "chìa khoá nhà": header
+        # X-Bridge-Token (fetch/curl) hoặc ?token= (WS, iframe, lệnh 1 dòng).
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        tok = self.headers.get("X-Bridge-Token") or (q.get("token") or [""])[0]
+        # so trên bytes: token lạ có ký tự non-ASCII thì compare_digest(str)
+        # raise TypeError → thread chết thay vì trả 401 gọn
+        return hmac.compare_digest(
+            (tok or "").encode("utf-8", "replace"), BRIDGE_TOKEN.encode())
 
     def _blocked(self):
         o = self.headers.get("Origin")
@@ -354,9 +412,12 @@ class Handler(BaseHTTPRequestHandler):
         if self._blocked():
             return
         path = urllib.parse.urlparse(self.path).path
+        if path != "/api/health" and not self._authed():
+            return self._json({"err": "thiếu hoặc sai mã kết nối"}, 401)
         if path == "/api/health":
             self._json({"ok": True, "sessionId": acp.session_id if acp else None,
-                        "brain": getattr(acp, "brain_id", None) or load_brain().get("id")})
+                        "brain": getattr(acp, "brain_id", None) or load_brain().get("id"),
+                        "version": app_version()})
         elif path == "/api/brain":
             cur = load_brain()
             presets = []
@@ -397,6 +458,8 @@ class Handler(BaseHTTPRequestHandler):
         if self._blocked():
             return
         path = urllib.parse.urlparse(self.path).path
+        if not self._authed():
+            return self._json({"err": "thiếu hoặc sai mã kết nối"}, 401)
         try:
             cl = int(self.headers.get("Content-Length") or 0)
         except ValueError:

@@ -5,11 +5,23 @@ Sự cố đã gặp thật + cách xử lý. Cập nhật khi gặp lỗi mới
 ## 1. Health check nhanh
 
 ```bash
-curl -s http://localhost:8080/web/ | head -1        # portal sống
-curl -s http://localhost:7682/api/health            # chat-bridge {"ok":true}
-curl -s -X POST http://localhost:7684/api/browser \
-  -d '{"action":"status"}'                          # ext-bridge {"connected":true}
+TOKEN=$(cat .devin/bridge.token)                     # "mã kết nối" dùng chung
+curl -s http://localhost:8080/web/ | head -1         # portal sống
+curl -s http://localhost:7682/api/health             # chat-bridge {"ok":true} — health miễn token
+curl -s -X POST "http://localhost:7684/api/browser?token=$TOKEN" \
+  -d '{"action":"status"}'                           # ext-bridge {"connected":true}
 ```
+
+Mọi call bridge khác đều cần `?token=$TOKEN` hoặc header
+`X-Bridge-Token: $TOKEN` — thiếu → `401 {"err":"thiếu hoặc sai mã kết nối"}`.
+
+**401 toàn bộ sau khi update?** Kiểm portal có mở bằng file `start`
+không — URL phải có `?t=` (portal tự nhớ vào localStorage). Mở tay
+`localhost:8080` trần → không có mã → mọi API 401.
+
+**Đổi khoá (rotation):** `rm .devin/bridge.token` + chạy lại `start` →
+mã mới; portal/extension cũ hết hạn — extension tự pair lại khi mở
+portal, hoặc dán mã mới trong trang options của nó.
 
 Log: `.logs/{portal,chat-bridge,ext-bridge,ttyd}.log` dưới root.
 
@@ -19,6 +31,7 @@ Log: `.logs/{portal,chat-bridge,ext-bridge,ttyd}.log` dưới root.
 |---|---|---|
 | Portal không lên | port 8080 bị chiếm | `lsof -i :8080` (macOS) / `netstat -ano \| findstr 8080` (Win); xem `.logs/portal.log` |
 | `{"connected":false}` mọi action | extension chưa nạp | Mở `chrome://extensions` → bật "Trợ Lý AI"; sau khi sửa `extension/*.js` → `{"action":"reload"}` |
+| Icon extension hiện `!` | chưa có mã kết nối | Mở portal qua file `start` — auto-pair tự chạy; không được thì ⚙ Cài đặt → "Mã kết nối" → copy → dán vào options của extension |
 | Chat không trả lời | não ACP chết / license / chưa đăng nhập | Chạy lệnh não tay (`brain.json` → `cmd`) xem lỗi; xem `.logs/chat-bridge.log`; bridge tự thử bật lại ở lượt gửi sau |
 | Chat báo "không chạy được 'X'" | não `X` trong `brain.json` chưa cài | Panel ⚙ Cài đặt → Bộ não → chọn não khác; hoặc cài `X` rồi gửi lại |
 | Đổi não mà chat vẫn não cũ | bridge chưa reload | `POST /api/brain` tự restart agent; kiểm `GET /api/health` → trường `brain` |
