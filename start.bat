@@ -2,7 +2,8 @@
 rem ============================================================
 rem  TRO LY AI - mo khoa hoc cua ban
 rem  Double-click file nay de bat dau hoc.
-rem  File nay mo 2 thu: trang web khoa hoc + tro ly AI (Devin).
+rem  File nay mo toi 4 thu: trang web khoa hoc + chat bridge +
+rem  cau noi extension + terminal (neu co ttyd).
 rem ============================================================
 cd /d "%~dp0"
 

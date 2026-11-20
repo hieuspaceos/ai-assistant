@@ -74,6 +74,10 @@ function Get-AppVersion {
     if (Test-Path $vf) { $v = (Get-Content $vf -Raw -Encoding UTF8).Trim(); if ($v) { return $v } }
     return "0"
 }
+function Get-ExtVersion {
+    # version extension "đúng" = version trong payload đang chạy
+    try { $m = Get-Content (Join-Path $WorkDir "extension\manifest.json") -Raw -Encoding UTF8 | ConvertFrom-Json; return $m.version } catch { return $null }
+}
 # Các não biết nói ACP mà onboarding gợi ý. requires = binary phải có trên
 # PATH thì preset mới coi là "đã cài" (adapter qua npx vẫn cần CLI gốc để
 # đăng nhập — vd codex-acp cần `codex`).
@@ -400,8 +404,17 @@ try {
                 Send-Json $ctx @{ err = "thiếu hoặc sai mã kết nối" } 401
                 continue
             }
+            # body quá lớn → chặn trước khi đọc (save-page cho tới 8MB vì
+            # trang clone nhúng ảnh base64; mọi POST khác 1MB)
+            if ($ctx.Request.HttpMethod -eq "POST") {
+                $cap = if ($path -eq "/api/save-page") { 8000000 } else { 1000000 }
+                if ($ctx.Request.ContentLength64 -gt $cap) {
+                    Send-Json $ctx @{ err = "body quá lớn" } 413
+                    continue
+                }
+            }
             if ($ctx.Request.HttpMethod -eq "GET" -and $path -eq "/api/health") {
-                Send-Json $ctx @{ ok = $true; sessionId = $script:SessionId; brain = (Get-Brain).id; version = (Get-AppVersion) }
+                Send-Json $ctx @{ ok = $true; sessionId = $script:SessionId; brain = (Get-Brain).id; version = (Get-AppVersion); extVersion = (Get-ExtVersion) }
             }
             elseif ($ctx.Request.HttpMethod -eq "GET" -and $path -eq "/api/brain") {
                 $cur = Get-Brain
@@ -555,6 +568,29 @@ try {
                     }
                 }
             }
+            elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/save-page") {
+                $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
+                $body = $reader.ReadToEnd() | ConvertFrom-Json
+                $rel = ([string]$body.file).Trim().TrimStart("/")
+                $html = [string]$body.html
+                $course = (Resolve-Path (Join-Path $WorkDir "my-course")).Path
+                $target = [IO.Path]::GetFullPath((Join-Path $WorkDir $rel))
+                if (-not $rel.StartsWith("my-course/") -or $rel.Contains("..") -or
+                    -not $target.StartsWith($course + [IO.Path]::DirectorySeparatorChar) -or
+                    $target -notmatch '\.html?$') {
+                    Send-Json $ctx @{ err = "chỉ lưu file .html trong my-course/" } 400
+                } elseif (-not $html) {
+                    Send-Json $ctx @{ err = "trang trống" } 400
+                } else {
+                    [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($target)) | Out-Null
+                    # backup trước khi ghi đè — học viên sửa hỏng còn về được
+                    if (Test-Path $target) { Copy-Item $target "$target.bak" -Force }
+                    # UTF-8 KHÔNG BOM — Set-Content mặc định ghi BOM, viewer đọc
+                    # file trực tiếp sẽ thấy ký tự lạ đầu trang
+                    [IO.File]::WriteAllText($target, $html, (New-Object System.Text.UTF8Encoding $false))
+                    Send-Json $ctx @{ ok = $true }
+                }
+            }
             elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/permissions") {
                 $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
                 $body = $reader.ReadToEnd() | ConvertFrom-Json
@@ -661,13 +697,19 @@ try {
                 } else {
                     New-Item -ItemType Directory -Force -Path $McDir | Out-Null
                     Save-Json $ConfigFp @{ language = $lang; learner_name = $name }
+                    # Đồng bộ tên + recipes (công thức nhanh) vào manifest —
+                    # recipes đi kèm pack ngôn ngữ nên sidebar đúng lệnh, đúng tiếng
                     $mf = Join-Path $McDir "manifest.json"
                     try {
                         $m = Get-Content $mf -Raw -Encoding UTF8 | ConvertFrom-Json
                         if ($name) {
                             $m | Add-Member -NotePropertyName learner_name -NotePropertyValue $name -Force
-                            Save-Json $mf $m
                         }
+                        $rec = Load-Json (Join-Path $SkillPacks "recipes\$lang.json") @{}
+                        if ($rec -and $rec.recipes) {
+                            $m | Add-Member -NotePropertyName recipes -NotePropertyValue $rec.recipes -Force
+                        }
+                        Save-Json $mf $m
                     } catch {}
                     # Skill pack đè lên .devin\skills nhưng skill học viên TỰ
                     # TẠO (không có trong pack) phải giữ: dir cũ backup sang

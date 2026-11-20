@@ -1,0 +1,187 @@
+#!/usr/bin/env python3
+"""test-bridges.py — smoke test cho chat-bridge.py + ext-bridge.py + serve.py.
+
+Spawn mỗi bridge THẬT trên port động với CWD tạm (não giả → dead ngay
+nhưng bridge vẫn sống — đúng thiết kế). Không cần dep ngoài, không cần
+não thật. Chạy: python3 tools/test-bridges.py"""
+import json, os, secrets, shutil, socket, subprocess, sys, tempfile, time
+import urllib.error, urllib.request
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TOOLS = os.path.join(ROOT, "tools")
+TOKEN = "test-" + secrets.token_hex(12)
+
+fails, passed = [], []
+
+def check(name, cond, extra=""):
+    (passed if cond else fails).append(name)
+    if not cond:
+        print(f"  FAIL {name} {extra}")
+
+def free_port():
+    s = socket.socket(); s.bind(("127.0.0.1", 0)); p = s.getsockname()[1]
+    s.close(); return p
+
+def http(method, url, body=None, token=None, headers=None):
+    req = urllib.request.Request(url, method=method)
+    if token:
+        req.add_header("X-Bridge-Token", token)
+    for k, v in (headers or {}).items():
+        req.add_header(k, v)
+    data = None
+    if body is not None:
+        data = json.dumps(body).encode()
+        req.add_header("Content-Type", "application/json")
+    try:
+        with urllib.request.urlopen(req, data, timeout=8) as r:
+            return r.status, json.loads(r.read() or b"{}"), dict(r.headers)
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read() or b"{}"), dict(e.headers)
+        except Exception:
+            return e.code, {}, dict(e.headers)
+    except Exception as e:
+        return -1, {"_exc": str(e)}, {}
+
+def spawn(script, port, cwd):
+    p = subprocess.Popen([sys.executable, os.path.join(TOOLS, script),
+                          str(port), cwd],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return p
+
+def wait_health(url, tries=60):
+    for _ in range(tries):
+        try:
+            urllib.request.urlopen(url, timeout=1).read()
+            return True
+        except Exception:
+            time.sleep(0.2)
+    return False
+
+def make_workdir():
+    d = tempfile.mkdtemp(prefix="troly-test-")
+    os.makedirs(os.path.join(d, ".devin"))
+    os.makedirs(os.path.join(d, "my-course"))
+    # não giả — bridge sống nhưng Acp.dead ngay (không cần não thật để test)
+    json.dump({"id": "none", "cmd": "__no_such_brain__", "args": []},
+              open(os.path.join(d, "brain.json"), "w"))
+    open(os.path.join(d, ".devin", "bridge.token"), "w").write(TOKEN)
+    json.dump({"learner_name": "", "recipes": [], "lessons": []},
+              open(os.path.join(d, "my-course", "manifest.json"), "w"))
+    # skill-packs thật để /api/setup copy được
+    packs = os.path.join(d, ".devin", "skill-packs")
+    shutil.copytree(os.path.join(ROOT, ".devin", "skill-packs"), packs)
+    # extension manifest cho extVersion
+    os.makedirs(os.path.join(d, "extension"))
+    shutil.copy(os.path.join(ROOT, "extension", "manifest.json"),
+                os.path.join(d, "extension"))
+    return d
+
+def main():
+    wd = make_workdir()
+    procs = []
+    try:
+        # ---- chat-bridge ----
+        cb = free_port()
+        procs.append(spawn("chat-bridge.py", cb, wd))
+        base = f"http://127.0.0.1:{cb}"
+        check("chat-bridge lên", wait_health(base + "/api/health"))
+
+        s, b, _ = http("GET", base + "/api/health")
+        check("1. health không token → 200", s == 200 and b.get("ok"), str(s))
+
+        s, b, _ = http("GET", base + "/api/poll")
+        check("2. poll không token → 401", s == 401, str(s))
+
+        s, b, _ = http("GET", base + f"/api/poll?token={TOKEN}")
+        check("3. poll token đúng → 200", s == 200 and "events" in b, str(s))
+
+        s, b, _ = http("GET", base + "/api/permissions", token=TOKEN)
+        check("4. header token → 200", s == 200, str(s))
+
+        s, b, h = http("OPTIONS", base + "/api/prompt",
+                       headers={"Origin": "http://localhost:8080",
+                                "Access-Control-Request-Method": "POST"})
+        ah = h.get("Access-Control-Allow-Headers", "")
+        check("5. OPTIONS miễn token + cho phép X-Bridge-Token",
+              s == 204 and "X-Bridge-Token" in ah, f"{s} {ah}")
+
+        s, b, _ = http("GET", base + "/api/health",
+                       headers={"Origin": "http://evil.example"})
+        check("6. Origin lạ → 403", s == 403, str(s))
+
+        s, b, _ = http("POST", base + f"/api/save-page?token={TOKEN}",
+                       {"file": "../evil.html", "html": "x"})
+        check("7. save-page .. → 400", s == 400, str(s))
+
+        s, b, _ = http("POST", base + f"/api/save-page?token={TOKEN}",
+                       {"file": "my-course/x.txt", "html": "x"})
+        check("8. save-page non-.html → 400", s == 400, str(s))
+
+        s, b, _ = http("POST", base + f"/api/save-page?token={TOKEN}",
+                       {"file": "my-course/a.html", "html": "<p>xin chào</p>"})
+        fp = os.path.join(wd, "my-course", "a.html")
+        ok = s == 200 and open(fp, encoding="utf-8").read() == "<p>xin chào</p>"
+        s2, _, _ = http("POST", base + f"/api/save-page?token={TOKEN}",
+                        {"file": "my-course/a.html", "html": "<p>đổi</p>"})
+        ok = ok and s2 == 200 and os.path.exists(fp + ".bak")
+        check("9. save-page ghi file + .bak", ok, f"{s}/{s2}")
+
+        s, b, _ = http("POST", base + f"/api/brain?token={TOKEN}",
+                       {"cmd": "/bin/evil"})
+        check("10. brain cmd có path → 400", s == 400, str(s))
+
+        s, b, _ = http("POST", base + f"/api/brain?token={TOKEN}",
+                       {"cmd": "__no_such__"})
+        check("11. brain cmd chưa cài → 404", s == 404, str(s))
+
+        # ---- ext-bridge ----
+        eb = free_port()
+        procs.append(spawn("ext-bridge.py", eb, wd))
+        ebase = f"http://127.0.0.1:{eb}"
+        time.sleep(0.8)   # ext-bridge không có health — chờ socket bind
+        s, b, _ = http("GET", ebase + "/api/browser/status")
+        check("12. ext-bridge status không token → 401", s == 401, str(s))
+
+        s, b, _ = http("GET", ebase + f"/api/browser/status?token={TOKEN}")
+        check("13. ext-bridge status → connected=false",
+              s == 200 and b.get("connected") is False, str(b))
+
+        # ---- serve.py ----
+        sv = free_port()
+        procs.append(spawn("serve.py", sv, wd))
+        time.sleep(0.8)
+        s, _, _ = http("GET", f"http://127.0.0.1:{sv}/.devin/bridge.token")
+        check("14. serve chặn dotfile", s in (403, 404), str(s))
+
+        # ---- case thêm ----
+        s, b, _ = http("POST", base + f"/api/prompt?token={TOKEN}",
+                       {"text": "hello"})
+        check("15. prompt khi não dead → 503", s == 503, str(s))
+
+        s, b, _ = http("POST", base + f"/api/setup?token={TOKEN}",
+                       {"language": "vi", "learner_name": "Test"})
+        sk = os.path.join(wd, ".devin", "skills")
+        check("16. setup vi → cài pack vi",
+              s == 200 and os.path.isdir(os.path.join(sk, "clone-trang"))
+              and os.path.isdir(os.path.join(sk, "phong-van")), str(s))
+        mf = json.load(open(os.path.join(wd, "my-course", "manifest.json")))
+        check("16b. setup ghi recipes vi vào manifest",
+              any(r.get("command") == "/clone-trang"
+                  for r in mf.get("recipes", [])), str(mf.get("recipes"))[:80])
+    finally:
+        for p in procs:
+            try:
+                p.terminate()
+            except Exception:
+                pass
+        shutil.rmtree(wd, ignore_errors=True)
+
+    print(f"\n{'PASS' if not fails else 'FAIL'} — "
+          f"{len(passed)} xanh, {len(fails)} đỏ")
+    if fails:
+        print("  đỏ:", ", ".join(fails))
+    sys.exit(1 if fails else 0)
+
+if __name__ == "__main__":
+    main()

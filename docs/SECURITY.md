@@ -95,6 +95,9 @@ trong options).
   Nếu họ định dán → chặn và giải thích.
 - Không log, không echo, không commit giá trị secret — chỉ commit
   định nghĩa field (`"secret": true` là cờ, không phải giá trị).
+- `secrets.local.json` được `chmod 600` khi ghi (macOS/Linux) — cùng mức
+  với `bridge.token`. Windows: ACL thư mục home mặc định đã chỉ-owner,
+  chấp nhận không set thêm.
 - Extension đọc web bằng **phiên đăng nhập sẵn của học viên** — không
   cần, không lưu mật khẩu Zalo/Outlook. Đây là lựa chọn kiến trúc có
   chủ đích.
