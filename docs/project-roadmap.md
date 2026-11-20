@@ -17,6 +17,10 @@ việc hoặc đổi ưu tiên.
 
 | Việc | Ghi chú |
 |---|---|
+| Ship học viên thật | Plan `261120-1900-ship-learner`: CI build `TroLyAI.exe`, Web Store, não miễn phí, định vị assistant-first, freeze `.ps1` |
+| Giữ chân & moat | Plan `261120-1905-keep-moat`: chat history persist, skill bank hai chiều (pack `community/`), publish skills.sh |
+| Mobile/relay | Plan `261120-1500-relay-mobile` (đã thiết kế xong, pending): relay VPS + pairing 6 số — điện thoại làm màn hình từ xa |
+| Tạo bot theo nghề | Plan `261120-2100-create-bot`: bot = persona + skill theo nghề + connection — template gallery, phỏng vấn sinh bot, nhập bot chia sẻ (sau keep-moat) |
 | Mobile viewport cho clone | Extension chưa đổi được kích thước cửa sổ — hiện kiểm tĩnh media query. CDP `Emulation.setDeviceMetricsOverride` là đường đi nếu cần ảnh mobile thật |
 | `clone-compare` trên Windows | `shot` cần `sips` (macOS). PowerShell `System.Drawing` đổi BMP tương đương — port khi có học viên Windows cần so ảnh |
 | Backup nhiều mốc | `.bak` giữ 1 bản. Nếu học viên hay sửa hỏng: versioned `.bak-<timestamp>` hoặc git init trong my-course |

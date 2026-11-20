@@ -8,7 +8,7 @@ file trỏ domain giả.
 
 | Mối đe | Đã chặn bằng |
 |---|---|
-| Ai đó nối WS giả desktop | `s` = HMAC(mid, relay.secret) — không có secret thì close |
+| Ai đó nối WS giả desktop | `X-Relay-Auth` = `mid:ts:HMAC(mid:ts, relay.secret)` — không có secret thì close; ts hết hạn 5' chặn replay |
 | Đoán mã pair 6 số | TTL 5' + dùng 1 lần + rate-limit 5 lần/phút/IP |
 | Phone session bị đánh cắp | Cookie HttpOnly+Secure; TTL 30 ngày; không có cách nào đọc cookie qua JS |
 | Relay bị chiếm | Không lưu dữ liệu; token chỉ trong RAM; traffic MITM được (ghi rõ là giới hạn v1) |
@@ -19,20 +19,38 @@ file trỏ domain giả.
 ## 2. Test matrix bắt buộc
 
 **Auth:**
-- WS `/ws/desktop` không `s` / sai `s` → close ngay, không vào DESKS
+- WS `/ws/desktop` không `X-Relay-Auth` / sai hmac / ts quá 5 phút → close
+  ngay, không vào DESKS
 - `POST /pair` sai mã → 401; đúng mã đã dùng lần 2 → 401 (one-time)
 - Request API không cookie → 401/redirect; cookie hết hạn → về form
-- 6 lần sai mã trong 1 phút → 429
+- 6 lần sai mã trong 1 phút **cùng một XFF** → 429; XFF khác nhau vẫn vào
+  được (verify rate-limit đọc X-Forwarded-For chứ không phải
+  client_address — sau Caddy mọi request đều từ 127.0.0.1)
+- Access log Caddy/relay không chứa `s=`/hmac (auth nằm ở header)
 
 **Đường đi:**
 - `GET /` qua relay (desktop offline) → portal + form vẫn load (static từ VPS)
 - `GET /api/health` offline → 503 "đang nghỉ"; online → 200 từ bridge thật
 - `POST /api/prompt` → xuống bridge, session chat thật trả về qua relay
 - `GET /my-course/trang.html` (clone) → load được; `/.devin/x` → 403
+- `GET /ext-api/browser/status` → connector rewrite thành
+  `/api/browser/status` trên :7684 → 200 (KHÔNG phải `/browser/status`)
 - Header `X-Bridge-Token` sai từ phone → bridge local 401 (relay không nuốt)
+- Request same-origin từ phone CÓ kèm `X-Bridge-Token` (verify luật mới
+  trong `bridge-token.js`: same-origin được gắn token — chỗ dễ sót nhất
+  vì code cũ cố tình chỉ gắn cho loopback)
+- `GET /web` (không slash) → redirect Location KHÔNG chứa `127.0.0.1:8080`
+  (connector rewrite Location nội bộ thành path tương đối)
+- Pair xong → relay redirect `/?t=<token>` → portal phone lưu được token
+  (verify message `hello` connector→relay đã mang bridge_token)
 
 **Bền bỉ:**
 - Kill connector giữa chừng → troly restart, WS mới thay thế WS cũ ở relay
+- `remote.json` `enabled:false` → connector KHÔNG thoát (idle loop),
+  supervisor không đếm crash; bật lại `true` → tự nối WS mà không cần
+  restart troly
+- Port 7685 bị chiếm sẵn → connector vẫn chạy phần WS, log lỗi rõ,
+  `/api/remote/pair-code` trả lỗi có nghĩa chứ không treo
 - Rút mạng desktop 60s → reconnect, chat tiếp được
 - Hai connector cùng mid → đường mới thắng, đường cũ close (test bằng
   connector giả)
@@ -41,6 +59,8 @@ file trỏ domain giả.
 - iPhone Safari + Android Chrome thật: pair → chat → nhận reply →
   A2HS → mở từ icon → session còn
 - Desktop sleep/tắt → phone thấy "đang nghỉ" trong ≤30s
+- Remote (hostname không phải localhost): nút/iframe **Terminal không
+  xuất hiện** (ttyd không qua relay); chỉ Chat mode hoạt động
 
 ## 3. Prompt-injection — lớp relay không nới lỏng
 
@@ -55,7 +75,7 @@ hành động chỉ cho phép khi request đến từ localhost, không qua rela
 
 ## 4. Checklist trước khi mở cho user thật
 
-- [ ] Đợt 1 auth xong hết (7 phases kia merge trước)
+- [ ] Đợt bridge-auth merge xong hết (9 phases — `261120-1420`)
 - [ ] `remote.json` không nằm trong git, chmod 600
 - [ ] `relay.secret` chỉ tồn tại 2 nơi: VPS + remote.json
 - [ ] Pairing flow e2e chạy trên điện thoại thật qua domain thật

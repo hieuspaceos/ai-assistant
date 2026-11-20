@@ -10,7 +10,11 @@ bơm request HTTP hai chiều qua WS. Tái dùng mẫu WS server trong
 GET  /                    → serve portal static (từ web/ đã copy lên VPS)
 GET  /api/* (+ POST)      → forward xuống connector của desktop → bridge :7682
 GET  /assets/...          → forward xuống connector → serve.py :8080
-WS   /ws/desktop?mid=&s=  → connector desktop cắm đường dây vào (đăng ký)
+GET  /web/* (+ GET /)     → serve portal static TẠI CẢ /web/ — app.js nhúng
+                            iframe '/web/chat.html' (absolute), đổi path sẽ
+                            vỡ chat; / → redirect /web/ hoặc serve index
+WS   /ws/desktop?mid=     → connector desktop cắm đường dây vào (auth ở
+                            header X-Relay-Auth, KHÔNG query — xem mục 1)
 GET  /pair (POST code)    → điện thoại đổi mã 6 số lấy cookie session
 GET  /health              → {"ok": true, "desktops_online": n}
 ```
@@ -23,10 +27,10 @@ GET  /health              → {"ok": true, "desktops_online": n}
 # Stdlib only. Chạy: python3 relay.py --port 4443 --secret-file relay.secret
 import json, threading, secrets, time, hmac, base64, os, sys
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from socketserver import ThreadingMixIn
 from urllib.parse import urlparse, parse_qs
 
-DESKTOP_SECRET = open("relay.secret").read().strip()   # sinh 1 lần: secrets.token_hex
+# --secret-file trỏ tới đây (argparse); mặc định ./relay.secret
+DESKTOP_SECRET = open(ARGS.secret_file).read().strip()  # sinh 1 lần: secrets.token_hex
 DESKS = {}          # mid -> {"sock": ws, "last": ts, "lock": Lock}
 PENDING = {}        # req_id -> {"ev": Event, "res": bytes|None}
 PAIRS = {}          # code -> {"mid": mid, "exp": ts}
@@ -36,15 +40,24 @@ PAIR_TTL, SESS_TTL = 300, 30*86400
 
 ### 1. WS endpoint `/ws/desktop` — đăng ký đường dây
 
-- Query `mid` (machine id) + `s` = HMAC-SHA256(mid, DESKTOP_SECRET) —
-  connector chứng minh nó biết secret chung.
+- Auth qua **header, không query string**: `mid` ở path query (cần cho
+  routing) nhưng chữ ký gửi `X-Relay-Auth: <hmac>` — để `?s=` không rớt
+  vào access log của Caddy (log mặc định ghi cả query).
+- `s = HMAC-SHA256(mid + ":" + ts, DESKTOP_SECRET)` kèm `ts` trong cùng
+  header (`mid:ts:hmac`), relay chấp nhận |now - ts| < 5 phút —
+  HMAC tĩnh bắt được trong log là replay vĩnh viễn; có ts thì chỉ sống
+  5 phút. Connector chứng minh nó biết secret chung.
 - `Origin`/host: không check Origin (đây là server-initiated WS của
   connector, Origin không có nghĩa ở chiều này — auth bằng HMAC).
 - Thành công → `DESKS[mid] = sock`. Nếu mid đã online: **đường mới thắng**,
   close đường cũ (máy khởi động lại sẽ nối lại).
+- **Message `hello`**: ngay sau đăng ký, connector gửi
+  `{"type":"hello","bridge_token":"<token>"}` → relay lưu
+  `DESKS[mid]["token"]` — dùng khi pair thành công redirect `/?t=` về
+  portal (phase 3). Token chỉ trong RAM, mất khi relay restart.
 - Loop đọc frame: mỗi frame từ connector = response cho một `PENDING` request
   (id khớp) → `ev.set()`. Connector KHÔNG gửi request chủ động (ngoài
-  `pair-request` bên dưới).
+  `hello` lúc đăng ký và `pair-request` bên dưới).
 
 ### 2. Pairing — phát mã và đổi mã
 
@@ -60,6 +73,10 @@ PAIR_TTL, SESS_TTL = 300, 30*86400
   - Tìm mã còn hạn → tạo `SESSIONS[tok] = {mid}` → `Set-Cookie: s=<tok>;
     HttpOnly; Secure; SameSite=Lax; Max-Age=2592000`
   - **Rate limit**: per-IP tối đa 5 lần/phút (`RATE = {}` — ip → [ts...]).
+    **BẮT BUỘC đọc IP từ `X-Forwarded-For`** (Caddy reverse proxy →
+    `client_address` luôn là `127.0.0.1`; không đọc XFF thì limit per-IP
+    hoá limit toàn cục — 5 lần sai mã CHUNG cho mọi client, và ai spam
+    cũng khoá luôn người thật). Tin XFF chỉ khi peer là 127.0.0.1 (Caddy).
     Sai mã trả 401 chung, không nói "mã hết hạn" hay "không tồn tại".
   - Điện thoại có cookie → mọi request sau đó resolve `mid` từ session.
 
@@ -105,8 +122,8 @@ connector.)
 
 ## Acceptance criteria
 
-- Connector giả (wscat hoặc python client) nối `?mid=vm1&s=<hmac>` → online;
-  sai `s` → close ngay.
+- Connector giả nối `?mid=vm1` + header `X-Relay-Auth: mid:ts:hmac` →
+  online; thiếu header / sai hmac / ts quá 5 phút → close ngay.
 - `pair-request` → nhận 6 số; `POST /pair` đúng mã → cookie; sai mã 6 lần
   trong 1 phút từ một IP → lần 7 bị 429.
 - `GET /api/health` qua relay → 200 khi desktop online; rút connector →

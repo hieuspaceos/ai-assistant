@@ -1,36 +1,7 @@
 {
   "learner_name": "",
   "intro": "Khoá học này giúp bạn giao việc lặp đi lặp lại cho trợ lý — bắt đầu từ việc đọc hết tin chưa đọc trên Zalo mỗi sáng.",
-  "recipes": [
-    {
-      "command": "/anh-web",
-      "meaning": "Đổi tên + nén hàng loạt ảnh export từ Canva, sẵn sàng đăng web — không đụng file gốc"
-    },
-    {
-      "command": "/nen-anh",
-      "meaning": "Nén + resize nhiều ảnh, không đụng gốc"
-    },
-    {
-      "command": "/tom-tat-file",
-      "meaning": "Đọc file và tóm tắt nội dung"
-    },
-    {
-      "command": "/gom-file",
-      "meaning": "Gom file lộn xộn vào folder gọn gàng"
-    },
-    {
-      "command": "/loc-khach",
-      "meaning": "Tách file khách hàng lớn thành file riêng theo tỉnh — file gốc giữ nguyên"
-    },
-    {
-      "command": "/doc-zalo",
-      "meaning": "Lật hộp thư Zalo Web — liệt kê hội thoại chưa đọc, đọc và tóm tắt một hội thoại"
-    },
-    {
-      "command": "/clone-trang",
-      "meaning": "Dựng trang web giống trang mẫu bạn thích — nội dung của bạn, không copy của người ta"
-    }
-  ],
+  "recipes": [],
   "lessons": [
     {
       "id": "lesson-01",
