@@ -16,6 +16,24 @@ ROOT_PREFIX = ROOT + os.sep
 # mimetypes của một số OS chưa biết font web → khai báo tay
 EXTRA_MIME = {".woff": "font/woff", ".woff2": "font/woff2", ".ttf": "font/ttf"}
 
+# CSP cho .html dưới vùng nội dung (slide/clone do agent sinh — nguồn duy
+# nhất có thể bị prompt-injection). connect-src 'none' là chìa khoá: script
+# trong đó vẫn chạy nhưng KHÔNG gọi được bridge :7682/:7684 hay gửi data đi
+# đâu bằng JS. KHÔNG áp cho /web/ (portal phải gọi bridge được).
+CSP_PATHS = ("/my-course/", "/intro/")
+CSP = ("default-src 'self'; "
+       "script-src 'self' 'unsafe-inline' https:; "
+       "style-src 'self' 'unsafe-inline' https:; "
+       "img-src 'self' data: https:; "
+       "font-src 'self' data: https:; "
+       "media-src 'self' data:; "
+       "connect-src 'none'; "
+       "form-action 'none'; "
+       "base-uri 'none'; "
+       "object-src 'none'; "
+       "frame-src 'self' https:; "
+       "frame-ancestors 'self'")
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -65,6 +83,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                          EXTRA_MIME.get(os.path.splitext(fp)[1].lower())
                          or self.guess_type(fp))
         self.send_header("Content-Length", str(os.fstat(f.fileno()).st_size))
+        raw_path = urllib.parse.unquote(urllib.parse.urlparse(self.path).path)
+        if raw_path.startswith(CSP_PATHS) \
+                and raw_path.lower().endswith((".html", ".htm")):
+            self.send_header("Content-Security-Policy", CSP)
         self.end_headers()
         return f
 

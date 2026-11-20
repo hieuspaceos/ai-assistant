@@ -375,7 +375,11 @@ async function loadMdInto(pane, url, fallbackTitle) {
 function setPaneHtml(pane, html) {
   $(pane === 'guide' ? '#guide-md' : '#pane-' + pane).innerHTML = html;
 }
-function iframe(src) { return `<iframe class="deck" sandbox="allow-scripts allow-same-origin" src="${escapeHtml(src)}"></iframe>`; }
+// sandbox="allow-scripts" (KHÔNG allow-same-origin): slide thành opaque
+// origin — script chạy nhưng tự nó cũng không đọc được localStorage/token
+// của portal kể cả nếu CSP sót. Đã kiểm: slide không dùng localStorage/
+// fetch/parent. Clone-view KHÔNG qua hàm này (edit cần same-origin).
+function iframe(src) { return `<iframe class="deck" sandbox="allow-scripts" src="${escapeHtml(src)}"></iframe>`; }
 function emptyMsg(txt) { return `<div class="empty-msg">${txt}</div>`; }
 function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
