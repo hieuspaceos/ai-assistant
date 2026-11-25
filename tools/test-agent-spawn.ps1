@@ -203,7 +203,16 @@ try {
     for ($i = 0; $i -lt 90 -and -not $ready; $i++) {
         try {
             $h = Invoke-RestMethod "http://127.0.0.1:7699/api/health" -TimeoutSec 2
-            if ($h.ok -and $h.sessionId) { $ready = $true }
+            if ($h.ok) {
+                # /api/health khong con tra sessionId (audit — endpoint
+                # khong auth khong duoc lo session id). "Ready" = nao
+                # sandbox spawn xong + ACP initialize tra sessionId, bao
+                # qua event {"t":"ready"} doc tu /api/poll (authed).
+                $ev = (Invoke-RestMethod `
+                    "http://127.0.0.1:7699/api/poll?since=0&token=$tok" `
+                    -TimeoutSec 2).events
+                if ($ev | Where-Object { $_.t -eq "ready" }) { $ready = $true }
+            }
         } catch { Start-Sleep -Milliseconds 500 }
     }
     Check "bridge + sandboxed brain ready" $ready
