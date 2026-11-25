@@ -217,6 +217,43 @@ def main():
                                           "url": "http://localhost:7684/api/browser/status"}}})
         check("15d. connections probe loopback → 200", s == 200, str(s))
 
+        # audit đợt 4: probe path tới folder nhạy cảm = oracle tồn-tại-
+        # file cho ~/.ssh, Keychains… → phải bị chặn như .devin
+        s, b, _ = http("POST", base + f"/api/connections?token={TOKEN}",
+                       {"app": {"id": "evil3",
+                                "probe": {"type": "path",
+                                          "path": os.path.expanduser("~/.ssh")}}})
+        check("15g. connections probe path nhạy cảm → 400", s == 400, str(s))
+
+        # audit đợt 4: probe http tới chính bridge phải kèm token — trước
+        # thiếu header nên probe sẵn "trinh-duyet" ăn 401 mãi ("có lỗi").
+        # Probe vào /api/health của CHÍNH bridge này → qua được + expect ok
+        s, b, _ = http("POST", base + f"/api/connections?token={TOKEN}",
+                       {"app": {"id": "self",
+                                "probe": {"type": "http",
+                                          "url": base + "/api/health",
+                                          "expect_key": "ok",
+                                          "expect_val": True}}})
+        check("15h. upsert app self-probe → 200", s == 200, str(s))
+        s, b, _ = http("POST", base + f"/api/check-connection?token={TOKEN}",
+                       {"id": "self"})
+        check("15i. probe http tới bridge → kèm token, không 401",
+              s == 200 and b.get("ok") is True
+              and "lỗi" not in (b.get("msg") or ""), str(b)[:80])
+
+        # audit đợt 4: save_json race — tmp cố định fp+".tmp" làm 2 ghi
+        # song song đè nhau → FileNotFoundError 500 (đã thấy log thật).
+        # Bắn nhiều check-connection đồng thời cùng ghi connections.json.
+        import concurrent.futures as _cf
+        with _cf.ThreadPoolExecutor(8) as ex:
+            rs = list(ex.map(
+                lambda _i: http("POST",
+                                base + f"/api/check-connection?token={TOKEN}",
+                                {"id": "self"})[0],
+                range(8)))
+        check("15j. ghi JSON song song → không 500",
+              all(s != 500 for s in rs), str(rs))
+
         # ---- audit S3a: đổi url secrets → xoá creds cũ (chống exfil) ----
         # audit v6: /api/secrets giờ qua consent gate → mỗi POST phải
         # approve card bằng Origin loopback thì mới ghi
@@ -322,19 +359,25 @@ def main():
         s, b, _ = http("POST", b3 + f"/api/bot?token={TOKEN}",
                        {"action": "activate", "id": bid})
         bot_md = os.path.join(wd, "my-course", "bot.md")
-        ok = (s == 200 and b.get("active") == bid
+        # audit đợt 4: activate/delete/import-confirm qua consent gate —
+        # agent tự đổi persona + bots.json (file sandbox deny-write) im
+        # lặng được trước đây
+        rid_b = b.get("pending")
+        sa_b = _approve(b3, rid_b)
+        ok = (s == 202 and sa_b == 200
               and os.path.isfile(bot_md)
               and "Hằng" in open(bot_md, encoding="utf-8").read())
         mf = json.load(open(os.path.join(wd, "my-course", "manifest.json")))
         ok = ok and any(r.get("command") == "/doc-zalo"
                         for r in mf.get("recipes", []))
-        check("19b. activate → bot.md + recipes gộp", ok, str(b)[:80])
+        check("19b. activate (qua gate) → bot.md + recipes gộp", ok, str(b)[:80])
 
         s, b, _ = http("POST", b3 + f"/api/bot?token={TOKEN}",
                        {"action": "delete", "id": bid})
+        sa_c = _approve(b3, b.get("pending"))
         s2, b2_, _ = http("GET", b3 + "/api/bots", token=TOKEN)
-        check("19c. delete → active null + bot.md mất",
-              s == 200 and b2_.get("active") is None
+        check("19c. delete (qua gate) → active null + bot.md mất",
+              s == 202 and sa_c == 200 and b2_.get("active") is None
               and not os.path.exists(bot_md)
               and not any(x.get("id") == bid for x in b2_.get("bots", [])))
 
@@ -364,10 +407,11 @@ def main():
               and not os.path.exists(os.path.join(wd, "evil2.txt")))
         s, b, _ = http("POST", b3 + f"/api/bot-import-confirm?token={TOKEN}",
                        {"stage": pv.get("stage")})
+        sa_i = _approve(b3, b.get("pending"))
         s2, b2_, _ = http("GET", b3 + "/api/bots", token=TOKEN)
         imp = next((x for x in b2_.get("bots", []) if x.get("name") == "Bot nhập"), None)
-        check("20b. confirm → bot trong list, KHÔNG active",
-              s == 200 and imp is not None
+        check("20b. confirm (qua gate) → bot trong list, KHÔNG active",
+              s == 202 and sa_i == 200 and imp is not None
               and b2_.get("active") is None
               and os.path.isdir(os.path.join(wd, ".devin", "skills", "skill-lanh")))
         # stage dùng lại → lỗi rõ, không crash
@@ -390,17 +434,19 @@ def main():
                        {"file": _b64.b64encode(buf2.getvalue()).decode()})
         s, b, _ = http("POST", b3 + f"/api/bot-import-confirm?token={TOKEN}",
                        {"stage": b.get("preview", {}).get("stage")})
+        sa_e = _approve(b3, b.get("pending"))
         s2, bx, _ = http("GET", b3 + "/api/bots", token=TOKEN)
         evil = next((x for x in bx.get("bots", [])
                      if x.get("name") == "Bot xấu"), None)
         check("20e. skill traversal bị lọc khỏi bot",
-              s == 200 and evil is not None
+              s == 202 and sa_e == 200 and evil is not None
               and evil.get("skills") == []
               and evil.get("id") != "gia-mao", str(evil)[:100])
         s, b, _ = http("POST", b3 + f"/api/bot?token={TOKEN}",
                        {"action": "activate", "id": evil and evil.get("id")})
+        sa_f = _approve(b3, b.get("pending"))
         check("20f. activate bot xấu — không ghi gì lạ",
-              s == 200
+              s == 202 and sa_f == 200
               and not os.path.exists(os.path.join(wd, ".devin", "leon"))
               and not os.path.exists(os.path.join(wd, "leon2")),
               str(b)[:80])
@@ -417,16 +463,18 @@ def main():
                        {"file": _b64.b64encode(buf3.getvalue()).decode()})
         s, b, _ = http("POST", b3 + f"/api/bot-import-confirm?token={TOKEN}",
                        {"stage": b.get("preview", {}).get("stage")})
+        sa_g = _approve(b3, b.get("pending"))
         s2, bx, _ = http("GET", b3 + "/api/bots", token=TOKEN)
         long_bot = next((x for x in bx.get("bots", [])
                          if x.get("name") == "Bot dài"), None)
         ins = (long_bot or {}).get("instructions") or {}
         check("20g. instructions dict kẹp 2000 + lọc key",
-              s == 200 and len(ins.get("vi", "")) == 2000
+              s == 202 and sa_g == 200 and len(ins.get("vi", "")) == 2000
               and ins.get("en") == "y" * 100 and "fr" not in ins,
               str(sorted(ins))[:60])
-        http("POST", b3 + f"/api/bot?token={TOKEN}",
-             {"action": "activate", "id": None})   # dọn — về trợ lý chung
+        s, b, _ = http("POST", b3 + f"/api/bot?token={TOKEN}",
+                       {"action": "activate", "id": None})  # về trợ lý chung
+        _approve(b3, b.get("pending"))              # deactivate cũng qua gate
 
         # ---- lock-down ph-1: Host check + term-gate + ws cap ----
         s, _ = http_raw(f"http://127.0.0.1:{sv}/my-course/manifest.json",
@@ -443,10 +491,15 @@ def main():
                       encoding="utf-8-sig").read()
         src_ln = open(os.path.join(TOOLS, "launcher.py"),
                       encoding="utf-8").read()
-        check("23. 3 đường spawn ttyd qua term-gate + -a",
+        # Windows PHẢI là term-gate.ps1 không phải .cmd: ?arg= đi qua %1
+        # trong batch là re-lex injection (" phá quote → & chạy lệnh)
+        check("23. 3 đường spawn ttyd qua term-gate + -a + -O",
               "term-gate.sh" in src_sh and " -a " in src_sh
-              and "term-gate.cmd" in src_ps and "-a" in src_ps
-              and "term-gate" in src_ln and '"-a"' in src_ln)
+              and "-O" in src_sh
+              and "term-gate.ps1" in src_ps and "-a" in src_ps
+              and "-O" in src_ps
+              and "term-gate" in src_ln and '"-a"' in src_ln
+              and '"-O"' in src_ln)
 
         src_eb = open(os.path.join(TOOLS, "ext-bridge.py"),
                       encoding="utf-8").read()

@@ -77,6 +77,9 @@ $handler = {
       $cc = if ($path.StartsWith('/web/vendor/')) { 'max-age=3600' } else { 'no-store' }
       $res.Headers.Add('Cache-Control', $cc)
       $res.Headers.Add('X-Content-Type-Options', 'nosniff')
+      # trang lạ iframe portal → clickjacking; SAMEORIGIN vẫn cho iframe
+      # nội bộ (chat-frame, term-frame, clone-view) — parity serve.py
+      $res.Headers.Add('X-Frame-Options', 'SAMEORIGIN')
       # ToLower BAT BUOC: FS Windows/macOS khong phan biet hoa-thuong nen
       # /MY-COURSE/x.html resolve ra cung file — so case-sensitive se lam
       # content doc thoat CSP qua alias viet hoa.

@@ -15,8 +15,12 @@ rem --- Doc "nao" tu brain.json (mac dinh devin, doi duoc trong onboarding) ---
 set "BRAIN_CMD=devin"
 set "BRAIN_TERM=devin"
 if exist brain.json (
-  for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try{(Get-Content brain.json -Raw -Encoding UTF8 ^| ConvertFrom-Json).cmd}catch{'devin'}"`) do set "BRAIN_CMD=%%i"
-  for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try{(Get-Content brain.json -Raw -Encoding UTF8 ^| ConvertFrom-Json).terminal}catch{'devin'}"`) do set "BRAIN_TERM=%%i"
+  rem Doc qua read-brain.ps1: validate charset + deny-list TRUOC khi gia
+  rem tri vao env — expansion trong batch (&, |) la injection neu doc tho.
+  for /f "usebackq tokens=1,2 delims=|" %%i in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\read-brain.ps1"`) do (
+    set "BRAIN_CMD=%%i"
+    set "BRAIN_TERM=%%j"
+  )
 )
 
 rem --- Kiem tra CLI cua nao ---

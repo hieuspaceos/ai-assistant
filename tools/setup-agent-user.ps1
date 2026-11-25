@@ -39,8 +39,19 @@ if (-not $pr.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
 # --- tao/reset user han che + password ngau nhien ---
 # Luon reset password moi lan chay -> cred file luon dong bo, va chay
 # lai nhieu lan khong vo tinh dung password cu da lo.
-$pwd = -join ((48..57)+(65..90)+(97..122) | Get-Random -Count 24 |
-              ForEach-Object {[char]$_})
+# CSPRNG — Get-Random là System.Random (~32bit seed, đoán được theo thời
+# điểm chạy) nên không dùng cho password; sinh hex như bridge.token.
+# Dùng instance Create()+GetBytes(byte[]) thay vì static GetBytes(int):
+# overload static chỉ có trên .NET Core/5+ (pwsh 7), .NET Framework
+# (Windows PowerShell 5.1 — thứ start.bat gọi) không có.
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+try {
+    $rb = New-Object byte[] 24
+    $rng.GetBytes($rb)
+} finally {
+    $rng.Dispose()
+}
+$pwd = ([BitConverter]::ToString($rb)).Replace('-', '').ToLower()
 $sec = ConvertTo-SecureString $pwd -AsPlainText -Force
 if (-not (Get-LocalUser -Name $AgentUser -ErrorAction SilentlyContinue)) {
     New-LocalUser -Name $AgentUser -Password $sec `

@@ -183,8 +183,16 @@ function actQuery(p) {
     // Thuộc tính trống/không có → thử property sống (value, checked của input).
     let t;
     if (p.attr) {
-      let v = el.getAttribute(p.attr);
-      if ((v === null || v === '') && typeof el[p.attr] !== 'object') v = el[p.attr];
+      // attr tuỳ ý → đọc được dữ liệu nhạy cảm trong DOM (CSRF token trong
+      // <meta content>, mật khẩu trong .value…). Chỉ attr vô hại +
+      // aria-*/data-*/class được phép. value CHỈ cấm trên input
+      // password/hidden (mật khẩu đã gõ, token ẩn) — ô text thường vẫn
+      // cần đọc (skill cap-nhat-sheet đọc #t-name-box lấy ô đang chọn).
+      const an = String(p.attr).toLowerCase();
+      const safe = /^(src|href|alt|title|type|name|role|id|for|target|rel|width|height|placeholder|colspan|rowspan|class|checked|selected|disabled|readonly|datetime|lang|dir|tabindex|download|open|value|aria-|data-)/.test(an)
+        && !(an === 'value' && /^(password|hidden)$/i.test(el.type || ''));
+      let v = safe ? el.getAttribute(p.attr) : null;
+      if (safe && (v === null || v === '') && typeof el[p.attr] !== 'object') v = el[p.attr];
       t = String(v ?? '');
     } else {
       t = String(el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();

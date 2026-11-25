@@ -829,10 +829,13 @@ $('#bot-chip').onclick = (e) => {
       if (it.dataset.new) { openBotGallery(); return; }
       if (it.dataset.imp) { $('#bot-file').click(); return; }
       try {
-        await bfetch(BRIDGE_URL + '/api/bot', {
+        const r = await bfetch(BRIDGE_URL + '/api/bot', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'activate', id: it.dataset.id || null })
         });
+        const d = await r.json().catch(() => ({}));
+        // đổi trợ lý qua consent gate — xác nhận xong trong chat mới đổi
+        if (d.pending) await uiAlert(t('gateTitle'), d.msg || t('gateMsg'));
         await loadBots();
         loadManifest();   // recipes đổi theo trợ lý
       } catch { uiAlert(t('botErr'), ''); }
@@ -891,10 +894,12 @@ $('#bot-create-btn').onclick = async () => {
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok || !d.bot) throw 0;
-    await bfetch(BRIDGE_URL + '/api/bot', {
+    const ra = await bfetch(BRIDGE_URL + '/api/bot', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'activate', id: d.bot.id })
     });
+    const da = await ra.json().catch(() => ({}));
+    if (da.pending) await uiAlert(t('gateTitle'), da.msg || t('gateMsg'));
     $('#bot-overlay').hidden = true;
     await loadBots();
     loadManifest();
@@ -952,7 +957,11 @@ $('#bot-file').onchange = async (e) => {
         body: JSON.stringify({ stage: p.stage })
       });
       const d2 = await r.json().catch(() => ({}));
-      if (!r.ok) { uiAlert(t('botImportTitle'), d2.err || t('botErr')); }
+      if (d2.pending) {
+        // cài bot qua consent gate — xác nhận trong chat mới cài thật
+        $('#bot-overlay').hidden = true;
+        await uiAlert(t('gateTitle'), d2.msg || t('gateMsg'));
+      } else if (!r.ok) { uiAlert(t('botImportTitle'), d2.err || t('botErr')); }
       else {
         $('#bot-overlay').hidden = true;
         uiAlert(t('botImportTitle'), t('botImportDone'));
@@ -962,5 +971,14 @@ $('#bot-file').onchange = async (e) => {
     btn.disabled = false; btn.textContent = t('botImportBtn');
   };
 };
+
+// thẻ consent gate chạy xong trong iframe chat (đổi trợ lý, xoá bài,
+// sửa quyền…) → làm mới chip trợ lý + manifest cho khớp state trên đĩa
+window.addEventListener('message', (e) => {
+  if (e.origin === location.origin && e.data && e.data.t === 'gateDone') {
+    loadBots();
+    loadManifest();
+  }
+});
 
 loadBots();

@@ -161,7 +161,11 @@ def ws_recv(sock):
         if op == 8:
             raise ConnectionError("extension đóng kết nối")
         if op == 9:      # ping → pong (frame từ server không được mask)
-            sock.sendall(b"\x8a\x00")
+            # PHẢI qua ext_send_lock y như ws_send — gửi trần lúc thread
+            # khác đang viết một frame lệnh lớn thì 2 byte pong chen giữa
+            # frame → stream hỏng → extension ngắt kết nối
+            with ext_send_lock:
+                sock.sendall(b"\x8a\x00")
             continue
         if op in (0, 1, 2):
             msg += payload
@@ -330,6 +334,19 @@ def serve_conn(sock):
         parts = first.split(" ")
         method, path = parts[0], parts[1] if len(parts) > 1 else "/"
         pu = urllib.parse.urlparse(path)
+        # chống DNS rebinding — y serve.py/chat-bridge: Host không phải
+        # loopback → từ chối trước cả auth (trang lạ rebind DNS vẫn giữ
+        # hostname của nó trong Host header)
+        mo_h = re.search(r"^host:\s*(\S+)", head, re.I | re.M)
+        hh = (mo_h.group(1).strip() if mo_h else "")
+        if hh.startswith("[") and "]" in hh:
+            hh = hh[1:hh.index("]")]               # [::1]:7684 → ::1
+        elif not hh.startswith("["):
+            hh = hh.rsplit(":", 1)[0]              # localhost:7684 → localhost
+        if hh not in ("localhost", "127.0.0.1", "::1") \
+                and not hh.endswith(".localhost"):
+            sock.sendall(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n")
+            return
         # Mã kết nối: header X-Bridge-Token hoặc ?token= — bắt buộc cho mọi
         # cửa vào (HTTP api + WS). Vá lỗ hổng no-Origin: process local trước
         # đây chiếm được slot /ext và đọc trộm mọi lệnh agent gửi extension.

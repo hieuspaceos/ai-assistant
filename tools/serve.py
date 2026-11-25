@@ -151,6 +151,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
             self.send_header("Accept-Ranges", "bytes")
             self.send_header("Content-Length", str(end - start + 1))
+            # trang lạ iframe portal → clickjacking; SAMEORIGIN vẫn cho
+            # iframe nội bộ (chat-frame, term-frame, clone-view)
+            self.send_header("X-Frame-Options", "SAMEORIGIN")
             # CSP phải đi kèm MỌI response của vùng nội dung — kể cả 206;
             # bỏ sót thì trang độc đoạn Range trả về render không sandbox
             raw_path = urllib.parse.unquote(
@@ -178,6 +181,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(size))
         self.send_header("Accept-Ranges", "bytes")
+        # trang lạ iframe portal → clickjacking; SAMEORIGIN vẫn cho
+        # iframe nội bộ (chat-frame, term-frame, clone-view)
+        self.send_header("X-Frame-Options", "SAMEORIGIN")
         raw_path = urllib.parse.unquote(urllib.parse.urlparse(self.path).path)
         # .lower() BẮT BUỘC: FS macOS/Windows không phân biệt hoa-thường nên
         # /MY-COURSE/x.html resolve ra cùng file — nếu so case-sensitive thì

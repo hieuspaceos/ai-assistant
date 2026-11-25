@@ -10,7 +10,7 @@
 #   GET  /api/poll?since=N -> {"events": [...], "next": M}
 #   POST /api/prompt       -> {"text": "..."} gửi lời nhắn
 #   POST /api/respond      -> {"id": N, "optionId": "..."} trả lời xin phép
-#   GET  /api/health       -> {"ok": true, "sessionId": ...}
+#   GET  /api/health       -> {"ok": true, "brain": ..., "version": ...}
 #   GET  /api/brain        -> não hiện tại + danh sách preset (kèm đã cài chưa)
 #   POST /api/brain        -> {"id": <preset>} hoặc {"cmd","args"} đổi não
 
@@ -211,6 +211,10 @@ function Test-SensitivePath($p) {
         "$env:LOCALAPPDATA\Google\Chrome\User Data",
         "$env:LOCALAPPDATA\Microsoft\Edge\User Data",
         "$env:APPDATA\Mozilla\Firefox",
+        "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\User Data",
+        "$env:LOCALAPPDATA\Arc\User Data",
+        "$env:LOCALAPPDATA\Vivaldi\User Data",
+        "$env:APPDATA\Opera Software",
         "$env:APPDATA\Microsoft\Credentials",
         "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup",
         "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp",
@@ -645,6 +649,19 @@ function Drain-Queue {
         }
         # Agent hỏi xin phép -> chuyển cho UI
         if ($m.method -eq "session/request_permission") {
+            # id do CHÍNH não tự khai: (1) không scalar → hashtable key rác
+            # + JSON-RPC reply không khớp; (2) trùng card đang mở → che card
+            # local (đọc id qua /api/poll) — bấm "Đồng ý" của học viên thành
+            # approval cho tool call của não. Từ chối + báo lỗi cả hai.
+            $badId = ($null -eq $m.id) -or `
+                ($m.id -isnot [string] -and $m.id -isnot [int] -and $m.id -isnot [long]) -or `
+                $script:PermPending.ContainsKey([string]$m.id) -or `
+                $script:LocalPending.ContainsKey([string]$m.id)
+            if ($badId) {
+                try { Send-Acp ([ordered]@{ jsonrpc = "2.0"; id = $m.id
+                    error = @{ code = -32602; message = "id không hợp lệ" } }) } catch {}
+                continue
+            }
             $p = $m.params; $tc = $p.toolCall
             $opts = @()
             $optIds = @()
@@ -657,9 +674,12 @@ function Drain-Queue {
                 options = $optIds
                 ts = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
             }
+            # kẹp độ dài title do não gửi — phình thì lọt thẳng vào store
+            $ttl = if ($tc.title) { [string]$tc.title } else { "Trợ lý muốn làm một việc" }
+            if ($ttl.Length -gt 200) { $ttl = $ttl.Substring(0, 200) }
             Push-Event ([ordered]@{
                 t = "perm"; id = $m.id
-                title = (if ($tc.title) { $tc.title } else { "Trợ lý muốn làm một việc" })
+                title = $ttl
                 options = $opts
             })
             continue
@@ -730,7 +750,8 @@ function Test-Probe($probe) {
         $home2 = [IO.Path]::GetFullPath($env:USERPROFILE)
         $dev = [IO.Path]::GetFullPath((Join-Path $WorkDir ".devin"))
         return $p.StartsWith($home2 + [IO.Path]::DirectorySeparatorChar) -and `
-            -not ($p -eq $dev -or $p.StartsWith($dev + [IO.Path]::DirectorySeparatorChar))
+            -not ($p -eq $dev -or $p.StartsWith($dev + [IO.Path]::DirectorySeparatorChar)) -and `
+            -not (Test-SensitivePath $p)
     }
     if ($t -eq "mcp") {
         return ($probe.name -is [string]) -and ([string]$probe.name).Length -le 40
@@ -747,7 +768,16 @@ function Run-Probe($probe) {
     }
     try {
         if ($probe.type -eq "http") {
-            $d = Invoke-RestMethod -Uri $probe.url -TimeoutSec 4
+            # CHỈ đính mã kết nối khi probe chính 2 bridge — đính cho URL
+            # loopback khác là rò token sang server local lạ (parity .py;
+            # cùng lý do BRIDGE_PORTS trong bridge-token.js)
+            $hdr = @{}
+            try {
+                if (([uri]$probe.url).Port -in @(7682, 7684)) {
+                    $hdr["X-Bridge-Token"] = $BridgeToken
+                }
+            } catch {}
+            $d = Invoke-RestMethod -Uri $probe.url -TimeoutSec 4 -Headers $hdr
             if (-not $probe.expect_key) {
                 $ok = $true
             } else {
@@ -844,6 +874,13 @@ try { $listener.Start() } catch {
     Write-Host "Không mở được cổng $Port — có chương trình nào đang giữ nó rồi."
     exit 1
 }
+# Chống slow-drip: loop đơn luồng nên một client rỏ header/body từng
+# giọt là nghẽn cả bridge (parity với settimeout(45) bên chat-bridge.py —
+# ở đây timeout ngắn hơn vì ps1 không có long-poll nào cần giữ request).
+$listener.TimeoutManager.HeaderWait = [timespan]::FromSeconds(15)
+$listener.TimeoutManager.EntityBody = [timespan]::FromSeconds(30)
+$listener.TimeoutManager.RequestQueue = [timespan]::FromSeconds(30)
+$listener.TimeoutManager.IdleConnection = [timespan]::FromSeconds(60)
 Write-Host "chat-bridge: http://localhost:$Port  (cwd=$WorkDir)"
 
 try {
@@ -896,7 +933,7 @@ try {
                 }
             }
             if ($ctx.Request.HttpMethod -eq "GET" -and $path -eq "/api/health") {
-                Send-Json $ctx @{ ok = $true; sessionId = $script:SessionId; brain = (Get-Brain).id; version = (Get-AppVersion); extVersion = (Get-ExtVersion) }
+                Send-Json $ctx @{ ok = $true; brain = (Get-Brain).id; version = (Get-AppVersion); extVersion = (Get-ExtVersion) }
             }
             elseif ($ctx.Request.HttpMethod -eq "GET" -and $path -eq "/api/brain") {
                 $cur = Get-Brain
@@ -1084,6 +1121,11 @@ try {
                 $age = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() - $(if ($rec) { $rec.ts } else { 0 })
                 if ($null -eq $rec -or $age -gt $PermTtl) {
                     Send-Json $ctx @{ err = "yêu cầu không còn hiệu lực" } 404
+                } elseif (-not (Test-LocalOrigin $ctx.Request.Headers["Origin"])) {
+                    # Card não (ACP): id do chính não tự khai + nó có sẵn
+                    # token → phải đòi Origin trình duyệt y như card nội
+                    # bộ, kẻo não/script nhiễm tự duyệt tool call của mình
+                    Send-Json $ctx @{ err = "thiếu Origin trình duyệt" } 403
                 } elseif ($body.optionId -ne "__cancel__" -and
                           $rec.options -notcontains [string]$body.optionId) {
                     Send-Json $ctx @{ err = "lựa chọn không hợp lệ" } 400
@@ -1102,6 +1144,7 @@ try {
                         }
                     }
                     try { if (-not $script:AcpDead -and (Test-BrainAlive)) { Send-Acp $payload } } catch {}
+                    Push-Event ([ordered]@{ t = "perm_done"; id = $body.id })
                     Send-Json $ctx @{ ok = $true }
                 }
             }

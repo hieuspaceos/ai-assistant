@@ -20,8 +20,10 @@ $theme = 'theme={' +
 # chữ và chữ bị giãn khoảng. Font mono mặc định của từng OS đủ rõ.
 $brain = "devin"
 try {
-    $b = Get-Content (Join-Path (Split-Path -Parent $PSScriptRoot) "brain.json") -Raw -Encoding UTF8 | ConvertFrom-Json
-    if ($b.terminal) { $brain = [string]$b.terminal }
+    # qua read-brain.ps1: giá trị terminal đi thẳng vào %BRAIN_TERM% rồi
+    # mở rộng trong batch — chưa validate thì ký tự &, | thành injection
+    $rb = (& "$PSScriptRoot\read-brain.ps1")
+    if ($rb -match '^[A-Za-z0-9_.-]+\|([A-Za-z0-9_.-]+)$') { $brain = $Matches[1] }
 } catch {}
 
 # "Chìa khoá nhà" cho agent chạy trong chế độ Terminal — ttyd spawn shell
@@ -29,12 +31,17 @@ try {
 $tokFile = Join-Path (Split-Path -Parent $PSScriptRoot) ".devin\bridge.token"
 if (Test-Path $tokFile) { $env:BRIDGE_TOKEN = (Get-Content $tokFile -Raw -Encoding UTF8).Trim() }
 
-# ttyd KHÔNG tự xác thực (flag -O chỉ so hostname, bỏ port) → mỗi kết nối
-# phải đi qua term-gate.cmd: đòi mã kết nối đúng rồi mới chạy não. -a cho
-# portal tự điền mã qua ?arg= (ttyd append arg đó vào cuối lệnh).
+# ttyd KHÔNG tự xác thực → mỗi kết nối phải đi qua term-gate.ps1: đòi mã
+# kết nối đúng rồi mới chạy não. -a cho portal tự điền mã qua ?arg= (ttyd
+# append arg đó vào cuối lệnh). -O so hostname của Origin với Host —
+# portal localhost:* vẫn qua nhưng WS không chịu same-origin nên trang
+# web NGOÀI (origin evil.com) bị chặn ngay, không spawn được term-gate
+# để bơm process. -O không thay thế được term-gate (localhost:* đều qua).
+# PHẢI là .ps1 không phải .cmd: arg ?arg= đi qua %1 trong batch là re-lex
+# injection (" phá quote → & chạy lệnh); PowerShell nhận argv an toàn.
 $env:BRAIN_TERM = $brain
-ttyd -p 7681 -i 127.0.0.1 -W -a `
+ttyd -p 7681 -i 127.0.0.1 -W -a -O `
   -t $theme `
   -t fontSize=17 `
   -t lineHeight=1.45 `
-  cmd /c "$PSScriptRoot\term-gate.cmd"
+  powershell -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\term-gate.ps1"

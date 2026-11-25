@@ -97,6 +97,10 @@ def ensure_token():
         tok = secrets.token_hex(24)
         fd = os.open(fp, os.O_CREAT | os.O_WRONLY, 0o600)
         os.write(fd, tok.encode()); os.close(fd)
+    try:
+        os.chmod(fp, 0o600)   # file từ bản cũ — siết lại perm
+    except OSError:
+        pass
     os.environ["BRIDGE_TOKEN"] = tok
     return tok
 
@@ -148,11 +152,14 @@ def supervisor():
         # term-gate.* nằm trong tools/ → CODE_DIRS đã copy sang DATA.
         os.environ["BRAIN_TERM"] = brain_terminal()
         if platform.system() == "Windows":
-            gate = ["cmd", "/c", os.path.join(DATA, "tools", "term-gate.cmd")]
+            # PHẢI là .ps1: ?arg= đi qua %1 trong .cmd là re-lex injection
+            # (" phá quote → & chạy lệnh); PowerShell nhận argv an toàn
+            gate = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                    "-File", os.path.join(DATA, "tools", "term-gate.ps1")]
         else:
             gate = ["sh", os.path.join(DATA, "tools", "term-gate.sh")]
         jobs.append(("ttyd", ["ttyd", "-p", "7681", "-i", "127.0.0.1",
-                              "-W", "-a"] + gate))
+                              "-W", "-a", "-O"] + gate))
     procs, fails, born = {}, {n: 0 for n, _ in jobs}, {}
 
     def cmd_of(n, spec):

@@ -11,11 +11,14 @@ hoặc sau khi đụng `tools/*.py`, `tools/*.ps1`, `.devin/skill*/`:
 python3 tools/test-bridges.py   # endpoint-level: auth, save-page, brain…
 python3 tools/test-parity.py    # endpoint .py ↔ .ps1 phải khớp
 python3 tools/test-packs.py     # skill active ↔ packs ↔ recipes
+python3 tools/test-gates.py     # endpoint POST phải khai GATED/OPEN_OK
 ```
 
 Bất kỳ test nào đỏ → KHÔNG release. `test-parity` đỏ thường là quên port
 endpoint sang bản bridge kia; `test-packs` đỏ là skill mới/sửa chưa đồng
-bộ vào `skill-packs/`.
+bộ vào `skill-packs/`; `test-gates` đỏ là thêm endpoint POST mới mà chưa
+khai vào `GATED`/`OPEN_OK` trong `tools/test-gates.py` — bắt buộc quyết
+định "agent tự gọi được endpoint này có an toàn không" ngay lúc viết.
 
 ## 0.5. Release một phiên bản mới (CI)
 

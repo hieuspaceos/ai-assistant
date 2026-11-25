@@ -62,10 +62,12 @@ python3 tools/ext-bridge.py 7684 "$ROOT" >"$LOGDIR/ext-bridge.log" 2>&1 &
 
 # --- 4. ttyd (cong 7681, tuy chon): che do Terminal nhung web ---
 if command -v ttyd >/dev/null 2>&1; then
-  # ttyd KHONG tu xac thuc (-O chi so hostname, bo port) → moi ket noi
-  # phai qua term-gate: doi ma ket noi roi moi exec nao. -a cho phep
-  # portal tu dien ma qua ?arg= (append cuoi argv).
-  ttyd -p 7681 -i 127.0.0.1 -W -a sh tools/term-gate.sh >"$LOGDIR/ttyd.log" 2>&1 &
+  # ttyd KHONG tu xac thuc → moi ket noi phai qua term-gate: doi ma ket
+  # noi roi moi exec nao. -a cho phep portal tu dien ma qua ?arg= (append
+  # cuoi argv). -O so hostname Origin voi Host → chan trang web NGOAI
+  # mo ws://127.0.0.1:7681 bom process term-gate (WS khong chiu same-
+  # origin); portal localhost:* van qua vi chi so hostname, bo port.
+  ttyd -p 7681 -i 127.0.0.1 -W -a -O sh tools/term-gate.sh >"$LOGDIR/ttyd.log" 2>&1 &
 else
   echo "  [!] Khong co ttyd - che do Terminal khong dung duoc (Chat van binh thuong)"
 fi

@@ -102,6 +102,13 @@ async function ensureContent(tabId) {
 }
 
 const freshTabs = new Set();
+// tab đóng thì gỡ id khỏi set — nếu không id tích luỹ vô hạn (tab id churn
+// qua nhiều ngày). Cap thêm cho chắc dù onRemoved đã dọn.
+chrome.tabs.onRemoved.addListener(id => freshTabs.delete(id));
+function markFresh(id) {
+  if (freshTabs.size > 1000) freshTabs.clear();
+  freshTabs.add(id);
+}
 
 // ── Sự kiện THẬT qua chrome.debugger (CDP Input domain) ─────────────
 // Một số app (Zalo, Google Sheets grid, FB) check event.isTrusted —
@@ -167,14 +174,14 @@ async function inTab(tabId, action, params) {
     if (!freshTabs.has(id)) {
       const pong = await sendToTab(id, { action: 'ping' });
       if (!pong || !pong.ok) throw new Error('content script cũ');
-      freshTabs.add(id);
+      markFresh(id);
     }
     const r = await sendToTab(id, { action, ...params });
     return r || { ok: true };
   } catch (e) {
     // thử nạp content script rồi gọi lại
     await ensureContent(id);
-    freshTabs.add(id);
+    markFresh(id);
     const r = await sendToTab(id, { action, ...params });
     return r || { ok: true };
   }

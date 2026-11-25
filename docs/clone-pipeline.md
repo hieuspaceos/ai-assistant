@@ -50,6 +50,16 @@ nhất để viewer/agent/`trang-moi`/compare-tool nhận diện đồng nhất.
 | `data-cs-template` | trang chi tiết mẫu | "Khuôn" để `/trang-moi` nhân bản — **từ vựng mở** (`post tour product recipe…`), đúng MỘT cái mỗi loại |
 | `data-cs-ref` | section + phần tử lớn | Selector nguồn tương ứng (`el` trong ref-styles.json) — `clone-compare.py harvest` khớp đúng phần tử |
 
+Marker nội bộ của viewer (không do builder phát): `data-cs-sv-<attr>`
+lưu attribute bị trung hoà lúc sửa (`on*`, `javascript:`, meta refresh,
+sandbox iframe) để serialize gắn lại nguyên khi lưu; `data-cs-added-*`
+đánh dấu attribute viewer tự thêm. **`prepareEditable` strip mọi marker
+này có sẵn trong HTML nguồn** — trang clone độc tự khai
+`data-cs-sv-onclick` sẽ bị serialize "khôi phục" thành `onclick` thật
+trong file đã lưu (kênh cấy script). Và **mọi giá trị trang nguồn nhúng
+vào popover phải qua `esc()`** — attribute chứa `"` phá được innerHTML
+của popover (XSS trong origin portal).
+
 Design tokens bắt buộc là CSS variable trên `:root` (`--cs-font`,
 `--cs-primary`, `--cs-bg`, `--cs-radius`, `--cs-gap`…) — không rải giá
 trị rời.

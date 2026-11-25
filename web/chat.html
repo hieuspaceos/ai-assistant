@@ -334,6 +334,10 @@ function addPerm(ev) {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({id: ev.id, optionId: o.optionId})});
       if (!res.ok) addErr('yêu cầu xin phép đã hết hạn');
+      // thẻ gate nội bộ (local-*) vừa chạy xong — báo trang ngoài làm mới
+      // chip trợ lý / danh sách bài học (apply đổi bots.json, manifest…)
+      else if (String(ev.id).startsWith('local-') && window.parent !== window)
+        window.parent.postMessage({t: 'gateDone'}, location.origin);
     };
     btns.appendChild(b);
   });
@@ -394,8 +398,15 @@ function handleEvent(ev) {
   else if (ev.t === 'perm') { removeTyping(); flushBubble(); addPerm(ev); }
   else if (ev.t === 'perm_done') {
     // bridge đã có quyết định (hộp thoại native/cancel) → đóng card treo
-    const c = msgs.querySelector('[data-perm-id="' + ev.id + '"]');
+    // ev.id do não tự khai — có thể chứa " phá querySelector (SyntaxError
+    // → poll loop đứt). So bằng dataset thay vì nối chuỗi vào selector.
+    const c = [...msgs.querySelectorAll('[data-perm-id]')]
+      .find(x => x.dataset.permId === String(ev.id));
     if (c) c.remove();
+    // gate nội bộ vừa xong qua đường native — báo trang ngoài refresh
+    // (refresh thừa khi cancel vẫn rẻ: 2 fetch)
+    if (String(ev.id).startsWith('local-') && window.parent !== window)
+      window.parent.postMessage({t: 'gateDone'}, location.origin);
   }
   else if (ev.t === 'done') { flushBubble(); setBusy(false); curBubble = null; }
   else if (ev.t === 'err') { flushBubble(); addErr(ev.msg); setBusy(false); }

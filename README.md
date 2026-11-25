@@ -96,7 +96,8 @@ ai-assistant/
 ├── tools/serve.ps1            # pure-PowerShell static server: dotfile block, CSP on course pages, Range (serve.py on macOS/Linux — + Host check, keep-alive)
 ├── tools/ext-bridge.py        # extension bridge: HTTP API for the agent + token-authed WS for the extension (7684)
 ├── tools/chat-bridge.ps1      # browser ↔ ACP brain bridge: long-poll, respond-gate, prompt lock; on Windows also spawns the brain under the restricted `troly-agent` user (CreateProcessWithLogonW + NTFS ACL — set up once via setup-agent-user.ps1); .py on macOS/Linux spawns under Seatbelt
-├── tools/term-gate.*          # gate between ttyd and the brain — requires the connection code before exec (all spawn paths: start, chat-terminal, launcher)
+├── tools/term-gate.*          # gate between ttyd and the brain — requires the connection code before exec (.sh/.ps1 — the .cmd is only an arg-less forwarder since batch can't read argv safely)
+├── tools/read-brain.ps1       # validated brain.json read (charset + deny-list) shared by start.bat + chat-terminal.ps1
 ├── tools/gen-sandbox.py       # generates .devin/agent.sb from permissions.json — macOS enforcement
 ├── tools/launcher.py          # supervisor inside the packaged binary — builds ~/TroLyAI, spawns all processes
 ├── tools/chat-terminal.ps1    # ttyd launcher, light theme + large font (Terminal mode)
@@ -136,7 +137,9 @@ ai-assistant/
   secrets. Belt-and-suspenders on top: every bridge requires the
   connection code, Terminal mode asks for it again inside the shell
   (`term-gate`), permission cards only accept live pending requests
-  (and on macOS the "Allow" button lives in a native OS dialog the
+  with a loopback `Origin` — both the internal consent cards and the
+  brain's own ACP permission cards (the agent can't self-approve: on
+  macOS the "Allow" button lives in a native OS dialog the
   sandboxed agent can't fake or click), "delete lesson" moves the
   folder to `my-course/.trash/` so a misclick is recoverable,
   course/clone pages run sandboxed to an opaque origin (can't read the connection code or frame the portal), and on macOS the

@@ -3,6 +3,61 @@
 Các quyết định kiến trúc và **tại sao** — để sau này không gỡ ngược lại
 vì quên lý do. Mới nhất lên đầu.
 
+## 2026 — Audit v9: vá audit — clone-view XSS, term-gate.cmd RCE, card ACP tự duyệt
+
+**`.cmd` KHÔNG BAO GIỜ được đọc argv/input không tin cậy — dùng `.ps1`.**
+Vì: expansion `%1`/`%t%` trong batch được re-parse — payload `?arg=`
+chứa `"` phá quote của `if "%t%"==...` → `& <lệnh>` chạy trực tiếp =
+RCE **không cần mã kết nối** (trang web ngoài nhúng link
+`localhost:7681/?arg=%22%26<cmd>` — ttyd `-O` chỉ kiểm Origin của WS
+handshake, không chặn GET trang). Không tồn tại cách expansion
+attacker-data an toàn trong cmd nên `term-gate.cmd` bị thay bằng
+`term-gate.ps1` (PowerShell nhận argv không re-lex; token compare
+`String.Equals` ordinal; `BRAIN_TERM` validate charset+deny y
+`term-gate.sh`); `chat-terminal.ps1` + `launcher.py` trỏ sang `.ps1`,
+file `.cmd` chỉ còn là forwarder không-kèm-arg (luôn hỏi tay). Bash
+không bị class này — gán `$1` vào biến không re-lex.
+
+**Card ACP (`perm_pending`) đi qua đầy đủ consent-gate model.** Vì:
+`id` của `session/request_permission` do CHÍNH não tự khai + não có
+sẵn `BRIDGE_TOKEN` → respond không check Origin = não tự duyệt mọi
+tool call đắt (exec, ghi file) — lớp "người duyệt" chỉ là nghi thức.
+Giờ: card ACP cũng đòi Origin loopback; macOS siết hơn — option duyệt
+chỉ qua `_perm_native_confirm` (osascript dialog → chọn option
+`allow_*` đầu; "Không"/hết hạn → báo `-32800` cho não ngay), chat chỉ
+còn nút "Không". **id trùng card đang mở bị từ chối ngay lúc đăng ký**
+— não đọc được id card `local-*` qua `/api/poll`, trùng id thì card
+ACP che card consent (click "Đồng ý" cho grant-folder resolve thành
+approval cho tool call của não). `.ps1` parity: `badId` check +
+`LocalPending` ưu tiên trước + `perm_done` broadcast. Residual
+Windows: không có native dialog → não forge Origin vẫn tự duyệt được —
+muốn chặt hẳn cần kênh out-of-band proof-of-human (ghi SECURITY.md).
+
+**Dữ liệu trang clone nhúng vào UI editor phải escape + marker phải do
+editor tự tạo.** Vì: `clone-view.html` interpolate `src`/`href`/
+`innerText` thẳng vào popover `innerHTML` — attribute chứa `"` phá tag
+→ XSS trong origin portal (đọc `localStorage.bridge_token`, tự duyệt
+card, lái extension — `/web/` không CSP); và `serialize()` "khôi phục"
+mọi `data-cs-sv-*` thành attribute thật → trang nguồn tự khai
+`data-cs-sv-onclick` = cấy script vào file đã lưu. Giờ: `esc()` mọi
+giá trị, `prepareEditable` strip `data-cs-sv-*`/`data-cs-added-*` có
+sẵn trong nguồn trước khi xử lý.
+
+Kèm đợt này: `_SENSITIVE_DIRS`/`Test-SensitivePath` + Brave/Arc/
+Vivaldi/Opera (đúng trình duyệt docs hướng dẫn); Host check loopback
+cho `:7682`/`:7684` (DNS rebinding — `.ps1` đã có sẵn nhờ http.sys
+prefix); `X-Frame-Options: SAMEORIGIN` (serve.py + serve.ps1);
+`turn_gen` race đóng trong `store_lock`; `spawn_brain` kill fallback;
+`hist_write` lock; `.trash/` GC (giữ 20 mới nhất, >30 ngày xoá); bots
+cap 50; `actQuery` whitelist attr (`value` chỉ cấm trên input
+password/hidden — skill cap-nhat-sheet cần đọc `#t-name-box`);
+`save_json` tmp duy nhất qua mkstemp; ACP `id` non-scalar → `-32602`;
+`read-brain.ps1` validate `cmd`/`terminal` một chỗ cho `start.bat` +
+`chat-terminal.ps1`; `check-path`/`probe path` qua `path_sensitive`
+(hết oracle dò-tồn-tại-file `~/.ssh`); pong WS qua `ext_send_lock`;
+`perm_done` tra card bằng dataset (id não tự khai chứa `"` phá
+querySelector).
+
 ## 2026 — Audit v8 (S4): Windows sandbox = user hạn chế + CreateProcessWithLogonW
 
 **Não Windows chạy dưới user `troly-agent` kém quyền, không phải

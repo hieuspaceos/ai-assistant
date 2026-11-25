@@ -82,7 +82,12 @@ function prepareEditable(html) {
   // trang clone dùng onclick cho menu/slider rất nhiều, xoá là phá file.
   d.querySelectorAll('*').forEach(el => {
     for (const a of [...el.attributes]) {
-      if (/^on/i.test(a.name) ||
+      // Marker nội bộ do trang NGUỒN tự khai (data-cs-sv-onclick="…"):
+      // serialize() sẽ "khôi phục" nó thành attribute thật → kênh cấy
+      // script vào file đã lưu. Xoá trước khi xử lý.
+      if (/^data-cs-(sv|added)-/i.test(a.name)) {
+        el.removeAttribute(a.name);
+      } else if (/^on/i.test(a.name) ||
           (/^(href|src|action|formaction|xlink:href)$/i.test(a.name)
            && /^\s*javascript:/i.test(a.value))) {
         el.setAttribute('data-cs-sv-' + a.name, a.value);
@@ -260,6 +265,15 @@ function showPop(anchor, html) {
 
 function lab(t) { return `<div style="color:#888;font-size:11px">${t}</div>`; }
 
+// Giá trị đọc từ trang clone (src/href/innerText) là DỮ LIỆU KHÔNG TIN
+// CẬY: trang nguồn đặt được attribute chứa " → nhúng thẳng vào innerHTML
+// của popover thì phá tag, chạy script trong origin portal (đọc trộm mã
+// kết nối, tự duyệt thẻ xác nhận). Escape trước khi nhúng.
+function esc(v) {
+  return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function editText(el) {
   if (editingEl === el) return;
   snapBefore(el);
@@ -278,11 +292,11 @@ function popImg(el) {
   snapBefore(el);
   const p = showPop(el,
     '<b>Đổi ảnh</b>' + lab('Link ảnh mới') +
-    `<input style="${POP_INPUT}" id="p-src" value="${el.getAttribute('src') || ''}">` +
+    `<input style="${POP_INPUT}" id="p-src" value="${esc(el.getAttribute('src'))}">` +
     lab('…hoặc chọn ảnh từ máy') +
     `<input type="file" accept="image/*" id="p-file" style="font-size:12px;margin:4px 0 10px">` +
     lab('Chú thích ảnh (alt)') +
-    `<input style="${POP_INPUT}" id="p-alt" value="${el.getAttribute('alt') || ''}">` +
+    `<input style="${POP_INPUT}" id="p-alt" value="${esc(el.getAttribute('alt'))}">` +
     `<button style="border:0;background:#f1f1f4;border-radius:8px;padding:7px 12px;cursor:pointer" id="p-ok">Xong</button>`);
   p.querySelector('#p-src').oninput = e => { el.src = e.target.value; dirty = true; };
   p.querySelector('#p-alt').oninput = e => { el.alt = e.target.value; dirty = true; };
@@ -299,9 +313,9 @@ function popLink(el) {
   snapBefore(el);
   const p = showPop(el,
     '<b>Sửa nút / liên kết</b>' + lab('Chữ hiển thị') +
-    `<input style="${POP_INPUT}" id="p-txt" value="${el.innerText}">` +
+    `<input style="${POP_INPUT}" id="p-txt" value="${esc(el.innerText)}">` +
     lab('Đường dẫn khi bấm') +
-    `<input style="${POP_INPUT}" id="p-href" value="${el.getAttribute('href') || ''}">` +
+    `<input style="${POP_INPUT}" id="p-href" value="${esc(el.getAttribute('href'))}">` +
     `<button style="border:0;background:#f1f1f4;border-radius:8px;padding:7px 12px;cursor:pointer" id="p-ok">Xong</button>`);
   p.querySelector('#p-txt').oninput = e => { el.innerText = e.target.value; dirty = true; };
   p.querySelector('#p-href').oninput = e => { el.setAttribute('href', e.target.value); dirty = true; };

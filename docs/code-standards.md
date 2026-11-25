@@ -62,3 +62,7 @@ chỉ có Python chuẩn + PowerShell + browser** — mọi file mới phải ch
 - ❌ Log/in ra secrets, token, app password.
 - ❌ Comment giải thích điều code đã nói — comment cho "tại sao", bẫy
   thật, số đo từ site nguồn.
+- ❌ File `.cmd`/`.bat` đọc argv (`%1`) hay input không tin cậy — mọi
+  expansion trong batch được re-parse nên ký tự `"` phá quote → `&`
+  chạy lệnh (đã là lỗ hổng RCE của term-gate.cmd). Việc đó phải là
+  `.ps1` (PowerShell không re-lex argv).

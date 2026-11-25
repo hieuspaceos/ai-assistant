@@ -18,7 +18,8 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 |---|---|
 | `serve.py` / `serve.ps1` | Static server: chặn dotfiles, Host check chống rebinding, CSP `sandbox` opaque-origin `/my-course/`+`/intro/`, Range, keep-alive |
 | `chat-bridge.py` / `.ps1` | Chat portal ↔ não ACP (`brain.json` chọn não, `/api/brain` đổi nóng); API config/permissions/connections/secrets/save-page; long-poll + prompt_lock + respond-gate; spawn não qua Seatbelt (macOS) |
-| `term-gate.sh` / `.cmd` | Cửa gác giữa ttyd và não — đòi mã kết nối (từ `?arg=`) trước khi exec não; macOS bọc sandbox-exec |
+| `term-gate.sh` / `.ps1` | Cửa gác giữa ttyd và não — đòi mã kết nối (từ `?arg=`) trước khi exec não; macOS bọc sandbox-exec. `.cmd` chỉ là forwarder không-arg (batch không đọc argv an toàn) |
+| `read-brain.ps1` | Đọc `brain.json` → in `cmd|terminal` ĐÃ validate (charset + deny-list) — `start.bat`/`chat-terminal.ps1` dùng chung, tránh expansion injection trong batch |
 | `gen-sandbox.py` | Sinh `.devin/agent.sb` từ `permissions.json` — whitelist write + deny-enumerate read + deny exec binary thoát-sandbox |
 | `setup-agent-user.ps1` | Windows sandbox (admin một lần): tạo user hạn chế `troly-agent`, ACL icacls tương đương Seatbelt, credential DPAPI → `.devin/agent-user.cred`; `chat-bridge.ps1` spawn não cross-user qua `CreateProcessWithLogonW` (`TroLy.AgentSpawn` + Job Object) — verify trên CI `test-windows` |
 | `launcher.py` | Supervisor của bản đóng gói (`troly`/`TroLyAI.exe`) — tự dựng `~/TroLyAI`, spawn 4 process |
@@ -30,6 +31,7 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 | `test-bridges.py` | Smoke test endpoint: auth 401, save-page sandbox, brain whitelist — spawn bridge thật trên port động |
 | `test-parity.py` | Diff tập endpoint `/api/*` giữa chat-bridge `.py` ↔ `.ps1` — bắt drift |
 | `test-packs.py` | Diff `.devin/skills/` ↔ `skill-packs/` + kiểm recipes trỏ đúng skill — bắt "quên đồng bộ pack" |
+| `test-gates.py` | Mọi endpoint POST `/api/*` phải khai `GATED` (handler gọi `gate_local`/`New-Gate`) hoặc `OPEN_OK` — bắt "write đặc quyền quên consent gate" |
 
 ## extension/ — MV3 "Trợ Lý AI"
 

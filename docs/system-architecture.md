@@ -83,7 +83,8 @@ extension = cánh tay trên trình duyệt · serve.py = file tĩnh.
   thật vào portal; `<não>` = trường `terminal` trong `brain.json`.
   Windows dùng `tools/chat-terminal.ps1` (theme sáng, font lớn cho
   người mới).
-- **term-gate** (`term-gate.sh`/`.cmd`) đứng giữa ttyd và não ở mọi
+- **term-gate** (`term-gate.sh`/`.ps1` — `.cmd` chỉ là forwarder vì
+  batch không đọc argv an toàn) đứng giữa ttyd và não ở mọi
   đường spawn (start.sh, chat-terminal.ps1, launcher.py — bản đóng
   gói): ttyd `-a` truyền `?arg=<mã kết nối>` từ URL iframe, gate đòi
   đúng mã trong shell (sai 3 lần/timeout 90s → thoát) rồi mới `exec
