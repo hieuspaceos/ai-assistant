@@ -508,46 +508,58 @@ def main():
               f"{el:.2f}s {str(b)[:60]}")
 
         # 31 + 32 cần não giả SỐNG (bridge với não chết không giữ busy được):
-        # workdir riêng, brain là script python trả lời ACP tối thiểu
+        # workdir riêng, brain là script python trả lời ACP tối thiểu.
+        # cmd interpreter trần (python3…) nằm trong deny-list — phải đi
+        # đường shebang + PATH giống check 54; chỉ chạy được trên POSIX.
         wd2 = make_workdir()
-        fake = os.path.join(wd2, "fake-brain.py")
-        with open(fake, "w", encoding="utf-8") as f:
-            f.write(
-                "import json, sys\n"
-                "for line in sys.stdin:\n"
-                "    try: m = json.loads(line)\n"
-                "    except Exception: continue\n"
-                "    mid, meth = m.get('id'), m.get('method')\n"
-                "    if meth == 'initialize':\n"
-                "        print(json.dumps({'jsonrpc':'2.0','id':mid,"
-                "'result':{'protocolVersion':1}}), flush=True)\n"
-                "    elif meth == 'session/new':\n"
-                "        print(json.dumps({'jsonrpc':'2.0','id':mid,"
-                "'result':{'sessionId':'s1'}}), flush=True)\n"
-                "    elif meth == 'session/prompt':\n"
-                "        print(json.dumps({'jsonrpc':'2.0',"
-                "'method':'session/update','params':{'sessionId':'s1',"
-                "'update':{'sessionUpdate':'agent_message_chunk',"
-                "'content':{'type':'text','text':'pong'}}}}), flush=True)\n")
-        # cmd phải là tên trần (load_brain chặn absolute path — audit S2)
-        # → dùng basename của interpreter, PATH lookup lúc spawn
-        json.dump({"id": "fake",
-                   "cmd": os.path.basename(sys.executable), "args": [fake]},
-                  open(os.path.join(wd2, "brain.json"), "w"))
-        cb4 = free_port()
-        procs.append(spawn("chat-bridge.py", cb4, wd2))
-        b4 = f"http://127.0.0.1:{cb4}"
-        check("31. não giả lên", wait_health(b4 + "/api/health"))
+        b4 = None
+        if os.name != "nt":
+            fbdir = os.path.join(wd2, "fakebin")
+            os.makedirs(fbdir, exist_ok=True)
+            fake = os.path.join(fbdir, "fake-brain")
+            with open(fake, "w", encoding="utf-8") as f:
+                f.write("#!/usr/bin/env python3\n"
+                    "import json, sys\n"
+                    "for line in sys.stdin:\n"
+                    "    try: m = json.loads(line)\n"
+                    "    except Exception: continue\n"
+                    "    mid, meth = m.get('id'), m.get('method')\n"
+                    "    if meth == 'initialize':\n"
+                    "        print(json.dumps({'jsonrpc':'2.0','id':mid,"
+                    "'result':{'protocolVersion':1}}), flush=True)\n"
+                    "    elif meth == 'session/new':\n"
+                    "        print(json.dumps({'jsonrpc':'2.0','id':mid,"
+                    "'result':{'sessionId':'s1'}}), flush=True)\n"
+                    "    elif meth == 'session/prompt':\n"
+                    "        print(json.dumps({'jsonrpc':'2.0',"
+                    "'method':'session/update','params':{'sessionId':'s1',"
+                    "'update':{'sessionUpdate':'agent_message_chunk',"
+                    "'content':{'type':'text','text':'pong'}}}}), flush=True)\n")
+            os.chmod(fake, 0o755)
+            json.dump({"id": "fake", "cmd": "fake-brain", "args": []},
+                      open(os.path.join(wd2, "brain.json"), "w"))
+            cb4 = free_port()
+            procs.append(subprocess.Popen(
+                [sys.executable, os.path.join(TOOLS, "chat-bridge.py"),
+                 str(cb4), wd2],
+                env=dict(os.environ,
+                         PATH=fbdir + os.pathsep + os.environ["PATH"],
+                         TROLY_NO_SANDBOX="1"),
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+            b4 = f"http://127.0.0.1:{cb4}"
+        check("31. não giả lên", b4 is not None and
+              wait_health(b4 + "/api/health"))
 
         # chờ session sẵn (ready) rồi lấy cursor mới nhất
         ready, nxt4 = False, 0
-        for _ in range(50):
-            s, b, _ = http("GET", b4 + f"/api/poll?since=0&token={TOKEN}")
-            if any(e.get("t") == "ready" for e in b.get("events", [])):
-                ready, nxt4 = True, b.get("next", 0)
-                break
-            time.sleep(0.1)
-        check("31a. não giả có session", ready)
+        if b4:
+            for _ in range(50):
+                s, b, _ = http("GET", b4 + f"/api/poll?since=0&token={TOKEN}")
+                if any(e.get("t") == "ready" for e in b.get("events", [])):
+                    ready, nxt4 = True, b.get("next", 0)
+                    break
+                time.sleep(0.1)
+        check("31a. não giả có session", ready or b4 is None)
 
         # 31: long-poll đang chờ → prompt tới → event chunk đánh thức sớm
         got = {}
@@ -556,18 +568,20 @@ def main():
                             f"/api/poll?since={nxt4}&wait=3000&token={TOKEN}")
         th = threading.Thread(target=_longpoll, daemon=True)
         t0 = time.time(); th.start(); time.sleep(0.4)
-        s, b, _ = http("POST", b4 + f"/api/prompt?token={TOKEN}", {"text": "hi"})
-        check("31b. prompt đầu → 200", s == 200, str(s))
+        s, b, _ = http("POST", b4 + f"/api/prompt?token={TOKEN}", {"text": "hi"}) \
+            if b4 else (-1, {}, None)
+        check("31b. prompt đầu → 200", s == 200 or b4 is None, str(s))
         th.join(timeout=6); el = time.time() - t0
         r = got.get("r") or (-1, {}, {})
         check("31c. long-poll dậy sớm khi có event",
-              r[0] == 200 and el < 2.5
-              and any(e.get("text") == "pong" for e in r[1].get("events", [])),
+              b4 is None or (r[0] == 200 and el < 2.5
+              and any(e.get("text") == "pong" for e in r[1].get("events", []))),
               f"{el:.2f}s {str(r[1])[:60]}")
 
         # 32: não giả không bao giờ gửi stopReason → lượt vẫn mở → busy
-        s, b, _ = http("POST", b4 + f"/api/prompt?token={TOKEN}", {"text": "nữa"})
-        check("32. prompt thứ 2 trong lượt → 409", s == 409, str(s))
+        s, b, _ = http("POST", b4 + f"/api/prompt?token={TOKEN}", {"text": "nữa"}) \
+            if b4 else (-1, {}, None)
+        check("32. prompt thứ 2 trong lượt → 409", s == 409 or b4 is None, str(s))
 
         # ---- lock-down ph-6: Seatbelt sandbox (macOS) ----
         # vùng "cấm" trong home — phải tạo TRƯỚC khi gen profile vì
@@ -725,7 +739,9 @@ def main():
         check("37. permissions → 202 → no-Origin 403 → Origin 200 → regen",
               s == 202 and bool(rid) and s2 == 403 and s3 == 200
               and s4 == 404     # one-shot — respond lại phải hết hiệu lực
-              and os.path.realpath(perm_dir) in prof2,
+              # regen profile Seatbelt chỉ có trên darwin
+              and (sys.platform != "darwin"
+                   or os.path.realpath(perm_dir) in prof2),
               f"{s}/{s2}/{s3}/{s4}")
         shutil.rmtree(perm_dir, ignore_errors=True)
 

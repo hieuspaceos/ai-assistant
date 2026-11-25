@@ -40,7 +40,7 @@ $pwd = -join ((48..57)+(65..90)+(97..122) | Get-Random -Count 24 |
 $sec = ConvertTo-SecureString $pwd -AsPlainText -Force
 if (-not (Get-LocalUser -Name $AgentUser -ErrorAction SilentlyContinue)) {
     New-LocalUser -Name $AgentUser -Password $sec `
-        -FullName "TroLy AI Agent" -Description "User han che cho nao tro ly - chi doc/ghi folder duoc cap" `
+        -FullName "TroLy AI Agent" -Description "Nao tro ly - quyen han che" `
         -PasswordNeverExpires -UserMayNotChangePassword | Out-Null
     Write-Host "Da tao user '$AgentUser'."
 } else {
