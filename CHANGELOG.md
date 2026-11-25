@@ -3,7 +3,7 @@
 Format theo [Keep a Changelog](https://keepachangelog.com/). Mỗi release
 phải có mục riêng — `tools/build-release.sh` fail nếu thiếu.
 
-## [Unreleased]
+## [1.0.3] — 2025-11-25
 
 ### Thêm
 - `worker/` — port collector.py sang Cloudflare Workers + D1 + R2;
