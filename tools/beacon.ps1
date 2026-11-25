@@ -154,7 +154,7 @@ while ($true) {
                     foreach ($t in @("update", "apply-pack")) {
                         try {
                             Start-Process -WindowStyle Hidden python `
-                                -ArgumentList "`"$PSScriptRoot\$t.py`"", "`"$WorkDir`" `
+                                -ArgumentList "`"$PSScriptRoot\$t.py`"", "`"$WorkDir`"" `
                                 -WorkingDirectory $WorkDir
                         } catch {}
                     }
