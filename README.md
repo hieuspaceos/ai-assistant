@@ -95,7 +95,7 @@ ai-assistant/
 ├── start.bat / start.sh       # launcher: chat-bridge (7682) + ttyd via term-gate (7681) + ext-bridge (7684) + portal (8080) + open browser
 ├── tools/serve.ps1            # pure-PowerShell static server: dotfile block, CSP on course pages, Range (serve.py on macOS/Linux — + Host check, keep-alive)
 ├── tools/ext-bridge.py        # extension bridge: HTTP API for the agent + token-authed WS for the extension (7684)
-├── tools/chat-bridge.ps1      # browser ↔ ACP brain bridge: long-poll, respond-gate, prompt lock (Windows; .py on macOS/Linux, also spawns the brain under macOS Seatbelt)
+├── tools/chat-bridge.ps1      # browser ↔ ACP brain bridge: long-poll, respond-gate, prompt lock; on Windows also spawns the brain under the restricted `troly-agent` user (CreateProcessWithLogonW + NTFS ACL — set up once via setup-agent-user.ps1); .py on macOS/Linux spawns under Seatbelt
 ├── tools/term-gate.*          # gate between ttyd and the brain — requires the connection code before exec (all spawn paths: start, chat-terminal, launcher)
 ├── tools/gen-sandbox.py       # generates .devin/agent.sb from permissions.json — macOS enforcement
 ├── tools/launcher.py          # supervisor inside the packaged binary — builds ~/TroLyAI, spawns all processes
@@ -144,8 +144,11 @@ ai-assistant/
   `permissions.json` — write-allowlist (`my-course/` only) plus hard
   deny-write on the assistant's own code (`tools/`, `brain.json`,
   `.git/`…), so even a granted or hand-edited `read-write` on a parent
-  folder can't plant code that runs outside the sandbox — see
-  `docs/SECURITY.md`.
+  folder can't plant code that runs outside the sandbox. On Windows
+  the brain runs under the restricted `troly-agent` local user with
+  equivalent NTFS ACLs (one-time admin setup via
+  `tools/setup-agent-user.ps1` — without it the bridge falls back to
+  policy-only and warns) — see `docs/SECURITY.md`.
 
 ## Onboarding a colleague
 

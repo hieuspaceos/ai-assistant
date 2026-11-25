@@ -154,6 +154,30 @@ khẩu/token vào ô chat** — ghi vào file theo hướng dẫn của trợ l�
 
 ---
 
+## Bước 7 — Lồng an toàn cho trợ lý (không bắt buộc, cần quyền admin)
+
+Mặc định trợ lý chạy chung tài khoản với bạn — nó tự giữ quy tắc, nhưng
+máy tính không ép được. Bước này tạo một "tài khoản phụ" kém quyền tên
+`troly-agent`: trợ lý chạy trong đó nên **dù có bị lừa cũng không đọc/ghi
+được gì ngoài những ngăn tủ bạn đã cho phép** (giống cơ chế sẵn có trên
+macOS).
+
+1. Bấm phím Windows, gõ `powershell` → **chuột phải** "Windows
+   PowerShell" → chọn **Run as administrator** → Yes.
+2. Dán lệnh này rồi Enter — chọn đúng dòng theo cách bạn cài:
+
+   ```powershell
+   # Cài bằng file TroLyAI.exe tải về:
+   powershell -ExecutionPolicy Bypass -File "$HOME\TroLyAI\tools\setup-agent-user.ps1"
+
+   # Hoặc nếu bạn có folder ai-assistant (tải source):
+   powershell -ExecutionPolicy Bypass -File "$HOME\ai-assistant\tools\setup-agent-user.ps1"
+   ```
+
+3. Xong — không cần làm lại. Lần mở `start.bat` kế tiếp trợ lý tự chạy
+   trong lồng. Bỏ qua bước này cũng không sao: trợ lý vẫn chạy bình
+   thường và sẽ nhắc trong chat rằng nó chưa ở trong lồng.
+
 ## Lỗi thường gặp
 
 | Bạn thấy | Làm gì |

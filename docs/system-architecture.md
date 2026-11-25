@@ -129,8 +129,15 @@ extension = cánh tay trên trình duyệt · serve.py = file tĩnh.
   `sandbox-exec -f`. Đọc = allow `/` trừ sibling bị deny-enumerate
   (quirk compiler Darwin: `process*` chỉ compile khi `file-read*` phủ
   `/`); ghi = whitelist CWD + folder `read-write`. `bridge.token`
-  đọc-được-không-ghi; `secrets*.json` deny-read. Windows chưa có
-  enforcement tương đương (`tools/setup-agent-user.ps1` là khung).
+  đọc-được-không-ghi; `secrets*.json` deny-read. **Windows: não chạy
+  dưới user hạn chế `troly-agent`** — `tools/setup-agent-user.ps1`
+  (admin, một lần) tạo user + đặt NTFS ACL tương đương Seatbelt (RX
+  toàn project, ghi chỉ `my-course/`+`.devin/skills/`+`.logs/`, deny
+  tools/brain.json/secrets) + lưu credential DPAPI vào
+  `.devin/agent-user.cred`; `chat-bridge.ps1` spawn não qua
+  `CreateProcessWithLogonW` (`TroLy.AgentSpawn`, C# Add-Type) với
+  stdio qua anonymous pipes + Job Object `KILL_ON_JOB_CLOSE`. Thiếu
+  cred → spawn thường, degrade về policy-only kèm event cảnh báo.
 - Agent gọi `POST :7684/api/browser` khi skill cần lái trình duyệt; gọi
   `POST :7682/api/save-page` khi viewer lưu trang clone.
 
