@@ -31,3 +31,4 @@ my-course/clone-work/
 # S4 — fake brain build tren CI + credential DPAPI user han che
 tools/fakebrain/
 .devin/agent-user.cred
+.build-stage.*

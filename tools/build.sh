@@ -14,7 +14,9 @@ command -v pyinstaller >/dev/null || {
 # plans, git. clone-work/ bị loại: DOM site thật của bên thứ 3 — phình
 # binary + rủi ro IP/privacy khi phân phối.
 SEP=":"; [ "$(uname -s)" = "MINGW64_NT"* ] && SEP=";"   # win dùng ;
-STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT
+# Stage trong repo, path tương đối: mktemp /tmp trả MSYS path (/tmp/...)
+# mà PyInstaller (native binary) không resolve được trên Windows.
+STAGE="$(mktemp -d ./.build-stage.XXXXXX)"; trap 'rm -rf "$STAGE"' EXIT
 cp -R my-course "$STAGE/my-course"
 # clone-work: DOM site thật của bên thứ 3 (IP/privacy). .shots: screenshot
 # tab của máy build — có thể chứa tin nhắn học viên. .bak: bản nháp undo.
