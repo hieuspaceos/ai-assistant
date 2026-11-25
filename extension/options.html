@@ -30,10 +30,10 @@
   document.getElementById('save').onclick = () => {
     const t = inp.value.trim();
     if (!t) { ok.textContent = 'Chưa dán mã nào — mở ⚙ Cài đặt trong portal để lấy.'; return; }
-    chrome.storage.local.set({ bridge_token: t }, () => {
-      chrome.runtime.sendMessage({ t: 'set-token', token: t });
-      ok.textContent = 'Đã lưu ✓ — extension đang nối lại…';
-    });
+    // KHÔNG ghi storage ở đây — background chỉ persist sau khi bridge chấp
+    // nhận (ws.onopen). Ghi trước = mã sai ghi đè mã đúng đang lưu sẵn.
+    chrome.runtime.sendMessage({ t: 'set-token', token: t });
+    ok.textContent = 'Đang nối lại — mã đúng sẽ tự lưu, icon chuyển xanh…';
   };
 </script>
 </body>

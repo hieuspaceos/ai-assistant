@@ -43,6 +43,12 @@ import base64, hashlib, hmac, json, os, re, secrets, socket, struct, sys, thread
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 7684
 CWD = sys.argv[2] if len(sys.argv) > 2 else "."
+# Fail-closed: chỉ bind loopback trừ khi khai TROLY_ALLOW_REMOTE=1
+BIND = os.environ.get("TROLY_BIND") or "127.0.0.1"
+if BIND not in ("127.0.0.1", "localhost", "::1") \
+        and os.environ.get("TROLY_ALLOW_REMOTE") != "1":
+    raise SystemExit("TROLY_BIND không phải loopback — đặt "
+                     "TROLY_ALLOW_REMOTE=1 nếu thật sự muốn mở ra mạng")
 WS_MAGIC = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 TOKEN_FP = os.path.join(os.path.abspath(CWD), ".devin", "bridge.token")
@@ -131,6 +137,10 @@ def ws_recv(sock):
     while True:
         b1, b2 = _read(sock, 2)
         fin, op = b1 & 0x80, b1 & 0x0F
+        # RFC 6455: frame từ client BẮT BUỘC mask — frame trần là client
+        # lạ (proxy/impl sai) → đóng kết nối thay vì nuốt
+        if not (b2 & 0x80):
+            raise ConnectionError("frame WS không mask")
         n = b2 & 0x7F
         if n == 126:
             n = struct.unpack("!H", _read(sock, 2))[0]
@@ -140,7 +150,7 @@ def ws_recv(sock):
         # thì nhiều continuation frame nhỏ vẫn phình RAM vô hạn
         if len(msg) + n > MAX_WS_MSG:
             raise ConnectionError("message WS quá lớn")
-        mask = _read(sock, 4) if b2 & 0x80 else None
+        mask = _read(sock, 4)
         payload = _read(sock, n)
         if mask:
             payload = bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
@@ -377,7 +387,7 @@ def serve_conn(sock):
 def main():
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    srv.bind(("127.0.0.1", PORT))
+    srv.bind((BIND, PORT))
     srv.listen(16)
     print(f"ext-bridge: http://localhost:{PORT}  (agent API) + ws/ext (extension)")
     while True:

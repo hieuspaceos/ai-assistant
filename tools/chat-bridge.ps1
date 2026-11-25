@@ -42,7 +42,11 @@ function Get-BridgeToken {
         $t = (Get-Content $TokenFp -Raw -Encoding UTF8).Trim()
         if ($t) { return $t }
     }
-    $t = -join ((1..48) | ForEach-Object { '{0:x}' -f (Get-Random -Max 16) })
+    # CSPRNG — Get-Random là System.Random (seed ~32bit, đoán được theo
+    # thời điểm process); đây là chìa khoá cho mọi API đặc quyền
+    $t = ([BitConverter]::ToString(
+        [System.Security.Cryptography.RandomNumberGenerator]::GetBytes(24)
+    )).Replace('-', '').ToLower()
     New-Item -ItemType Directory -Force -Path (Split-Path $TokenFp) | Out-Null
     try {
         $fs = [IO.File]::Open($TokenFp, [IO.FileMode]::CreateNew)
@@ -67,7 +71,13 @@ function Test-Authed($req) {
     # header X-Bridge-Token (fetch/curl) hoặc ?token= (một dòng lệnh)
     $tok = $req.Headers["X-Bridge-Token"]
     if (-not $tok) { $tok = $req.QueryString["token"] }
-    return [string]$tok -ceq $BridgeToken
+    # constant-time — '-ceq' thoát sớm theo byte đầu khác (timing oracle)
+    $a = [Text.Encoding]::UTF8.GetBytes([string]$tok)
+    $b = [Text.Encoding]::UTF8.GetBytes($BridgeToken)
+    if ($a.Length -ne $b.Length) { return $false }
+    $d = 0
+    for ($i = 0; $i -lt $a.Length; $i++) { $d = $d -bor ($a[$i] -bxor $b[$i]) }
+    return ($d -eq 0)
 }
 function Get-AppVersion {
     $vf = Join-Path $WorkDir "VERSION"
@@ -128,6 +138,28 @@ $script:PermPending = @{}      # id -> @{ options = @(optionId); ts = epoch }
 $script:PromptBusy = $false    # serialize /api/prompt — 2 prompt đồng thời → 409
 $PermTtl = 600                 # perm treo >10 phút coi như chết
 $PermMax = 200                 # trần chống phình
+
+# Consent gate (parity với chat-bridge.py): write đặc quyền qua card do
+# bridge tự phát. RESIDUAL: agent cũng gọi /api/respond được — card chặn
+# im lặng + bắt nghi thức, respond card nội bộ đòi Origin trình duyệt.
+$script:LocalPending = @{}     # "local-<hex>" -> @{ apply = [scriptblock]; ts = epoch }
+
+function New-Gate($title, [scriptblock]$applyFn) {
+    if ($script:LocalPending.Count -ge $PermMax) {
+        $script:LocalPending.Clear()
+    }
+    $rid = "local-" + ([BitConverter]::ToString(
+        [System.Security.Cryptography.RandomNumberGenerator]::GetBytes(8)
+    )).Replace('-', '').ToLower()
+    $script:LocalPending[$rid] = @{ apply = $applyFn; ts = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() }
+    Push-Event ([ordered]@{
+        t = "perm"; id = $rid; title = $title
+        options = @(
+            @{ optionId = "ok"; name = "Đồng ý" },
+            @{ optionId = "__cancel__"; name = "Không" })
+    })
+    return $rid
+}
 
 # Dòng stdout của acp chạy qua event -> queue, main loop xử lý
 $lineQueue = New-Object 'System.Collections.Concurrent.ConcurrentQueue[string]'
@@ -292,10 +324,43 @@ function Expand-Path($p) {
     if ($p.StartsWith("~")) { $p = Join-Path $env:USERPROFILE $p.Substring(1).TrimStart('/','\') }
     return $p
 }
+function Test-Probe($probe) {
+    # probe phải khớp schema cố định (parity validate_probe bên .py):
+    # probe tuỳ ý = oracle đọc file ngoài sandbox / kênh exfil creds.
+    # Chặn 2 đầu — upsert /api/connections từ chối + Run-Probe kiểm lại.
+    if (-not $probe -or -not $probe.type) { return $false }
+    $t = [string]$probe.type
+    if ($t -eq "http") {
+        try { $u = [uri]([string]$probe.url) } catch { return $false }
+        $h = $u.Host
+        return ($u.Scheme -eq "http" -or $u.Scheme -eq "https") -and `
+            ($h -eq "localhost" -or $h -eq "127.0.0.1" -or $h -eq "::1" -or $h.EndsWith(".localhost"))
+    }
+    if ($t -eq "tabs") {
+        return ($probe.url_contains -is [string]) -and ([string]$probe.url_contains).Length -le 120
+    }
+    if ($t -eq "path") {
+        # chỉ probe dưới ~ và KHÔNG đụng .devin — nếu không thành oracle
+        # tồn-tại-file cho secrets.local.json & cả
+        $p = [IO.Path]::GetFullPath((Expand-Path ([string]$probe.path)))
+        $home2 = [IO.Path]::GetFullPath($env:USERPROFILE)
+        $dev = [IO.Path]::GetFullPath((Join-Path $WorkDir ".devin"))
+        return $p.StartsWith($home2 + [IO.Path]::DirectorySeparatorChar) -and `
+            -not ($p -eq $dev -or $p.StartsWith($dev + [IO.Path]::DirectorySeparatorChar))
+    }
+    if ($t -eq "mcp") {
+        return ($probe.name -is [string]) -and ([string]$probe.name).Length -le 40
+    }
+    return ($t -eq "wp" -or $t -eq "zalo-oa")
+}
+
 function Run-Probe($probe) {
     # msg hiện thẳng dưới tên app trong panel Cài đặt của học viên —
     # viết bằng lời thường, không thuật ngữ (token/MCP/extension…)
     if (-not $probe) { return @{ ok = $false; msg = "chưa cài — cứ nhờ trợ lý trong chat, nó làm giúp" } }
+    if (-not (Test-Probe $probe)) {
+        return @{ ok = $false; msg = "kiểu kết nối lạ — nhờ trợ lý xem" }
+    }
     try {
         if ($probe.type -eq "http") {
             $d = Invoke-RestMethod -Uri $probe.url -TimeoutSec 4
@@ -527,6 +592,19 @@ try {
                         Send-Json $ctx @{ err = "lệnh não không hợp lệ — chỉ nhận tên lệnh" } 400
                         continue
                     }
+                    # Interpreter/exec helper không được làm "não" tự nhập —
+                    # args của chúng là code-exec trần (python -c, find -exec)
+                    $cmdDeny = @("python3","python","py","sh","bash","zsh","fish","dash",
+                        "osascript","node","deno","bun","ruby","perl","php","pwsh",
+                        "powershell","cmd","env","nice","xargs","find","make","rake",
+                        "npm","npx","yarn","pnpm","gem","pip","pip3","curl","wget",
+                        "nc","ncat","socat","busybox","open","rundll32","regsvr32",
+                        "mshta","wscript","cscript","wmic","certutil","bitsadmin",
+                        "eval","exec","launchctl")
+                    if ($cmdDeny -contains $cmd.ToLower()) {
+                        Send-Json $ctx @{ err = "lệnh này chạy code tuỳ ý — không dùng làm não được" } 400
+                        continue
+                    }
                     $bArgs = @()
                     if ($body.args) {
                         $bArgs = @($body.args | Select-Object -First 20 | ForEach-Object {
@@ -539,12 +617,22 @@ try {
                     if ($label.Length -gt 60) { $label = $label.Substring(0, 60) }
                     $term = if ($body.terminal) { [string]$body.terminal } else { $cmd }
                     if ($term.Length -gt 60) { $term = $term.Substring(0, 60) }
+                    if ($term -notmatch '^[A-Za-z0-9_.-]+$') { $term = $cmd }
                     $b = [ordered]@{ id = $(if ($bid) { $bid } else { "custom" }); label = $label; cmd = $cmd; args = $bArgs; terminal = $term }
                     $requires = @($cmd)
                 }
                 $missing = @($requires | Where-Object { -not (Get-Command $_ -ErrorAction SilentlyContinue) })
                 if ($missing.Count -gt 0) {
                     Send-Json $ctx @{ err = "chưa cài trên máy: $($missing -join ', ')"; missing = $missing } 404
+                } elseif (-not $preset) {
+                    # Não tự nhập → consent gate (preset vẫn đổi thẳng)
+                    $disp = "$cmd $($bArgs -join ' ')"
+                    if ($disp.Length -gt 80) { $disp = $disp.Substring(0, 80) }
+                    $rid = New-Gate "Đổi não sang lệnh tự nhập `"$disp`"?" ({
+                        Save-Json $BrainFp $b
+                        Start-Brain
+                    }.GetNewClosure())
+                    Send-Json $ctx @{ pending = $rid; msg = "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để đổi não" } 202
                 } else {
                     Save-Json $BrainFp $b
                     Start-Brain
@@ -559,6 +647,35 @@ try {
                 # Chỉ Remove khi hợp lệ — request optionId lạ không được giết
                 # card (kẻ xấu sẽ DoS được nút bấm của học viên).
                 $key = [string]$body.id
+                $oid = [string]$body.optionId
+                # Card nội bộ (consent gate): phải kèm Origin trình duyệt —
+                # chỉ pop khi đủ điều kiện (request rác không DoS được nút
+                # xác nhận của học viên). Check trước PermPending.
+                $lrec = $script:LocalPending[$key]
+                if ($null -ne $lrec) {
+                    $lage = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() - $lrec.ts
+                    if ($lage -gt $PermTtl) {
+                        $script:LocalPending.Remove($key)
+                        Send-Json $ctx @{ err = "yêu cầu không còn hiệu lực" } 404
+                    } elseif ($oid -ne "ok" -and $oid -ne "__cancel__") {
+                        Send-Json $ctx @{ err = "lựa chọn không hợp lệ" } 400
+                    } elseif (-not (Test-LocalOrigin $ctx.Request.Headers["Origin"])) {
+                        Send-Json $ctx @{ err = "thiếu Origin trình duyệt" } 403
+                    } else {
+                        $script:LocalPending.Remove($key)   # one-shot sau check
+                        $failed = $null
+                        if ($oid -eq "ok") {
+                            try { & $lrec.apply } catch { $failed = "$($_.Exception.Message)" }
+                        }
+                        if ($failed) {
+                            if ($failed.Length -gt 120) { $failed = $failed.Substring(0, 120) }
+                            Send-Json $ctx @{ err = "làm không được — $failed" } 500
+                        } else {
+                            Send-Json $ctx @{ ok = $true }
+                        }
+                    }
+                    continue
+                }
                 $rec = $script:PermPending[$key]
                 $age = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() - $(if ($rec) { $rec.ts } else { 0 })
                 if ($null -eq $rec -or $age -gt $PermTtl) {
@@ -595,14 +712,16 @@ try {
                     $target = Join-Path $course $folder
                     if ((Test-Path $target -PathType Container) -and
                         ((Resolve-Path $target).Path.StartsWith($course + [IO.Path]::DirectorySeparatorChar))) {
-                        Remove-Item $target -Recurse -Force
-                        $mf = Join-Path $course "manifest.json"
-                        try {
-                            $m = Get-Content $mf -Raw -Encoding UTF8 | ConvertFrom-Json
-                            $m.lessons = @($m.lessons | Where-Object { $_.folder -ne $folder })
-                            Save-Json $mf $m
-                        } catch {}
-                        Send-Json $ctx @{ ok = $true }
+                        $rid = New-Gate "Xoá hẳn bài học $folder?" ({
+                            Remove-Item $target -Recurse -Force
+                            $mf = Join-Path $course "manifest.json"
+                            try {
+                                $m = Get-Content $mf -Raw -Encoding UTF8 | ConvertFrom-Json
+                                $m.lessons = @($m.lessons | Where-Object { $_.folder -ne $folder })
+                                Save-Json $mf $m
+                            } catch {}
+                        }.GetNewClosure())
+                        Send-Json $ctx @{ pending = $rid; msg = "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để xoá" } 202
                     } else {
                         Send-Json $ctx @{ err = "không thấy folder bài" } 404
                     }
@@ -641,29 +760,40 @@ try {
                 } elseif (-not (Test-Path $p -PathType Container)) {
                     Send-Json $ctx @{ err = "không thấy folder này trên máy" } 404
                 } else {
-                    $q = Load-Json $PermFp @{ folders = @() }
-                    # so sánh sau Expand-Path — entry cũ ghi "~/Downloads" vẫn khớp được
-                    $arr = @($q.folders | Where-Object { (Expand-Path $_.path) -ne $p })
-                    $arr += @{ path = $p; access = $lv; note = ([string]$body.note).Substring(0, [Math]::Min(120, ([string]$body.note).Length)) }
-                    $q.folders = $arr
-                    Save-Json $PermFp $q
-                    Send-Json $ctx @{ ok = $true }
+                    # Consent gate — permissions.json là "đồ chìa khoá": agent
+                    # tự cấp quyền được nếu endpoint này ghi thẳng
+                    $note2 = ([string]$body.note)
+                    $note2 = $note2.Substring(0, [Math]::Min(120, $note2.Length))
+                    $rid = New-Gate "Thêm quyền $lv cho folder $p?" ({
+                        $q = Load-Json $PermFp @{ folders = @() }
+                        # so sánh sau Expand-Path — entry cũ ghi "~/Downloads" vẫn khớp được
+                        $arr = @($q.folders | Where-Object { (Expand-Path $_.path) -ne $p })
+                        $arr += @{ path = $p; access = $lv; note = $note2 }
+                        $q.folders = $arr
+                        Save-Json $PermFp $q
+                    }.GetNewClosure())
+                    Send-Json $ctx @{ pending = $rid; msg = "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để có hiệu lực" } 202
                 }
             }
             elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/remove-permission") {
                 $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
                 $body = $reader.ReadToEnd() | ConvertFrom-Json
                 $p = Expand-Path ([string]$body.path).Trim()
-                $q = Load-Json $PermFp @{ folders = @() }
-                $q.folders = @($q.folders | Where-Object { (Expand-Path $_.path) -ne $p })
-                Save-Json $PermFp $q
-                Send-Json $ctx @{ ok = $true }
+                $rid = New-Gate "Gỡ quyền folder $p?" ({
+                    $q = Load-Json $PermFp @{ folders = @() }
+                    $q.folders = @($q.folders | Where-Object { (Expand-Path $_.path) -ne $p })
+                    Save-Json $PermFp $q
+                }.GetNewClosure())
+                Send-Json $ctx @{ pending = $rid; msg = "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để có hiệu lực" } 202
             }
             elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/connections") {
                 $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
                 $body = $reader.ReadToEnd() | ConvertFrom-Json
                 if (-not $body.app.id) {
                     Send-Json $ctx @{ err = "thiếu app.id" } 400
+                } elseif ($body.app.probe -and -not (Test-Probe $body.app.probe)) {
+                    # client ghi probe tuỳ ý = oracle/exfil — chỉ nhận schema cố định
+                    Send-Json $ctx @{ err = "kiểu kết nối không hỗ trợ" } 400
                 } else {
                     $k = Load-Json $ConnFp @{ apps = @() }
                     # thay tại chỗ để giữ thứ tự hiển thị trong panel Cài đặt
@@ -697,6 +827,8 @@ try {
                 } else {
                     $fp = Join-Path $WorkDir ".devin\secrets.local.json"
                     $creds = Load-Json $fp @{}
+                    $oldUrl = if ($creds.$appId) { [string]$creds.$appId.url } else { $null }
+                    $note = $null
                     $entry = @{}
                     if ($creds.$appId) {
                         $creds.$appId.PSObject.Properties | ForEach-Object { $entry[$_.Name] = $_.Value }
@@ -706,6 +838,12 @@ try {
                         if ($n -ge 10) { break }
                         $v = ([string]$p.Value).Trim()
                         if ($v) { $entry[[string]$p.Name] = $v.Substring(0, [Math]::Min(500, $v.Length)); $n++ }
+                    }
+                    # Đổi url → xoá toàn bộ creds còn lại: giữ user/app_password
+                    # qua URL mới là kênh gửi credential thật tới host attacker
+                    if ($entry.ContainsKey("url") -and $entry.url -ne $oldUrl) {
+                        $note = "url đổi — thông tin đăng nhập cũ đã xoá, nhập lại nhé"
+                        $entry = @{ url = $entry.url }
                     }
                     if (-not $entry.Count) {
                         Send-Json $ctx @{ err = "chưa nhập gì" } 400
@@ -721,7 +859,9 @@ try {
                         }
                         New-Item -ItemType Directory -Force -Path (Split-Path $fp) | Out-Null
                         Save-Json $fp $creds
-                        Send-Json $ctx @{ ok = $true }
+                        $resp = @{ ok = $true }
+                        if ($note) { $resp.note = $note }
+                        Send-Json $ctx $resp
                     }
                 }
             }

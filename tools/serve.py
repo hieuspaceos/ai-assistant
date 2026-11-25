@@ -11,6 +11,12 @@ import http.server, os, sys, urllib.parse
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
 ROOT = os.path.realpath(sys.argv[2] if len(sys.argv) > 2 else "..")
+# Fail-closed: chỉ bind loopback trừ khi khai TROLY_ALLOW_REMOTE=1
+BIND = os.environ.get("TROLY_BIND") or "127.0.0.1"
+if BIND not in ("127.0.0.1", "localhost", "::1") \
+        and os.environ.get("TROLY_ALLOW_REMOTE") != "1":
+    raise SystemExit("TROLY_BIND không phải loopback — đặt "
+                     "TROLY_ALLOW_REMOTE=1 nếu thật sự muốn mở ra mạng")
 ROOT_PREFIX = ROOT + os.sep
 
 # mimetypes của một số OS chưa biết font web → khai báo tay
@@ -58,6 +64,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             raw = "/web/index.html"
         parts = [p for p in raw.split("/") if p]
         if any(p.startswith(".") for p in parts):
+            return None
+        # JSON điều khiển quyền/cấu hình + persona bot: đọc qua API có
+        # token, không để GET trần trên :8080 (mọi process local đọc được
+        # → lộ danh sách folder, tên học viên, trạng thái app). So hoa-
+        # thường bắt buộc: FS macOS/Windows không phân biệt case.
+        low = [p.lower() for p in parts]
+        if (len(low) == 2 and low[0] == "my-course" and low[1] in (
+                "permissions.json", "connections.json", "config.json",
+                "bots.json", "bot.md")) \
+                or low == ["brain.json"]:
             return None
         fp = os.path.realpath(os.path.join(ROOT, *parts))
         if not (fp == ROOT or fp.startswith(ROOT_PREFIX)):
@@ -152,6 +168,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return f
 
 if __name__ == "__main__":
-    with http.server.ThreadingHTTPServer(("127.0.0.1", PORT), Handler) as srv:
+    with http.server.ThreadingHTTPServer((BIND, PORT), Handler) as srv:
         print(f"portal: http://localhost:{PORT}/web/  (root={ROOT})")
         srv.serve_forever()

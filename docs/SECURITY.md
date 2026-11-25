@@ -12,7 +12,12 @@ sinh một lần (bridge fallback sinh atomic `O_EXCL` nếu thiếu), `chmod
 :8080.
 
 **Hai cách trình khoá** (tương đương): header `X-Bridge-Token: <mã>`
-hoặc query `?token=<mã>`; so bằng `hmac.compare_digest` / `-ceq`.
+hoặc query `?token=<mã>`; so constant-time cả hai phía —
+`hmac.compare_digest` (Python) / vòng `bxor` tích luỹ (PowerShell —
+`-ceq` thoát sớm theo byte khác đầu tiên là timing oracle). Token sinh
+bằng CSPRNG ở mọi đường: `secrets.token_hex` (Python) /
+`RandomNumberGenerator` (PowerShell/`start.bat` — `Get-Random` là
+`System.Random`, seed đoán được theo thời điểm process).
 
 | Cửa | Bị khoá |
 |---|---|
@@ -45,7 +50,11 @@ không có token (đã chặn Origin trước đó, token là lớp thứ hai).
 
 1. **`serve :8080` GET mở trên loopback** — `<img>` trong trang clone
    không gắn được token; process local đọc file trên disk được anyway
-   nên khoá HTTP loopback không thêm gì. `.devin/` vẫn bị chặn.
+   nên khoá HTTP loopback không thêm gì. `.devin/` vẫn bị chặn, và file
+   điều khiển (`my-course/{permissions,connections,config,bots}.json`,
+   `bot.md`, `brain.json` — case-insensitive) cũng bị blocklist dù GET
+   mở: lộ qua :8080 = mọi process local đọc được danh sách folder, tên
+   học viên, trạng thái app.
    **KHÔNG áp cho non-loopback.**
    **Khi có relay (bắt buộc):** GET `/my-course/` phải qua token;
    `/.shots/` (screenshot tab có thể chứa tin nhắn) chặn hoặc khoá riêng.
@@ -106,14 +115,18 @@ trong options).
 | Agent/viewer → file hệ thống | `/api/save-page` chỉ ghi `.html` dưới `my-course/`, chặn `..`; `.bak` trước khi ghi đè |
 | Agent → folder ngoài | `permissions.json` — chưa có trong list thì phải hỏi học viên |
 | Agent → app bên ngoài | `connections.json` — chưa kết nối thì dẫn học viên kết nối trước |
-| Trang local → spawn process | `POST /api/brain` spawn "não" mới: `cmd` bị giới hạn ở **tên lệnh trần** `[A-Za-z0-9_.-]+` — không `/`, không path — nên không trỏ được vào script lạ; args cắt 20 mục × 200 ký tự |
+| Trang local → spawn process | `POST /api/brain` spawn "não" mới: `cmd` bị giới hạn ở **tên lệnh trần** `[A-Za-z0-9_.-]+` — không `/`, không path — nên không trỏ được vào script lạ; thêm **denylist interpreter/exec** (`python3`, `node`, `bash`, `npx`, `curl`, `certutil`… — args của chúng là code-exec trần); `terminal` cũng phải tên trần; `load_brain()` validate lại khi đọc file (brain.json bị sửa tay → rơi về preset devin); custom `cmd` phải qua **consent gate** |
+| Agent → write đặc quyền | **Consent gate** (`local_pending`): `POST /api/permissions`, `/api/remove-permission`, `/api/delete-lesson`, custom `/api/brain` trả `202 {pending}` + card xác nhận trong chat — hành động chỉ chạy sau khi học viên bấm Đồng ý. `/api/respond` cho card `local-*` đòi `Origin` loopback, one-shot, TTL 600s; request thiếu/sai không consume card. **Residual:** agent có token vẫn giả được Origin và tự duyệt — gate thêm *hiển thị + nghi thức*, không phải bằng chứng mật mã của "có người bấm". Bù thêm ở lớp sandbox: `permissions.json`/`brain.json`/tools nằm ngoài write-allowlist nên agent macOS không sửa trực tiếp được |
+| Bridge → file/probe tuỳ ý | `run_probe` chỉ chạy probe khớp schema (`validate_probe`/`Test-Probe` — cả upsert lẫn lúc chạy): `http` giới hạn URL loopback (chặn `file://` oracle và exfil), `path` chỉ dưới `~` ngoài `.devin/`; `/api/secrets` đổi `url` → **xoá creds còn lại** (giữ creds cũ qua host mới là credential forwarding); probe `wp` gửi Basic-auth tới URL trong secrets nên url-wipe là vá trực tiếp của S3a |
+| Agent → tài nguyên host qua extension | `fetch` trong content.js chỉ **same-origin** với trang đang mở (`credentials:'include'` + URL tuỳ ý = đọc session site khác); frame WS client bắt buộc mask + trần kích thước cộng dồn qua continuation |
+| Ai đó → bind ra mạng | Mọi server Python check `TROLY_BIND` phải loopback, ngược lại fail-closed trừ khi `TROLY_ALLOW_REMOTE=1` — mọi giả định auth/Origin dựa trên "chỉ local truy cập" |
 | Trang lạ → extension | `externally_connectable.matches` chỉ localhost; extension chỉ nhận `{t:'set-token'}`, token mới chỉ persist SAU khi WS mở (bridge trả 401 khi mã sai) — mã rác chỉ phá được session hiện tại, token đúng trong storage không bị ghi đè |
 | Trang `localhost:*` → shell qua ttyd | WS vẫn nối nhưng chỉ gặp `term-gate` đòi mã trong shell — sai mã → exit. Không phụ thuộc flag ttyd nào |
 | Script trong nội dung `my-course/`/`intro/` → bridge | CSP `connect-src 'none'` trên mọi `.html` dưới hai prefix đó — fetch/XHR/WS/beacon đều chết, kể cả gọi `localhost`. Slide iframe thêm `sandbox="allow-scripts"` (opaque origin — tự nó cũng không đọc được localStorage). Clone-view giữ same-origin để edit, CSP gánh. Residual: exfil token qua `<img src=https://…>` vẫn được (`img-src` mở cho ảnh học viên chèn) nhưng token vô dụng ngoài loopback |
 | DNS rebinding → file trên :8080 | `serve.py` reject Host không phải loopback (403); `serve.ps1` đã an toàn sẵn nhờ http.sys prefix `localhost`/`127.0.0.1` |
 | Kẻ có token → tự duyệt quyền | `/api/respond` chỉ nhận `id` đang pending trong map (TTL 600s) + `optionId` phải khớp danh sách đã phát — option sai → 400 nhưng card không bị giết, id hợp lệ dùng một lần rồi tiêu. `__cancel__` cũng phải có id pending |
 | Prompt đan xen → rối session | `/api/prompt` giữ `prompt_lock` (`.ps1`: `$PromptBusy`) — prompt thứ hai trong lúc lượt đang chạy → 409; mở lại khi `done`/`err`/`ready` |
-| Não bị injection → đọc/ghi file ngoài quyền | macOS: não chạy trong Seatbelt (`agent.sb` — ghi whitelist, đọc chỉ vùng được phép, `network-bind` deny, `bridge.token` deny-ghi, secrets deny-đọc). Residual: `network-outbound` mở (não cần gọi LLM API) → exfil data đã đọc hợp lệ vẫn được; dir user mới tạo giữa 2 lần regen đọc được (deny enumeration là snapshot); extension/browser session nằm NGOÀI sandbox theo bản chất — kênh đó trông vào lớp duyệt + respond-gate. Windows: chưa enforce |
+| Não bị injection → đọc/ghi file ngoài quyền | macOS: não chạy trong Seatbelt (`agent.sb` — **write-allowlist**: chỉ `my-course/`, `.devin/skills/`, `.logs/`, tmp — mọi thứ khác deny theo default; deny-write tường minh 4 JSON điều khiển + deny exec `osascript`; đọc chỉ vùng được phép, `network-bind` deny, `bridge.token` deny-ghi, secrets deny-đọc). Residual: `network-outbound` mở (não cần gọi LLM API) → exfil data đã đọc hợp lệ vẫn được; dir user mới tạo giữa 2 lần regen đọc được (deny enumeration là snapshot); extension/browser session nằm NGOÀI sandbox theo bản chất — kênh đó trông vào lớp duyệt + consent gate. **Windows: agent chạy full quyền user — đọc được `secrets.local.json` và mọi file của máy.** Coi Windows = policy-only (không enforcement) cho tới khi spawn cross-user (`setup-agent-user.ps1`) hoàn thiện |
 
 ## permissions.json — ngăn tủ được phép
 
@@ -127,10 +140,17 @@ trong options).
 - **Enforcement:** trên macOS, não được spawn trong Seatbelt
   (`sandbox-exec -f .devin/agent.sb`, sinh từ `tools/gen-sandbox.py` mỗi
   lần spawn + mỗi lần đổi permissions) — đọc/ghi ngoài danh sách bị
-  kernel từ chối thật, không còn là "nhờ não nghe". Terminal mode qua
-  `term-gate.sh` cũng bị bọc. Escape hatch debug: `TROLY_NO_SANDBOX=1`.
+  kernel từ chối thật, không còn là "nhờ não nghe". Profile theo mô hình
+  **write-allowlist** (chỉ `my-course/`, `.devin/skills/`, `.logs/`, tmp
+  ghi được — thay vì allow ghi cả project rồi carve-out): đổi quyền hạn
+  hay não chỉ đi qua bridge (chạy ngoài sandbox) → agent không thể tự
+  sửa `permissions.json`/`brain.json`/`agent.sb` rồi chờ respawn.
+  Terminal mode qua `term-gate.sh` cũng bị bọc. Escape hatch debug:
+  `TROLY_NO_SANDBOX=1`.
   Trên Windows hiện vẫn là **policy** (user hạn chế + ACL đang triển
-  khai — `setup-agent-user.ps1`, spawn cross-user chưa verify).
+  khai — `setup-agent-user.ps1`, spawn cross-user chưa verify) — tức
+  agent Windows đọc/ghi được mọi thứ của user kể cả secrets; cân nhắc
+  khi cho agent đọc dữ liệu không tin cậy trên Windows.
 - Folder khác → đọc `permissions.json`; chưa có → **hỏi học viên**,
   được đồng ý mới `POST /api/permissions` (mặc định xin `read`; chỉ xin
   `read-write` khi thật sự cần ghi và báo trước việc ghi cụ thể).

@@ -45,7 +45,10 @@ def _read(fp, default=""):
 def _copy_tree(src, dst, overwrite):
     """Copy cây thư mục; overwrite=False thì bỏ qua file đã có."""
     for root, dirs, files in os.walk(src):
-        dirs[:] = [d for d in dirs if d not in ("__pycache__", ".git", "skills")]
+        # clone-work = workspace clone site thật — DOM bên thứ 3, phình
+        # và không phải seed; skills chỉ cài từ skill-packs
+        dirs[:] = [d for d in dirs
+                   if d not in ("__pycache__", ".git", "skills", "clone-work")]
         rel = os.path.relpath(root, src)
         for f in files:
             if f.endswith((".pyc", ".log")) or f == "bridge.token":

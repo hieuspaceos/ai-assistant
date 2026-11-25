@@ -64,6 +64,8 @@ const I18N = {
     delOk: 'Xoá bài',
     delFailTitle: 'Chưa xoá được',
     delFailMsg: 'Kiểm tra lại xem chat-bridge có đang chạy không nhé — thử chạy lại file start.',
+    gateTitle: 'Cần bạn xác nhận',
+    gateMsg: 'Đã gửi thẻ xác nhận vào tab "Hỏi trợ lý" — bấm "Đồng ý" bên đó để hoàn tất.',
     warnChat: '<b>Chế độ Chat chưa mở:</b> chạy lại <code>start.bat</code>, hoặc bấm sang tab <b>Terminal</b> bên cạnh để dùng tạm.',
     warnCli: '<b>Terminal chưa mở:</b> chạy lại <code>start.bat</code>, hoặc mở PowerShell gõ <code>devin</code> để học bình thường.',
     hintNotReady: 'Trợ lý chưa sẵn sàng — mở lại file <code>start</code> rồi tải lại trang này. Nếu mới dùng lần đầu, bấm <a href="onboarding.html"><b>vào đây để cài đặt</b></a>.',
@@ -139,6 +141,8 @@ const I18N = {
     delOk: 'Delete',
     delFailTitle: 'Couldn\'t delete',
     delFailMsg: 'Check whether the chat bridge is running — try running the start file again.',
+    gateTitle: 'Needs your confirmation',
+    gateMsg: 'A confirmation card was sent to the "Ask the assistant" tab — tap "Đồng ý" (agree) there to finish.',
     warnChat: '<b>Chat mode isn\'t up:</b> run the <code>start</code> file again, or switch to the <b>Terminal</b> tab meanwhile.',
     warnCli: '<b>Terminal isn\'t up:</b> run the <code>start</code> file again, or open a shell and type <code>devin</code>.',
     hintNotReady: 'The assistant isn\'t ready — run the <code>start</code> file again and reload. First time here? <a href="onboarding.html"><b>Click to set up</b></a>.',
@@ -286,17 +290,17 @@ function renderLessonList() {
 }
 
 async function deleteLesson(b) {
-  const ok = await uiConfirm(
-    t('delConfirmTitle').replace('{t}', b.title),
-    t('delConfirmMsg'),
-    t('delOk'));
-  if (!ok) return;
+  // xác nhận nằm ở thẻ trong chat (consent gate) — không hỏi lại ở đây
   try {
     const res = await bfetch(BRIDGE_URL + '/api/delete-lesson', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({folder: b.folder})});
     const data = await res.json();
     if (!res.ok) throw new Error(data.err || 'lỗi');
+    if (data.pending) {
+      await uiAlert(t('gateTitle'), data.msg || t('gateMsg'));
+      return;               // bài chỉ mất sau khi bấm Đồng ý trong chat
+    }
   } catch (e) {
     await uiAlert(t('delFailTitle'), t('delFailMsg'));
     return;
@@ -728,9 +732,10 @@ async function renderFolders() {
         `<span class="folder-lv">${f.access === 'read-write' ? t('readWrite') : t('readOnly')}</span>` +
         `<button class="folder-del" title="${escapeHtml(t('delPermTitle'))}">×</button>`;
       row.querySelector('.folder-del').onclick = async () => {
-        await bfetch(BRIDGE_URL + '/api/remove-permission', {
+        const r = await (await bfetch(BRIDGE_URL + '/api/remove-permission', {
           method: 'POST', body: JSON.stringify({ path: f.path })
-        });
+        })).json().catch(() => ({}));
+        if (r.pending) await uiAlert(t('gateTitle'), r.msg || t('gateMsg'));
         renderFolders();
       };
       $('#folder-list').appendChild(row);
@@ -754,6 +759,7 @@ $('#folder-save').onclick = async () => {
   $('#folder-path').value = '';
   $('#folder-add').hidden = true;
   $('#folder-add-btn').hidden = false;
+  if (r.pending) await uiAlert(t('gateTitle'), r.msg || t('gateMsg'));
   renderFolders();
 };
 

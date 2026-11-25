@@ -103,17 +103,17 @@ có ảnh base64).
 | Path | Body | Tác dụng |
 |---|---|---|
 | `/api/prompt` | `{text}` | gửi prompt vào não ACP. Não đang bận một lượt khác → `409 {"err":"đang bận"}`. Não chết → bridge tự bật lại, trả 503 "gửi lại sau" |
-| `/api/brain` | `{id}` hoặc `{cmd, args?, terminal?, label?}` | đổi não: ghi `brain.json` + restart agent; preset không đủ `requires` → 404 kèm `missing`; `cmd` chỉ nhận tên lệnh trần `[A-Za-z0-9_.-]+` |
-| `/api/respond` | `{id, optionId}` | trả lời câu hỏi agent đang hỏi. `id` phải đang nằm trong pending map (ghi khi bridge dispatch `session/request_permission`, TTL 600s): không khớp/hết hạn/đã trả → `404`; `optionId` lạ → `400` (không huỷ card). Hợp lệ → consume một lần + forward. `optionId:"__cancel__"` = huỷ (vẫn cần `id` pending) |
-| `/api/delete-lesson` | `{folder}` | xoá bài + gỡ khỏi manifest |
+| `/api/brain` | `{id}` hoặc `{cmd, args?, terminal?, label?}` | đổi não: ghi `brain.json` + restart agent; preset không đủ `requires` → 404 kèm `missing`; `cmd` chỉ nhận tên lệnh trần `[A-Za-z0-9_.-]+` và ngoài denylist interpreter/exec (`python3`, `node`, `bash`, `npx`… — args của chúng là code-exec trần); `terminal` cũng phải tên trần, sai → về `cmd`. Custom `cmd` → **consent gate** (202) |
+| `/api/respond` | `{id, optionId}` | hai loại card: (a) card ACP — `id` phải đang pending (ghi khi bridge dispatch `session/request_permission`, TTL 600s): không khớp/hết hạn/đã trả → `404`; `optionId` lạ → `400` (không huỷ card). (b) card nội bộ `local-*` (consent gate): nhận `ok`/`__cancel__`, **bắt buộc `Origin` loopback** — thiếu/khác → `403` và card KHÔNG bị consume; hợp lệ → apply một lần. `optionId:"__cancel__"` = huỷ |
+| `/api/delete-lesson` | `{folder}` | consent gate → `202 {pending, msg}`; bấm Đồng ý trong chat mới xoá bài + gỡ manifest |
 | `/api/save-page` | `{file, html}` | ghi `.html` **chỉ dưới `my-course/`**; tự tạo `<file>.bak` trước khi ghi đè; chặn `..` |
-| `/api/permissions` | `{path, access, note?}` | thêm folder được phép (`read`/`read-write`); regen `.devin/agent.sb` (macOS) |
-| `/api/remove-permission` | `{path}` | gỡ quyền; regen `.devin/agent.sb` (macOS) |
-| `/api/connections` | `{app, ...}` | cập nhật trạng thái kết nối app |
+| `/api/permissions` | `{path, access, note?}` | consent gate → `202 {pending, msg}`; sau khi duyệt: thêm folder (`read`/`read-write`) + regen `.devin/agent.sb` (macOS) |
+| `/api/remove-permission` | `{path}` | consent gate → `202 {pending, msg}`; sau khi duyệt: gỡ quyền + regen `.devin/agent.sb` (macOS) |
+| `/api/connections` | `{app, ...}` | cập nhật trạng thái kết nối app; `app.probe` phải khớp schema cố định (`http` chỉ URL loopback, `tabs`/`mcp`/`path`/`wp`/`zalo-oa` theo từng kiểu) — probe tuỳ ý → 400 |
 | `/api/remove-connection` | `{id}` | gỡ kết nối |
-| `/api/secrets` | `{app, fields}` | lưu field bí mật (ô `secret:true` trong connections) |
+| `/api/secrets` | `{app, fields}` | lưu field bí mật (ô `secret:true` trong connections); đổi `url` của app → **xoá toàn bộ field còn lại** (trả `note`) — giữ creds cũ qua host mới là kênh exfil |
 | `/api/setup` | `{language, learner_name, ...}` | onboarding: ghi config, cài skill pack đúng ngôn ngữ |
-| `/api/check-connection` | `{id}` | probe trạng thái app (http/tabs) |
+| `/api/check-connection` | `{id}` | probe trạng thái app (http/tabs/wp/…) — `run_probe` tự kiểm lại schema trước khi chạy (probe cũ lọt vào file từ trước khi có check) |
 | `/api/bot` | `{action, ...}` | `create`/`activate`/`delete`/`rename` bot; activate → cài skill thiếu + ghi `my-course/bot.md`; `id:null` → bỏ chọn |
 | `/api/bot-import` | `{file: "<base64 zip>"}` | bung bundle bot vào temp → trả `{preview:{stage,name,avatar,instructions,skills,needs,bundled}}`; chống zip-slip; body cap 8MB |
 | `/api/bot-import-confirm` | `{stage}` | ghi thật: cài skill (không đè) + thêm bot vào `bots.json`; KHÔNG tự activate; stage dùng một lần |
@@ -153,6 +153,9 @@ ttyd -p 7681 -i 127.0.0.1 -W -a <gate>
 
 `-a` cho ttyd append `?arg=` của URL iframe vào cuối lệnh gate; portal
 (`app.js`) tự gắn `?arg=<BRIDGE_TOKEN>`. Gate đòi nhập đúng mã kết nối
-trong shell (sai 3 lần/timeout 90s → thoát) rồi mới `exec <não>` —
-macOS bọc thêm `sandbox-exec -f .devin/agent.sb`. Trang web lạ mở được
+trong shell (sai 3 lần → thoát; `.sh` timeout 90s mỗi lần đọc — `.cmd`
+không có timeout được do `set /p`) rồi mới `exec <não>` —
+macOS bọc thêm `sandbox-exec -f .devin/agent.sb`. `TROLY_TERM_STRICT=1`
+bỏ qua `?arg=` luôn hỏi tay — token qua argv lộ trong `ps` của máy
+multi-user. Trang web lạ mở được
 WS ttyd nhưng chỉ gặp prompt mã, không chạm được shell.

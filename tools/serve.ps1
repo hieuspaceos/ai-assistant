@@ -1,6 +1,11 @@
 # serve.ps1 — server web nhỏ cho portal, chạy bằng PowerShell thuần (không cần cài gì)
 # Phục vụ folder ai-assistant/ tại http://localhost:8080
 # Chặn dotfiles/folder ẩn (.devin, .git...) — secrets nằm đó, không được lộ ra web.
+#
+# Runspace pool 8 luồng + stream file từng chunk: bản cũ GetContext() đơn
+# luồng serialize mọi request (portal ~20 assets tải tuần tự) và
+# ReadAllBytes đọc FULL file vào RAM kể cả khi client chỉ xin Range —
+# tua video 100MB tốn 100MB RAM mỗi lần.
 
 $root = (Resolve-Path (Split-Path -Parent $PSScriptRoot)).Path   # thư mục cha của tools/ = ai-assistant/
 $rootPrefix = $root + [IO.Path]::DirectorySeparatorChar
@@ -27,6 +32,11 @@ $csp = "default-src 'self'; script-src 'self' 'unsafe-inline' https:; " +
        "connect-src 'none'; form-action 'none'; base-uri 'none'; " +
        "object-src 'none'; frame-src 'self' https:; frame-ancestors 'self'"
 
+# JSON điều khiển quyền/cấu hình + persona bot: đọc qua API có token, không
+# để GET trần trên :8080 (parity serve.py). So hoa-thường bắt buộc vì FS
+# Windows không phân biệt case — /MY-COURSE/PERMISSIONS.JSON cùng một file.
+$blockedJson = @('permissions.json', 'connections.json', 'config.json', 'bots.json', 'bot.md')
+
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://localhost:$port/")
 $listener.Prefixes.Add("http://127.0.0.1:$port/")
@@ -38,8 +48,8 @@ try { $listener.Start() } catch {
 
 Write-Host "Portal dang chay tai http://localhost:$port/web/  (Ctrl+C de dung)"
 
-while ($listener.IsListening) {
-  try { $ctx = $listener.GetContext() } catch { break }
+$handler = {
+  param($ctx, $root, $rootPrefix, $mime, $csp, $blockedJson)
   try {
     $req = $ctx.Request; $res = $ctx.Response
     $path = [System.Uri]::UnescapeDataString($req.Url.LocalPath)
@@ -48,13 +58,17 @@ while ($listener.IsListening) {
     # Chặn dotfile/dot-folder ở bất kỳ cấp nào của đường dẫn
     $segments = $path.TrimStart('/') -split '/'
     $hidden = $segments | Where-Object { $_.StartsWith('.') } | Select-Object -First 1
+    # JSON điều khiển — blocklist case-insensitive (xem $blockedJson)
+    $low = @($segments | ForEach-Object { $_.ToLower() })
+    $blocked = (($low.Count -eq 2 -and $low[0] -eq 'my-course' -and $blockedJson -contains $low[1]) -or
+        ($low.Count -eq 1 -and $low[0] -eq 'brain.json'))
 
     $file = Join-Path $root ($path.TrimStart('/') -replace '/', [IO.Path]::DirectorySeparatorChar)
     $resolved = $null
     try { $resolved = (Resolve-Path $file -ErrorAction Stop).Path } catch {}
 
-    if ($resolved -and -not $hidden -and $resolved.StartsWith($rootPrefix) -and (Test-Path $resolved -PathType Leaf)) {
-      $bytes = [IO.File]::ReadAllBytes($resolved)
+    if ($resolved -and -not $hidden -and -not $blocked -and
+        $resolved.StartsWith($rootPrefix) -and (Test-Path $resolved -PathType Leaf)) {
       $ext = [IO.Path]::GetExtension($resolved).ToLower()
       $res.ContentType = $mime[$ext]; if (-not $res.ContentType) { $res.ContentType = 'application/octet-stream' }
       # vendor khong doi theo request -> cache 1h; cho khac giu no-store
@@ -67,34 +81,45 @@ while ($listener.IsListening) {
           ($ext -eq '.html' -or $ext -eq '.htm')) {
         $res.Headers.Add('Content-Security-Policy', $csp)
       }
-      # Range cho video bai hoc — Chrome xin Range khi tua; chi single-range,
-      # multi-range/chuoi la bo qua -> 200 tron file. HttpListener tu keep-alive.
+
+      # Stream thay vi ReadAllBytes — request Range chỉ đọc đúng đoạn cần
+      $fs = [IO.File]::Open($resolved, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+      $size = $fs.Length
+      $s = 0; $e = $size - 1; $status = 200
       $range = [string]$req.Headers['Range']
       if ($range -match '^bytes=(\d*)-(\d*)$') {
         if ($Matches[1]) {
           $s = [long]$Matches[1]
-          $e = if ($Matches[2]) { [long]$Matches[2] } else { [long]$bytes.Length - 1 }
+          if ($Matches[2]) { $e = [Math]::Min([long]$Matches[2], $size - 1) }
         } else {
           # suffix: bytes=-500 = 500 byte cuoi (bytes=- → suf=0 → $s=size → 416)
           $suf = if ($Matches[2]) { [long]$Matches[2] } else { 0 }
-          $s = [Math]::Max(0, [long]$bytes.Length - $suf)
-          $e = [long]$bytes.Length - 1
+          $s = [Math]::Max(0, $size - $suf)
         }
-        if ($s -le $e -and $s -lt $bytes.Length) {
-          $e = [Math]::Min($e, [long]$bytes.Length - 1)
-          $res.StatusCode = 206
-          $res.Headers.Add('Content-Range', "bytes $s-$e/$($bytes.Length)")
-          $res.Headers.Add('Accept-Ranges', 'bytes')
-          $res.ContentLength64 = $e - $s + 1
-          $res.OutputStream.Write($bytes, [int]$s, [int]($e - $s + 1))
+        if ($s -le $e -and $s -lt $size) {
+          $status = 206
+          $res.Headers.Add('Content-Range', "bytes $s-$e/$size")
         } else {
-          $res.StatusCode = 416
+          $status = 416
+        }
+      }
+      $res.Headers.Add('Accept-Ranges', 'bytes')
+      if ($status -ne 416) {
+        $res.StatusCode = $status
+        $count = $e - $s + 1
+        $res.ContentLength64 = $count
+        if ($s -gt 0) { [void]$fs.Seek($s, [IO.SeekOrigin]::Begin) }
+        $buf = New-Object byte[] 262144
+        while ($count -gt 0) {
+          $n = $fs.Read($buf, 0, [int][Math]::Min($buf.Length, $count))
+          if ($n -le 0) { break }
+          $res.OutputStream.Write($buf, 0, $n)
+          $count -= $n
         }
       } else {
-        $res.Headers.Add('Accept-Ranges', 'bytes')
-        $res.ContentLength64 = $bytes.Length
-        $res.OutputStream.Write($bytes, 0, $bytes.Length)
+        $res.StatusCode = 416
       }
+      $fs.Close()
     } else {
       $res.StatusCode = 404
       $msg = [Text.Encoding]::UTF8.GetBytes('Khong tim thay file')
@@ -103,6 +128,30 @@ while ($listener.IsListening) {
     $res.Close()
   } catch {
     # một request lỗi (client tắt tab giữa chừng...) không được làm chết server
+    try { $ctx.Response.Abort() } catch {}
+  }
+}
+
+$pool = [runspacefactory]::CreateRunspacePool(1, 8)
+$pool.Open()
+$jobs = New-Object System.Collections.ArrayList
+
+while ($listener.IsListening) {
+  try { $ctx = $listener.GetContextAsync().GetAwaiter().GetResult() } catch { break }
+  try {
+    $ps = [powershell]::Create()
+    $ps.RunspacePool = $pool
+    [void]$ps.AddScript($handler).AddArgument($ctx).AddArgument($root).AddArgument($rootPrefix).AddArgument($mime).AddArgument($csp).AddArgument($blockedJson)
+    [void]$jobs.Add(@{ ps = $ps; h = $ps.BeginInvoke() })
+    # dọn job đã xong để $jobs không phình theo số request
+    for ($i = $jobs.Count - 1; $i -ge 0; $i--) {
+      if ($jobs[$i].h.IsCompleted) {
+        try { $jobs[$i].ps.EndInvoke($jobs[$i].h) } catch {}
+        $jobs[$i].ps.Dispose()
+        $jobs.RemoveAt($i)
+      }
+    }
+  } catch {
     try { $ctx.Response.Abort() } catch {}
   }
 }

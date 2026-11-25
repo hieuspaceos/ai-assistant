@@ -29,6 +29,18 @@ def _rp(p):
     (/tmp thật ra là /private/tmp → emit cả hai dạng)."""
     return os.path.normpath(os.path.realpath(p))
 
+# Home/state dir của từng não — đều là file "của chính app não" (não bắt
+# buộc đọc credentials của nó để chạy, ghi session db để tạo session, ghi
+# lại token khi refresh). Không có trong write-allowlist → ACP session/new
+# lỗi "Internal error" / "readonly database" ngay lúc bắt tay.
+BRAIN_HOME = {
+    "devin":    (".local/share/devin", ".config/devin"),
+    "gemini":   (".gemini",),
+    "codex":    (".codex",),
+    "claude":   (".claude", ".claude.json"),
+    "opencode": (".local/share/opencode", ".config/opencode"),
+}
+
 def _emit_paths(paths):
     """Mỗi path emit raw + realpath — deny/allow đều cần đúng canonical."""
     out = set()
@@ -99,19 +111,31 @@ def build_profile(cwd):
          ";; qua outbound van duoc, do la gioi han co huu cua 'nao can net'",
          "(allow network-outbound)",
          "(deny network-bind network-inbound)",
+         ";; osascript = AppleEvents — kenh vuot mat file-sandbox (lai",
+         ";; app khac, doc man hinh, lay cookie Safari). Nao khong can.",
+         '(deny process-exec (literal "/usr/bin/osascript"))',
+         ";; TUI cua nao (che do Terminal qua ttyd) ioctl pty de lay size/",
+         ";; mode — deny default chan -> 'Scrollback error: io error'.",
+         '(allow file-ioctl (regex #"^/dev/ttys[0-9]+$")',
+         '        (literal "/dev/tty") (literal "/dev/ptmx"))',
          ";; COMPILER QUIRK (Darwin 27): 'allow process*' chi compile khi",
          ";; profile co file-read* phu toi '/' — whitelist-doc thuan lam",
          ";; profile crash luc load. Doc duoc gate lai bang deny enumeration.",
          _sub("file-read*", ["/"])]
 
-    # --- vùng WRITE (whitelist thuần) ---
+    # --- vùng WRITE (whitelist thuần) — CHỈ 3 vùng, đúng luật AGENTS.md:
+    # "file cho học viên chỉ trong my-course/ hoặc folder được cấp quyền".
+    # Trước đây rw={cwd} → não bị lừa ghi được tools/*.py, brain.json,
+    # permissions.json = tự cấp quyền + đặt payload chạy NGOÀI sandbox.
     tmps = {"/tmp", "/private/tmp", "/var/tmp"}
     t = os.environ.get("TMPDIR")
     if t:
         tmps.add(os.path.realpath(t))
     sysw = {os.path.join(home, d) for d in (
         ".npm", ".cache", ".pnpm-store", "Library/Caches")}
-    rw = {cwd} | tmps | sysw
+    rw = {os.path.join(cwd, "my-course"),
+          os.path.join(cwd, ".devin", "skills"),
+          os.path.join(cwd, ".logs")} | tmps | sysw
 
     # --- vùng READ bổ sung (system + tool dirs) ---
     sysr = {"/usr", "/System", "/bin", "/sbin", "/Library", "/opt",
@@ -120,7 +144,9 @@ def build_profile(cwd):
         ".nvm", ".local", ".pyenv", ".volta", ".asdf", ".cargo", ".rustup",
         ".deno", ".bun", ".gem", ".rbenv", "go",
         "Library/Python", "Library/pnpm")}
-    ro = set(sysr)
+    # não vẫn ĐỌC được cả project (AGENTS.md, tools/, templates/) — chỉ
+    # vùng ghi siết xuống allowlist
+    ro = set(sysr) | {cwd}
 
     # auto-allow cha của binary não đang dùng — não cài chỗ lạ vẫn đọc lib được
     try:
@@ -130,6 +156,10 @@ def build_profile(cwd):
             brain.get("terminal") or "")
         if exe:
             ro.add(os.path.dirname(os.path.realpath(exe)))
+        # state dir riêng của não đang chọn (xem BRAIN_HOME)
+        bid = str(brain.get("id") or os.path.basename(exe or ""))
+        for d in BRAIN_HOME.get(bid, ()):
+            rw.add(os.path.join(home, d))
     except Exception:
         pass
 
@@ -164,6 +194,16 @@ def build_profile(cwd):
                    ("mcp_config.local.json", "file-read* file-write*")):
         for lit in _emit_paths([os.path.join(dev, f)]):
             L.append(f'(deny {ops} (literal "{_esc(lit)}"))')
+
+    # JSON điều khiển quyền hạn: chỉ bridge (chạy ngoài sandbox) được ghi
+    # — não ghi trực tiếp = tự cởi còng (ghi permissions.json "/" rồi
+    # respawn = profile phình toàn ổ). bot.md cố ý KHÔNG deny — skill
+    # phong-van ghi nó khi onboarding.
+    mc = os.path.join(cwd, "my-course")
+    for f in ("permissions.json", "connections.json", "bots.json",
+              "config.json"):
+        for lit in _emit_paths([os.path.join(mc, f)]):
+            L.append(f'(deny file-write* (literal "{_esc(lit)}"))')
     return "\n".join(L) + "\n"
 
 def main():

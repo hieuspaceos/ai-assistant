@@ -85,13 +85,19 @@ function actClick(p) {
     // (children<=3, chuỗi ngắn nhất) → chứa chữ (chuỗi ngắn nhất).
     const cands = [...document.querySelectorAll('a,button,div,span,li,[role]')]
       .slice(0, 6000)                        // trần chống trang khổng lồ
-      .filter(visible)
-      .map(e => ({ e, t: (e.innerText || '').toLowerCase() }));
-    let hit = cands.filter(c => c.t.trim() === want && c.e.children.length <= 3)
-                   .sort((a, b) => a.t.length - b.t.length)[0];
+      .filter(visible);
+    // Prefilter bằng textContent (KHÔNG reflow) — chỉ đọc innerText (1
+    // layout flush mỗi node) của ứng viên có khả năng khớp. Trước đây đọc
+    // innerText cả 6000 node. Prefilter rỗng → fallback scan hết: innerText
+    // có thể khác textContent (CSS text-transform, \n từ <br>).
+    let pool = cands.filter(e => (e.textContent || '').toLowerCase().includes(want));
+    if (!pool.length) pool = cands;
+    const mapped = pool.map(e => ({ e, t: (e.innerText || '').toLowerCase() }));
+    let hit = mapped.filter(c => c.t.trim() === want && c.e.children.length <= 3)
+                    .sort((a, b) => a.t.length - b.t.length)[0];
     if (!hit) {
-      hit = cands.filter(c => c.t.includes(want))
-                 .sort((a, b) => a.t.length - b.t.length)[0];
+      hit = mapped.filter(c => c.t.includes(want))
+                  .sort((a, b) => a.t.length - b.t.length)[0];
     }
     el = hit && hit.e;
     if (!el) return { ok: false, err: 'không thấy phần tử chữ "' + p.text + '"' };
@@ -263,7 +269,12 @@ const ACTIONS = {
   // không cần share link hay cài MCP. Chỉ dùng với URL cùng site đang mở.
   fetch: async p => {
     try {
-      const r = await fetch(p.url, { credentials: 'include' });
+      // Chỉ cùng origin trang đang mở — URL tuỳ ý + credentials:'include'
+      // là kênh đọc session của site khác qua phiên đăng nhập học viên.
+      const u = new URL(p.url, location.href);
+      if (u.origin !== location.origin)
+        return { ok: false, err: 'chỉ tải URL cùng trang đang mở' };
+      const r = await fetch(u.href, { credentials: 'include' });
       const text = await r.text();
       return { ok: r.ok, status: r.status, text: text.slice(0, 900000),
                truncated: text.length > 900000 };
@@ -342,13 +353,28 @@ const ACTIONS = {
     const fonts = new Set();
     try { document.fonts.forEach(f => fonts.add(`${f.family} ${f.weight}`)); } catch (e) {}
     const bgs = new Set();
-    // cap scan nền — getComputedStyle mỗi node là một layout read; trang
-    // khổng lồ trước đây quét hết dù 40 bg đầu thường nằm trong vài trăm node
+    const addBg = b => { if (b && b !== 'none')
+      for (const m of b.matchAll(/url\(["']?([^"')]+)/g)) bgs.add(m[1]); };
+    // cap scan nền — getComputedStyle mỗi node là một layout read.
+    // 1) inline style: không reflow → quét rẻ hết body.
     for (const el of [...document.querySelectorAll('body *')].slice(0, 5000)) {
       if (bgs.size >= 40) break;
-      const b = getComputedStyle(el).backgroundImage;
-      if (b && b !== 'none')
-        for (const m of b.matchAll(/url\(["']?([^"')]+)/g)) bgs.add(m[1]);
+      addBg(el.style && el.style.backgroundImage);
+    }
+    // 2) stylesheet bg: chỉ đo computed ở node "đáng ngờ" (class/id/style
+    // hint) trước; vẫn thiếu mới quét rộng với cap nhỏ hơn (1500 vs 5000).
+    for (const el of [...document.querySelectorAll(
+        'body [class*="bg"],body [class*="hero"],body [class*="banner"],' +
+        'body [class*="cover"],body [class*="masthead"],body [id*="hero"],' +
+        'body [id*="banner"],body [style]')].slice(0, 400)) {
+      if (bgs.size >= 40) break;
+      addBg(getComputedStyle(el).backgroundImage);
+    }
+    if (bgs.size < 40) {
+      for (const el of [...document.querySelectorAll('body *')].slice(0, 1500)) {
+        if (bgs.size >= 40) break;
+        addBg(getComputedStyle(el).backgroundImage);
+      }
     }
     return { ok: true, title: document.title, images: imgs, svgs,
              cssLinks, fonts: [...fonts].slice(0, 30), bgImages: [...bgs] };

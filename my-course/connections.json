@@ -65,7 +65,7 @@
         "url_contains": "outlook"
       },
       "status": "not-connected",
-      "check_message": "chưa mở — bấm nút Mở trang rồi đăng nhập"
+      "check_message": "trình duyệt chưa nối — mở Chrome/Edge lên trước"
     },
     {
       "id": "canva",

@@ -35,7 +35,7 @@ if exist .devin\bridge.token (
   for %%A in (.devin\bridge.token) do if %%~zA EQU 0 del .devin\bridge.token
 )
 if not exist .devin\bridge.token (
-  powershell -NoProfile -Command "[IO.File]::WriteAllText('.devin\bridge.token', -join ((1..48) | %% { '{0:x}' -f (Get-Random -Max 16) }))"
+  powershell -NoProfile -Command "[IO.File]::WriteAllText('.devin\bridge.token', ([BitConverter]::ToString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(24))).Replace('-','').ToLower())"
 )
 for /f "usebackq delims=" %%i in (".devin\bridge.token") do set "BRIDGE_TOKEN=%%i"
 

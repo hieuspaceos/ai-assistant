@@ -149,6 +149,15 @@ def main():
                        {"cmd": "__no_such__"})
         check("11. brain cmd chưa cài → 404", s == 404, str(s))
 
+        # audit S7: interpreter/exec-helper không được làm não tự nhập —
+        # args của chúng là code-exec trần
+        s, b, _ = http("POST", base + f"/api/brain?token={TOKEN}",
+                       {"cmd": "python3", "args": ["-c", "print(1)"]})
+        check("11b. brain cmd interpreter → 400", s == 400, str(s))
+        s, b, _ = http("POST", base + f"/api/brain?token={TOKEN}",
+                       {"cmd": "somecli", "terminal": "a&b"})
+        check("11c. brain terminal lạ → 400", s == 400, str(s))
+
         # ---- ext-bridge ----
         eb = free_port()
         procs.append(spawn("ext-bridge.py", eb, wd))
@@ -168,10 +177,66 @@ def main():
         s, _, _ = http("GET", f"http://127.0.0.1:{sv}/.devin/bridge.token")
         check("14. serve chặn dotfile", s in (403, 404), str(s))
 
+        # audit S12: JSON điều khiển trong my-course không GET trần được
+        open(os.path.join(wd, "my-course", "permissions.json"),
+             "w").write("{}")
+        s, _, _ = http("GET",
+                       f"http://127.0.0.1:{sv}/my-course/permissions.json")
+        s2, _, _ = http("GET",
+                        f"http://127.0.0.1:{sv}/MY-COURSE/PERMISSIONS.JSON")
+        s3, _, _ = http("GET",
+                        f"http://127.0.0.1:{sv}/my-course/manifest.json")
+        check("14b. serve chặn JSON điều khiển (kể cả alias hoa)",
+              s == 404 and s2 == 404 and s3 == 200,
+              f"{s}/{s2}/{s3}")
+
         # ---- case thêm ----
         s, b, _ = http("POST", base + f"/api/prompt?token={TOKEN}",
                        {"text": "hello"})
         check("15. prompt khi não dead → 503", s == 503, str(s))
+
+        # ---- audit S3b: probe trong connections phải khớp schema ----
+        s, b, _ = http("POST", base + f"/api/connections?token={TOKEN}",
+                       {"app": {"id": "evil",
+                                "probe": {"type": "http",
+                                          "url": "file:///etc/passwd",
+                                          "expect_key": "root"}}})
+        check("15b. connections probe file:// → 400", s == 400, str(s))
+        s, b, _ = http("POST", base + f"/api/connections?token={TOKEN}",
+                       {"app": {"id": "evil2",
+                                "probe": {"type": "http",
+                                          "url": "http://evil.example/x"}}})
+        check("15c. connections probe host lạ → 400", s == 400, str(s))
+        s, b, _ = http("POST", base + f"/api/connections?token={TOKEN}",
+                       {"app": {"id": "ok1", "label": "x",
+                                "probe": {"type": "http",
+                                          "url": "http://localhost:7684/api/browser/status"}}})
+        check("15d. connections probe loopback → 200", s == 200, str(s))
+
+        # ---- audit S3a: đổi url secrets → xoá creds cũ (chống exfil) ----
+        s, b, _ = http("POST", base + f"/api/secrets?token={TOKEN}",
+                       {"app": "wordpress", "fields":
+                        {"url": "https://site-that.com",
+                         "user": "u1", "app_password": "p1"}})
+        s2, b2x, _ = http("POST", base + f"/api/secrets?token={TOKEN}",
+                          {"app": "wordpress",
+                           "fields": {"url": "http://evil.example"}})
+        creds = json.load(open(os.path.join(wd, ".devin",
+                                            "secrets.local.json")))
+        wp = creds.get("wordpress") or {}
+        check("15e. secrets đổi url → xoá creds cũ",
+              s == 200 and s2 == 200
+              and wp.get("url") == "http://evil.example"
+              and "user" not in wp and "app_password" not in wp
+              and bool(b2x.get("note")), str(wp)[:80])
+        s, b, _ = http("POST", base + f"/api/secrets?token={TOKEN}",
+                       {"app": "wordpress",
+                        "fields": {"user": "u2", "app_password": "p2"}})
+        creds = json.load(open(os.path.join(wd, ".devin",
+                                            "secrets.local.json")))
+        wp = creds.get("wordpress") or {}
+        check("15f. secrets cùng url → merge giữ",
+              s == 200 and wp.get("user") == "u2", str(wp)[:80])
 
         s, b, _ = http("POST", base + f"/api/setup?token={TOKEN}",
                        {"language": "vi", "learner_name": "Test"})
@@ -323,6 +388,27 @@ def main():
               and not os.path.exists(os.path.join(wd, ".devin", "leon"))
               and not os.path.exists(os.path.join(wd, "leon2")),
               str(b)[:80])
+
+        # audit S11: instructions dạng dict cũng phải kẹp độ dài (trước
+        # chỉ str bị cắt → dict trôi → bot.md khổng lồ nhồi prompt)
+        buf3 = _io.BytesIO()
+        with _zf.ZipFile(buf3, "w") as z:
+            z.writestr("bot.json", json.dumps({
+                "name": "Bot dài", "skills": [],
+                "instructions": {"vi": "x" * 5000, "en": "y" * 100,
+                                 "fr": "bỏ"}}))
+        s, b, _ = http("POST", b3 + f"/api/bot-import?token={TOKEN}",
+                       {"file": _b64.b64encode(buf3.getvalue()).decode()})
+        s, b, _ = http("POST", b3 + f"/api/bot-import-confirm?token={TOKEN}",
+                       {"stage": b.get("preview", {}).get("stage")})
+        s2, bx, _ = http("GET", b3 + "/api/bots", token=TOKEN)
+        long_bot = next((x for x in bx.get("bots", [])
+                         if x.get("name") == "Bot dài"), None)
+        ins = (long_bot or {}).get("instructions") or {}
+        check("20g. instructions dict kẹp 2000 + lọc key",
+              s == 200 and len(ins.get("vi", "")) == 2000
+              and ins.get("en") == "y" * 100 and "fr" not in ins,
+              str(sorted(ins))[:60])
         http("POST", b3 + f"/api/bot?token={TOKEN}",
              {"action": "activate", "id": None})   # dọn — về trợ lý chung
 
@@ -427,7 +513,10 @@ def main():
                 "'method':'session/update','params':{'sessionId':'s1',"
                 "'update':{'sessionUpdate':'agent_message_chunk',"
                 "'content':{'type':'text','text':'pong'}}}}), flush=True)\n")
-        json.dump({"id": "fake", "cmd": sys.executable, "args": [fake]},
+        # cmd phải là tên trần (load_brain chặn absolute path — audit S2)
+        # → dùng basename của interpreter, PATH lookup lúc spawn
+        json.dump({"id": "fake",
+                   "cmd": os.path.basename(sys.executable), "args": [fake]},
                   open(os.path.join(wd2, "brain.json"), "w"))
         cb4 = free_port()
         procs.append(spawn("chat-bridge.py", cb4, wd2))
@@ -472,12 +561,31 @@ def main():
         os.makedirs(dsecret, exist_ok=True)
         open(os.path.join(dsecret, "f"), "w").write("x")
 
+        # sandbox probes cần cwd NGOÀI vùng tmp — mkdtemp mặc định nằm
+        # trong TMPDIR (vùng writable theo profile) nên write-probe ở đó
+        # pass giả. Tạo workdir riêng trong ROOT (vùng deny-theo-default)
+        sbwd = tempfile.mkdtemp(prefix="sbtest-", dir=ROOT)
+        for sd in ("tools", "my-course", ".devin", ".devin/skills",
+                   ".logs"):
+            os.makedirs(os.path.join(sbwd, sd), exist_ok=True)
+        open(os.path.join(sbwd, "brain.json"), "w").write("{}")
+        open(os.path.join(sbwd, "AGENTS.md"), "w").write("# x")
+        open(os.path.join(sbwd, ".devin", "bridge.token"),
+             "w").write(TOKEN)
+        open(os.path.join(sbwd, ".devin", "secrets.local.json"),
+             "w").write("{}")
+        open(os.path.join(sbwd, "my-course", "permissions.json"),
+             "w").write("{}")
+        json.dump({"learner_name": "", "recipes": [], "lessons": []},
+                  open(os.path.join(sbwd, "my-course",
+                                    "manifest.json"), "w"))
+
         # 33: profile sinh được + đúng cấu trúc (deny default, bind deny,
         #     carve-out secrets/token, deny enumeration cho home)
         sb_out = subprocess.run(
-            [sys.executable, os.path.join(TOOLS, "gen-sandbox.py"), wd],
+            [sys.executable, os.path.join(TOOLS, "gen-sandbox.py"), sbwd],
             capture_output=True, text=True)
-        sb_fp = os.path.join(wd, ".devin", "agent.sb")
+        sb_fp = os.path.join(sbwd, ".devin", "agent.sb")
         prof = ""
         try:
             prof = open(sb_fp, encoding="utf-8").read()
@@ -487,10 +595,13 @@ def main():
               sb_out.returncode == 0
               and "(deny default)" in prof
               and "(deny network-bind network-inbound)" in prof
-              and '(literal "' + os.path.join(wd, ".devin",
+              and '(literal "' + os.path.join(sbwd, ".devin",
                         "secrets.local.json") + '")' in prof
               and '(deny file-write* (literal "' +
-                  os.path.join(wd, ".devin", "bridge.token") + '")' in prof,
+                  os.path.join(sbwd, ".devin", "bridge.token") + '")' in prof
+              and '(deny file-write* (literal "' +
+                  os.path.join(sbwd, "my-course",
+                               "permissions.json") + '")' in prof,
               prof[:120])
 
         has_sbx = (sys.platform == "darwin"
@@ -498,7 +609,7 @@ def main():
         if has_sbx and prof:
             # 34: não trong sandbox đọc được file project
             r = subprocess.run(["sandbox-exec", "-f", sb_fp, "/bin/cat",
-                                os.path.join(wd, "my-course",
+                                os.path.join(sbwd, "my-course",
                                              "manifest.json")],
                                capture_output=True, text=True)
             check("34. sandbox: đọc project → được",
@@ -507,11 +618,11 @@ def main():
             # 35: ghi bridge.token bị deny; đọc thì vẫn được
             r = subprocess.run(["sandbox-exec", "-f", sb_fp, "/bin/sh",
                                 "-c", "echo x >> '" +
-                                os.path.join(wd, ".devin",
+                                os.path.join(sbwd, ".devin",
                                              "bridge.token") + "'"],
                                capture_output=True, text=True)
             r2 = subprocess.run(["sandbox-exec", "-f", sb_fp, "/bin/cat",
-                                 os.path.join(wd, ".devin",
+                                 os.path.join(sbwd, ".devin",
                                               "bridge.token")],
                                 capture_output=True, text=True)
             check("35. sandbox: ghi token deny, đọc vẫn được",
@@ -526,24 +637,80 @@ def main():
                   r.returncode != 0
                   and "not permitted" in (r.stderr or "").lower(),
                   r.stderr[:60])
+            # 36b-h: write-allowlist — não chỉ ghi được my-course/,
+            # .devin/skills/, .logs/ (audit S1/S2: trước rw=cả cwd → não
+            # tự sửa được permissions.json/brain.json/tools = tự cởi còng)
+            probes = [
+                ("36b. ghi tools/ → deny",
+                 os.path.join(sbwd, "tools", "probe-w.txt"), False),
+                ("36c. ghi my-course/permissions.json → deny",
+                 os.path.join(sbwd, "my-course", "permissions.json"),
+                 False),
+                ("36d. ghi brain.json → deny",
+                 os.path.join(sbwd, "brain.json"), False),
+                ("36e. ghi .devin/skills/ → ok",
+                 os.path.join(sbwd, ".devin", "skills", "probe-x", "f"),
+                 True),
+                ("36g. ghi my-course/ → ok (positive control)",
+                 os.path.join(sbwd, "my-course", "probe-ok.txt"), True),
+                ("36h. ghi .logs/ → ok",
+                 os.path.join(sbwd, ".logs", "h.jsonl"), True),
+            ]
+            for name, fp, should_ok in probes:
+                r = subprocess.run(
+                    ["sandbox-exec", "-f", sb_fp, "/bin/sh", "-c",
+                     "mkdir -p \"$(dirname '" + fp + "')\" && "
+                     "echo x >> '" + fp + "'"],
+                    capture_output=True, text=True)
+                ok = (r.returncode == 0) == should_ok
+                check(name, ok, f"{r.returncode} {r.stderr[:40]}")
+                if should_ok:
+                    if "probe-x" in fp:
+                        shutil.rmtree(os.path.dirname(fp),
+                                      ignore_errors=True)
+                    else:
+                        try:
+                            os.remove(fp)
+                        except OSError:
+                            pass
+            # 36f: osascript bị chặn (AppleEvents vượt mặt file-sandbox)
+            r = subprocess.run(["sandbox-exec", "-f", sb_fp,
+                                "/usr/bin/osascript", "-e", "return 1"],
+                               capture_output=True, text=True)
+            check("36f. sandbox: osascript → deny",
+                  r.returncode != 0, r.stderr[:60])
         else:
-            check("34-36. sandbox runtime (chỉ chạy trên macOS)", True,
+            check("34-36f. sandbox runtime (chỉ chạy trên macOS)", True,
                   "bỏ qua — không phải darwin")
         shutil.rmtree(dsecret, ignore_errors=True)
+        shutil.rmtree(sbwd, ignore_errors=True)
 
-        # 37: quyền mới qua /api/permissions → profile regen chứa folder
+        # 37: /api/permissions giờ qua consent-gate: POST → 202 {pending}
+        # → card trong poll → respond thiếu Origin → 403 card còn nguyên
+        # → respond đủ Origin → apply + regen profile (audit S1)
         perm_dir = tempfile.mkdtemp(prefix="troly-perm-")
         s, b, _ = http("POST", b3 + f"/api/permissions?token={TOKEN}",
                        {"path": perm_dir, "access": "read"})
+        rid = b.get("pending")
+        s2, _, _ = http("POST", b3 + f"/api/respond?token={TOKEN}",
+                        {"id": rid, "optionId": "ok"})
+        s3, _, _ = http("POST", b3 + f"/api/respond?token={TOKEN}",
+                        {"id": rid, "optionId": "ok"},
+                        headers={"Origin": "http://localhost:8080"})
+        s4, _, _ = http("POST", b3 + f"/api/respond?token={TOKEN}",
+                        {"id": rid, "optionId": "ok"},
+                        headers={"Origin": "http://localhost:8080"})
         prof2 = ""
         try:
             prof2 = open(os.path.join(wd, ".devin", "agent.sb"),
                          encoding="utf-8").read()
         except OSError:
             pass
-        check("37. /api/permissions → regen profile",
-              s == 200 and os.path.realpath(perm_dir) in prof2,
-              f"{s} {'found' if os.path.realpath(perm_dir) in prof2 else 'missing'}")
+        check("37. permissions → 202 → no-Origin 403 → Origin 200 → regen",
+              s == 202 and bool(rid) and s2 == 403 and s3 == 200
+              and s4 == 404     # one-shot — respond lại phải hết hiệu lực
+              and os.path.realpath(perm_dir) in prof2,
+              f"{s}/{s2}/{s3}/{s4}")
         shutil.rmtree(perm_dir, ignore_errors=True)
 
         # 38: escape hatch + wrap spawn — kiểm static hai nền tảng
@@ -552,6 +719,10 @@ def main():
               and "sandbox-exec" in src_cb
               and "agent.sb" in open(os.path.join(
                   TOOLS, "term-gate.sh"), encoding="utf-8").read())
+        # 38b: load_brain chặn cmd/terminal không phải tên trần (brain.json
+        # sửa tay không spawn lệnh lạ — audit S2)
+        check("38b. load_brain validate cmd/terminal",
+              're.fullmatch(r"[A-Za-z0-9_.-]+", str(out["cmd"]))' in src_cb)
     finally:
         for p in procs:
             try:

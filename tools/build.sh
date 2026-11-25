@@ -11,8 +11,12 @@ command -v pyinstaller >/dev/null || {
 
 # Payload "bung" ra ~/TroLyAI lần chạy đầu — toàn bộ phần mềm + seed
 # my-course/brain.json. KHÔNG bundle secrets, token, skills active,
-# plans, git.
+# plans, git. clone-work/ bị loại: DOM site thật của bên thứ 3 — phình
+# binary + rủi ro IP/privacy khi phân phối.
 SEP=":"; [ "$(uname -s)" = "MINGW64_NT"* ] && SEP=";"   # win dùng ;
+STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT
+cp -R my-course "$STAGE/my-course"
+rm -rf "$STAGE/my-course/clone-work"
 # hidden-import: child "vai" chạy qua runpy TRONG cùng frozen interpreter —
 # PyInstaller chỉ thấy import tĩnh của launcher nên phải khai tay module
 # mà tools/*.py cần, không thì child chết ModuleNotFoundError
@@ -45,7 +49,7 @@ pyinstaller --onefile --name troly --clean \
   --add-data "templates${SEP}templates" \
   --add-data "docs${SEP}docs" \
   --add-data ".devin/skill-packs${SEP}.devin/skill-packs" \
-  --add-data "my-course${SEP}my-course" \
+  --add-data "$STAGE/my-course${SEP}my-course" \
   --add-data "AGENTS.md${SEP}." \
   --add-data "CLAUDE.md${SEP}." \
   --add-data "SETUP.md${SEP}." \
