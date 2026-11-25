@@ -161,6 +161,17 @@ BRAIN_CMD_DENY = {
     "nc", "ncat", "socat", "busybox", "open", "rundll32", "regsvr32",
     "mshta", "wscript", "cscript", "wmic", "certutil", "bitsadmin",
     "eval", "exec", "launchctl",
+    # đọc credential/clipboard/màn hình
+    "security", "pbcopy", "pbpaste", "screencapture",
+    # exfil kênh mạng + shell bọc (pty → chạy lệnh tự do)
+    "ssh", "scp", "sftp", "rsync", "ftp", "telnet", "rlogin", "rsh",
+    "tmux", "screen", "script", "expect",
+    # debug/inject + runtime + cơ chế chạy ngoài/lách sandbox
+    "lldb", "gdb", "dtrace", "automator", "swift", "sudo",
+    "crontab", "at", "atq", "atrm", "sandbox-exec",
+    # DB client — lệnh "não" không bao giờ là shell database
+    "sqlite3", "mysql", "psql", "redis-cli", "mongosh", "mongo",
+    "qlmanage", "spctl", "codesign",
 }
 
 def load_brain():
@@ -173,9 +184,12 @@ def load_brain():
     base = next((dict(p) for p in BRAIN_PRESETS if p["id"] == b.get("id")), {})
     out = {**base, **{k: v for k, v in b.items() if v not in (None, "", [])}}
     # cmd/terminal phải là tên lệnh trần — brain.json bị sửa tay (đường
-    # dẫn/lệnh lạ) không được spawn; rơi về preset devin
+    # dẫn/lệnh lạ) không được spawn; rơi về preset devin. cmd do FILE tự
+    # khai nằm trong deny-list cũng rơi về devin (kiểm trên b thô — cmd từ
+    # preset như npx của codex/claude là hợp lệ, không được chặn)
     if not out.get("cmd") or \
-            not re.fullmatch(r"[A-Za-z0-9_.-]+", str(out["cmd"])):
+            not re.fullmatch(r"[A-Za-z0-9_.-]+", str(out["cmd"])) or \
+            str(b.get("cmd") or "").lower() in BRAIN_CMD_DENY:
         out = {**next(p for p in BRAIN_PRESETS if p["id"] == "devin"),
                "cmd": DEVIN}
     out.setdefault("args", [])
@@ -199,18 +213,25 @@ os.makedirs(os.path.dirname(HIST_FP), exist_ok=True)
 _hist_permed = False
 _hist_f = None                # fd giữ mở — open/close mỗi event là hàng
 _hist_writes = 0              # trăm syscall khi stream text
+_hist_flush_at = 0.0          # nhịp flush — text stream ra hàng trăm event
 HIST_ROTATE_EVERY = 500       # check rotate định kỳ, không chỉ lúc boot
 LOG_MAX_BYTES = 1024 * 1024   # mỗi .logs/*.log giữ tối đa 1MB
 
 def hist_write(ev):
-    global _hist_permed, _hist_f, _hist_writes
+    global _hist_permed, _hist_f, _hist_writes, _hist_flush_at
     if ev.get("t") == "perm":
         return          # card xin phép là transient — không ghi vào file
     try:
         if _hist_f is None:
             _hist_f = open(HIST_FP, "a", encoding="utf-8")
         _hist_f.write(json.dumps(ev, ensure_ascii=False) + "\n")
-        _hist_f.flush()       # vẫn flush mỗi event — crash không mất chat
+        # flush theo nhịp: event "text" trôi hàng trăm cái một lượt — flush
+        # mỗi cái là hàng trăm syscall. Event khác flush ngay; text gom lại
+        # 1s một lần — crash xấu nhất mất <1s chữ đang stream.
+        now = time.monotonic()
+        if ev.get("t") != "text" or now - _hist_flush_at > 1:
+            _hist_f.flush()
+            _hist_flush_at = now
         if not _hist_permed:      # history chứa nội dung chat — chỉ chủ đọc
             try: os.chmod(HIST_FP, 0o600)
             except OSError: pass
@@ -329,6 +350,11 @@ new_event = threading.Condition(store_lock)
 # Serialize /api/prompt: 2 tab/2 client gửi đồng thời → event đan xen làm
 # rối cả session ACP. acquire không blocking → kẻ đến sau nhận 409.
 prompt_lock = threading.Lock()
+
+# Serialize spawn_brain: 2 spawn đồng thời (self-heal ở /api/prompt +
+# đổi não ở /api/brain) tạo 2 process ACP — đứa thua race vẫn sống, reader
+# thread của nó vẫn broadcast event vào store → stream trộn + process rác.
+spawn_lock = threading.Lock()
 
 def broadcast(ev):
     global event_base
@@ -520,6 +546,39 @@ def save_json(fp, obj):
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(obj, f, ensure_ascii=False, indent=2)
     os.replace(tmp, fp)
+
+# Folder NHẠY CẢM không được cấp quyền dù request hợp lệ — card xác nhận
+# không bảo vệ được người bấm đại "Đồng ý": khoá SSH/cloud, keychain,
+# profile trình duyệt (cookie/phiên), credential của não, hay cả home/ổ
+# gốc (mở toàn máy — tương đương không sandbox).
+_SENSITIVE_DIRS = [os.path.expanduser(p) for p in (
+    "~/.ssh", "~/.gnupg", "~/.aws", "~/.kube", "~/.config/gh",
+    "~/.config/devin", "~/.local/share/devin",
+    "~/.gemini", "~/.codex", "~/.claude", "~/.claude.json",
+    "~/.opencode", "~/.config/opencode",
+    "~/Library/Keychains", "~/Library/Cookies", "~/Library/Safari",
+    "~/Library/Application Support/Google/Chrome",
+    "~/Library/Application Support/Chromium",
+    "~/Library/Application Support/Microsoft Edge",
+)]
+_SENSITIVE_ROOTS = {
+    os.path.realpath(p) for p in
+    ("/", "/Users", "/etc", "/var", "/private", "/System", "/usr", "/bin",
+     "/sbin", os.path.expanduser("~"))}
+_SENSITIVE_ROOTS_L = {s.lower() for s in _SENSITIVE_ROOTS}
+_SENSITIVE_DIRS_L = [os.path.realpath(p).lower() for p in _SENSITIVE_DIRS]
+
+def path_sensitive(p):
+    rp = os.path.realpath(os.path.expanduser(p))
+    # So case-insensitive: APFS/NTFS mặc định không phân biệt hoa-thường —
+    # "~/.SSH" là cùng folder ~/.ssh nhưng realpath giữ nguyên hoa-thường,
+    # so case-sensitive sẽ lọt. Trên Linux (~/.SSH là folder KHÁC) thì chặn
+    # hơi dư — vẫn an toàn hơn là sót.
+    rpl = rp.lower()
+    if rpl in _SENSITIVE_ROOTS_L:
+        return True
+    return any(rpl == s or rpl.startswith(s + os.sep)
+               for s in _SENSITIVE_DIRS_L)
 
 def validate_probe(probe):
     """probe trong connections.json phải khớp schema cố định — client ghi
@@ -829,6 +888,12 @@ def confirm_bot_bundle(sid):
         shutil.rmtree(st["dir"], ignore_errors=True)
 
 class Handler(BaseHTTPRequestHandler):
+    def setup(self):
+        super().setup()
+        # chống slow-drip: client nhỏ giọt header/body giữ thread vô hạn.
+        # 45s > wait_ms tối đa của long-poll (30s) nên không cắt nhầm.
+        self.connection.settimeout(45)
+
     def log_message(self, *a):
         pass
 
@@ -920,6 +985,13 @@ class Handler(BaseHTTPRequestHandler):
             self._json(load_json(CONN_FP, {"apps": []}))
         elif path == "/api/config":
             self._json(load_json(CONFIG_FP, {}))
+        elif path == "/api/check-path":
+            # onboarding hỏi "folder này có tồn tại không" trước khi thêm —
+            # POST /api/permissions tạo card nên không dùng để kiểm được.
+            # Chỉ trả isdir, không lộ metadata; vẫn đòi token.
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            p = os.path.expanduser((q.get("path") or [""])[0].strip())
+            self._json({"ok": True, "isdir": os.path.isdir(p) if p else False})
         elif path == "/api/bots":
             b = load_json(BOTS_FP, {"active": None, "bots": []})
             self._json({"active": b.get("active"),
@@ -1123,26 +1195,48 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": True})
         elif path == "/api/permissions":
             # Đổi quyền folder = đổi sandbox profile spawn kế → bắt buộc
-            # qua card xác nhận (agent tự cấp "/" = tự cởi còng)
-            p = os.path.expanduser(str(data.get("path", "")).strip())
+            # qua card xác nhận (agent tự cấp "/" = tự cởi còng). Batch
+            # {"paths": [...]} = MỘT card — onboarding thêm nhiều folder
+            # không spam card (mỗi card riêng = không card nào được đọc).
             access = str(data.get("access", "read"))
             if access not in ("read", "read-write"):
                 self._json({"err": "access phải là read hoặc read-write"}, 400); return
-            if not os.path.isdir(p):
+            raw = data.get("paths") if isinstance(data.get("paths"), list) \
+                else [data.get("path")]
+            if len(raw) > 20:
+                self._json({"err": "quá nhiều folder một lần"}, 400); return
+            paths, bad = [], []
+            for rp in raw:
+                p = os.path.expanduser(str(rp or "").strip())
+                if not p or not os.path.isdir(p):
+                    bad.append(str(rp or ""))
+                    continue
+                if path_sensitive(p):
+                    self._json({"err": "folder chứa dữ liệu nhạy cảm — "
+                                       "không cấp quyền được: " + p}, 400); return
+                paths.append(p)
+            if not paths:
                 self._json({"err": "không thấy folder này trên máy"}, 404); return
             note = str(data.get("note", ""))[:120]
-            def _apply(p=p, access=access, note=note):
+            def _apply(paths=paths, access=access, note=note):
                 q = load_json(PERM_FP, {"folders": []})
                 # file hỏng/thiếu key → qua fallback hết — không crash
                 q["folders"] = [f for f in (q.get("folders") or [])
-                                if os.path.expanduser(str(f.get("path", ""))) != p]
-                q["folders"].append({"path": p, "access": access,
-                                     "note": note})
+                                if os.path.expanduser(str(f.get("path", "")))
+                                not in paths]
+                for p in paths:
+                    q["folders"].append({"path": p, "access": access,
+                                         "note": note})
                 save_json(PERM_FP, q)
                 gen_sandbox_profile()   # quyền mới áp ngay spawn não kế tiếp
-            rid = gate_local(f"Thêm quyền {access} cho folder {p}?", _apply)
-            self._json({"pending": rid,
-                        "msg": "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để có hiệu lực"}, 202)
+            disp = paths[0] if len(paths) == 1 \
+                else f"{len(paths)} folder ({', '.join(paths)[:120]})"
+            rid = gate_local(f"Thêm quyền {access} cho {disp}?", _apply)
+            out = {"pending": rid,
+                   "msg": "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để có hiệu lực"}
+            if bad:
+                out["skipped"] = bad   # folder gõ sai — không đưa vào thẻ
+            self._json(out, 202)
         elif path == "/api/remove-permission":
             p = os.path.expanduser(str(data.get("path", "")).strip())
             def _apply(p=p):
@@ -1162,6 +1256,11 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"err": "thiếu app.id"}, 400); return
             if "probe" in app and not validate_probe(app["probe"]):
                 self._json({"err": "kiểu kiểm tra kết nối không hợp lệ"}, 400); return
+            # open_url là link nút "Mở trang" trong portal — javascript:/
+            # data: chạy được script trong origin portal → chỉ nhận http(s)
+            ou = str(app.get("open_url") or "")
+            if ou and not re.match(r"^https?://", ou, re.I):
+                self._json({"err": "open_url chỉ nhận link http(s)"}, 400); return
             k = load_json(CONN_FP, {"apps": []})
             k["apps"] = k.get("apps") or []
             for i, a in enumerate(k["apps"]):
@@ -1223,40 +1322,51 @@ class Handler(BaseHTTPRequestHandler):
             name = str(data.get("learner_name", "")).strip()[:80]
             if lang not in ("vi", "en"):
                 self._json({"err": "language phải là vi hoặc en"}, 400); return
-            os.makedirs(MC_DIR, exist_ok=True)
-            save_json(CONFIG_FP, {"language": lang, "learner_name": name})
-            # Đồng bộ tên + recipes (công thức nhanh) vào manifest khoá học —
-            # recipes đi kèm pack ngôn ngữ nên sidebar đúng lệnh, đúng tiếng
-            mf = os.path.join(MC_DIR, "manifest.json")
-            try:
-                m = json.load(open(mf, encoding="utf-8"))
-                if name:
-                    m["learner_name"] = name
-                rec = load_json(os.path.join(SKILL_PACKS, "recipes",
-                                             lang + ".json"), {})
-                if rec.get("recipes"):
-                    m["recipes"] = rec["recipes"]
-                json.dump(m, open(mf, "w", encoding="utf-8"),
-                          ensure_ascii=False, indent=2)
-            except Exception:
-                pass
-            # Cài bộ skill theo ngôn ngữ: pack đè lên .devin/skills/ nhưng
-            # skill học viên TỰ TẠO (không có trong pack) phải giữ lại —
-            # dir cũ backup sang skills.bak rồi merge phần riêng về.
-            pack = os.path.join(SKILL_PACKS, lang)
-            if os.path.isdir(pack):
-                bak = SKILLS_DIR + ".bak"
-                if os.path.isdir(SKILLS_DIR):
+            def _apply(lang=lang, name=name):
+                os.makedirs(MC_DIR, exist_ok=True)
+                save_json(CONFIG_FP, {"language": lang, "learner_name": name})
+                # Đồng bộ tên + recipes (công thức nhanh) vào manifest khoá học —
+                # recipes đi kèm pack ngôn ngữ nên sidebar đúng lệnh, đúng tiếng
+                mf = os.path.join(MC_DIR, "manifest.json")
+                try:
+                    m = json.load(open(mf, encoding="utf-8"))
+                    if name:
+                        m["learner_name"] = name
+                    rec = load_json(os.path.join(SKILL_PACKS, "recipes",
+                                                 lang + ".json"), {})
+                    if rec.get("recipes"):
+                        m["recipes"] = rec["recipes"]
+                    json.dump(m, open(mf, "w", encoding="utf-8"),
+                              ensure_ascii=False, indent=2)
+                except Exception:
+                    pass
+                # Cài bộ skill theo ngôn ngữ: pack đè lên .devin/skills/ nhưng
+                # skill học viên TỰ TẠO (không có trong pack) phải giữ lại —
+                # dir cũ backup sang skills.bak rồi merge phần riêng về.
+                pack = os.path.join(SKILL_PACKS, lang)
+                if os.path.isdir(pack):
+                    bak = SKILLS_DIR + ".bak"
+                    if os.path.isdir(SKILLS_DIR):
+                        if os.path.isdir(bak):
+                            shutil.rmtree(bak)
+                        os.replace(SKILLS_DIR, bak)
+                    shutil.copytree(pack, SKILLS_DIR)
                     if os.path.isdir(bak):
-                        shutil.rmtree(bak)
-                    os.replace(SKILLS_DIR, bak)
-                shutil.copytree(pack, SKILLS_DIR)
-                if os.path.isdir(bak):
-                    for name in os.listdir(bak):
-                        src = os.path.join(bak, name)
-                        dst = os.path.join(SKILLS_DIR, name)
-                        if os.path.isdir(src) and not os.path.exists(dst):
-                            shutil.copytree(src, dst)
+                        for n in os.listdir(bak):
+                            src = os.path.join(bak, n)
+                            dst = os.path.join(SKILLS_DIR, n)
+                            if os.path.isdir(src) and not os.path.exists(dst):
+                                shutil.copytree(src, dst)
+            # Setup đã chạy rồi (config có language) mà bị gọi lại → agent
+            # có thể đang cố đè skills/config — qua card xác nhận. Lần đầu
+            # thật (onboarding) thì chạy luôn, không cần card.
+            if load_json(CONFIG_FP, {}).get("language"):
+                rid = gate_local(
+                    "Chạy lại thiết lập ban đầu — sẽ cài đè bộ skill?", _apply)
+                self._json({"pending": rid,
+                            "msg": "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để chạy lại"}, 202)
+                return
+            _apply()
             self._json({"ok": True})
         elif path == "/api/check-connection":
             aid = str(data.get("id", ""))
@@ -1370,20 +1480,42 @@ def spawn_brain():
     """Bật (hoặc đổi) não: giết agent cũ nếu còn sống, spawn theo brain.json
     rồi bắt tay ACP chuẩn (initialize + session/new)."""
     global acp
-    old = acp
-    acp = Acp(load_brain())
-    if old and old.proc:
+    with spawn_lock:
+        old = acp
+        acp = Acp(load_brain())
+        if old and old.proc:
+            try:
+                old.proc.terminate()
+            except Exception:
+                pass
+        if not acp.dead:
+            acp.call("initialize", {
+                "protocolVersion": 1,
+                "clientCapabilities": {"fs": {"readTextFile": False,
+                                              "writeTextFile": False},
+                                       "terminal": False}})
+            acp.call("session/new", {"cwd": CWD, "mcpServers": []})
+
+class BoundedServer(ThreadingHTTPServer):
+    """Thread-per-connection KHÔNG trần → hàng nghìn kết nối treo là hết
+    thread/fd. Nắp 64 slot: connection quá hạn xếp backlog thay vì phình
+    thread. daemon_threads để Ctrl+C không bị thread treo níu lại."""
+    daemon_threads = True
+    _slots = threading.BoundedSemaphore(64)
+
+    def process_request(self, request, client_address):
+        self._slots.acquire()
         try:
-            old.proc.terminate()
+            super().process_request(request, client_address)
         except Exception:
-            pass
-    if not acp.dead:
-        acp.call("initialize", {
-            "protocolVersion": 1,
-            "clientCapabilities": {"fs": {"readTextFile": False,
-                                          "writeTextFile": False},
-                                   "terminal": False}})
-        acp.call("session/new", {"cwd": CWD, "mcpServers": []})
+            self._slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._slots.release()
 
 if __name__ == "__main__":
     rotate_history()
@@ -1405,4 +1537,4 @@ if __name__ == "__main__":
         pass
     spawn_brain()
     print(f"chat-bridge: http://localhost:{PORT}  (cwd={CWD})")
-    ThreadingHTTPServer((BIND, PORT), Handler).serve_forever()
+    BoundedServer((BIND, PORT), Handler).serve_forever()

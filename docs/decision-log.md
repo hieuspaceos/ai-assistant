@@ -150,6 +150,64 @@ bước", không phải backup; tránh rác file.
 Vì: so layout cần text có độ dài thật; nhưng giao phải là nội dung học
 viên (bản quyền). Skill ghi rõ ngoại lệ này.
 
+## 2026 — Siết bảo mật đợt 5 (audit chéo component)
+
+**CSP `sandbox` cho `/my-course/` + `/intro/`, không `allow-same-origin`.**
+Vì: trang clone nằm trong `my-course/` là nội dung bên thứ 3 (mục tiêu
+prompt injection), mà lại chạy cùng origin portal — script trong đó đọc
+được `localStorage.bridge_token` rồi iframe/`window.open` portal để
+`fetch` bridge trong context không-CSP. `sandbox` đẩy trang sang opaque
+origin: localStorage/iframe-DOM/service-worker đều chết mà script vẫn
+chạy, link vẫn sống. `allow-same-origin` đặt vào là mất hết hiệu lực.
+
+**`clone-view` edit qua `srcdoc` đã lọc `<script>`, view vẫn file thật.**
+Vì: CSP sandbox làm iframe opaque → `contentDocument` cũ không đọc được
+nữa. Edit nạp HTML qua `srcdoc` (chủ động chọn nên cùng origin được),
+lọc script ra store riêng, khôi phục khi lưu — tính năng giữ nguyên mà
+script của trang clone không bao giờ thực thi trong origin portal.
+
+**`bfetch` chỉ gắn token cho port 7682/7684.** Vì: gắn cho mọi loopback
+khiến request tới `/my-course/` trên `:8080` cũng kèm `X-Bridge-Token` —
+một service worker đăng ký dưới scope `my-course/` đọc được header đó
+rồi lái bridge trong context không chịu page-CSP.
+
+**Consent gate cho `/api/setup` re-run, batch `paths` cho
+`/api/permissions`, `GET /api/check-path`.** Vì: gate `/api/permissions`
+(đợt trước) vô tình phá onboarding — request trả `202 pending` nhưng UI
+coi như xong, folder "đã chọn" mà không hiệu lực. Setup re-run đè skill
+pack nên phải qua card; first-run (config chưa có `language`) chạy luôn.
+Batch = một card cho nhiều folder — mỗi card riêng thì không ai đọc.
+`check-path` trả `isdir` không lộ metadata để onboarding kiểm folder
+trước khi xin quyền.
+
+**Deny-list path nhạy cảm + `open_url` chỉ http(s).** Vì: card xác nhận
+không bảo vệ được người bấm đại — `~/.ssh`, keychain, profile trình
+duyệt, home, root bị từ chối ngay cả khi request hợp lệ. `open_url`
+`javascript:` chạy script trong origin portal → chỉ nhận `http(s)://`.
+
+**Seatbelt: `process-exec` + `file-read*` cho binary thoát-sandbox.**
+Vì: `open` spawn app ngoài sandbox qua launchd, `launchctl`/`crontab`
+đăng ký job chạy ngoài sandbox, `security` đọc keychain, `pbpaste` đọc
+clipboard, `screencapture` chụp màn — `file-read*` một mình chặn `cp`
+nhưng không chặn exec (verify bằng `sandbox-exec` trên máy thật), phải
+dùng cả hai literal. Chặn thêm mach-lookup `com.apple.pasteboard.1`
+phòng đường FFI/ctypes.
+
+**`BRAIN_CMD_DENY` dùng chung cho cả load và POST.** Vì: trước chỉ check
+lúc `POST /api/brain` — `brain.json` sửa tay ghi `cmd:"powershell"` vẫn
+spawn thẳng. List mở rộng thêm ssh/scp/rsync/tmux/lldb/swift/sudo/
+sandbox-exec/sql-client (code-exec + exfil qua args).
+
+**`troly.spec` tự lọc `my-course/`.** Vì: `build.sh` stage rồi xoá
+`clone-work/` cẩn thận, nhưng ai build bằng spec thì bundle nguyên DOM
+site thật của học viên (privacy + 4.4MB) vào binary phân phối — spec
+phải lọc giống build.sh.
+
+**Thread cap + socket timeout + unmask XOR theo khối.** Vì: thread-per-
+connection không trần là DoS local rẻ nhất; socket không timeout để
+client nhỏ giọt giữ thread vô hạn; unmask WS từng byte làm frame ảnh
+chụp vài MB nghẹt vài giây.
+
 ## Trước đó — nền hệ thống
 
 **`brain.json` tách não khỏi bridge; `/api/brain` đổi nóng.** Vì: bridge

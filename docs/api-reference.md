@@ -96,6 +96,7 @@ có ảnh base64).
 | `/api/permissions` | nội dung `permissions.json` |
 | `/api/connections` | nội dung `connections.json` |
 | `/api/config` | nội dung `config.json` |
+| `/api/check-path` | `?path=<đường dẫn>` → `{ok, isdir}` — onboarding kiểm folder tồn tại trước khi xin quyền; chỉ trả isdir, không metadata |
 | `/api/bots` | `{active, bots, templates}` — bot đã tạo + template nghề từ `skill-packs/roles/` |
 
 ### POST
@@ -107,12 +108,12 @@ có ảnh base64).
 | `/api/respond` | `{id, optionId}` | hai loại card: (a) card ACP — `id` phải đang pending (ghi khi bridge dispatch `session/request_permission`, TTL 600s): không khớp/hết hạn/đã trả → `404`; `optionId` lạ → `400` (không huỷ card). (b) card nội bộ `local-*` (consent gate): nhận `ok`/`__cancel__`, **bắt buộc `Origin` loopback** — thiếu/khác → `403` và card KHÔNG bị consume; hợp lệ → apply một lần. `optionId:"__cancel__"` = huỷ |
 | `/api/delete-lesson` | `{folder}` | consent gate → `202 {pending, msg}`; bấm Đồng ý trong chat mới xoá bài + gỡ manifest |
 | `/api/save-page` | `{file, html}` | ghi `.html` **chỉ dưới `my-course/`**; tự tạo `<file>.bak` trước khi ghi đè; chặn `..` |
-| `/api/permissions` | `{path, access, note?}` | consent gate → `202 {pending, msg}`; sau khi duyệt: thêm folder (`read`/`read-write`) + regen `.devin/agent.sb` (macOS) |
+| `/api/permissions` | `{path, access, note?}` hoặc `{paths:[...], access, note?}` | consent gate → `202 {pending, msg}`; batch `paths` (≤20) = **một** card, folder không tồn tại đi vào `skipped`; folder nhạy cảm (root, home, `~/.ssh`, keychain, profile trình duyệt…) → `400` ngay, không card; sau khi duyệt: thêm folder + regen `.devin/agent.sb` (macOS) |
 | `/api/remove-permission` | `{path}` | consent gate → `202 {pending, msg}`; sau khi duyệt: gỡ quyền + regen `.devin/agent.sb` (macOS) |
-| `/api/connections` | `{app, ...}` | cập nhật trạng thái kết nối app; `app.probe` phải khớp schema cố định (`http` chỉ URL loopback, `tabs`/`mcp`/`path`/`wp`/`zalo-oa` theo từng kiểu) — probe tuỳ ý → 400 |
+| `/api/connections` | `{app, ...}` | cập nhật trạng thái kết nối app; `app.probe` phải khớp schema cố định (`http` chỉ URL loopback, `tabs`/`mcp`/`path`/`wp`/`zalo-oa` theo từng kiểu) — probe tuỳ ý → 400; `app.open_url` chỉ nhận `http(s)://` (`javascript:`/`data:` → 400) |
 | `/api/remove-connection` | `{id}` | gỡ kết nối |
 | `/api/secrets` | `{app, fields}` | lưu field bí mật (ô `secret:true` trong connections); đổi `url` của app → **xoá toàn bộ field còn lại** (trả `note`) — giữ creds cũ qua host mới là kênh exfil |
-| `/api/setup` | `{language, learner_name, ...}` | onboarding: ghi config, cài skill pack đúng ngôn ngữ |
+| `/api/setup` | `{language, learner_name, ...}` | onboarding: ghi config, cài skill pack đúng ngôn ngữ. Config đã có `language` (re-setup) → **consent gate** `202 {pending, msg}` — agent gọi lại không đè được skill/config |
 | `/api/check-connection` | `{id}` | probe trạng thái app (http/tabs/wp/…) — `run_probe` tự kiểm lại schema trước khi chạy (probe cũ lọt vào file từ trước khi có check) |
 | `/api/bot` | `{action, ...}` | `create`/`activate`/`delete`/`rename` bot; activate → cài skill thiếu + ghi `my-course/bot.md`; `id:null` → bỏ chọn |
 | `/api/bot-import` | `{file: "<base64 zip>"}` | bung bundle bot vào temp → trả `{preview:{stage,name,avatar,instructions,skills,needs,bundled}}`; chống zip-slip; body cap 8MB |
@@ -130,11 +131,14 @@ Không có API — chỉ GET file tĩnh. Đặc điểm:
 - Chặn đường dẫn chứa dotfiles (`.devin`, `.git`) — secrets của học viên
   nằm trong `.devin/`, không được lộ ra HTTP.
 - **CSP** trên mọi `.html` dưới `/my-course/` và `/intro/` (so path
-  lower-case — FS case-insensitive không được bypass): `default-src
-  'self'; img-src 'self' data: https:; media-src 'self' https:;
-  style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'
-  https:; frame-src 'self' https:; connect-src 'none'` — trang
-  clone/content không gọi được ra ngoài.
+  đã-unquote + lower-case — `%6dy-course`/`/MY-COURSE` không bypass;
+  gắn kể cả response 206): **`sandbox allow-scripts
+  allow-top-navigation allow-popups allow-modals`** — trang rơi vào
+  opaque origin (không `allow-same-origin`): không đọc được
+  `localStorage.bridge_token`, không DOM-đọc portal qua
+  iframe/`window.open`, không register service worker — kèm
+  `connect-src 'none'` chặn mọi fetch/XHR/WS. Clone-view sửa trang qua
+  `srcdoc` đã lọc script vì trang giờ opaque (không đọc DOM được nữa).
 - HTTP/1.1 keep-alive; `/web/vendor/*` cache `max-age=3600`, còn lại
   `no-store`; `Range` single-range → `206` + `Content-Range`
   (`bytes=-N` = suffix), vượt biên → `416`, multi-range → `200` trọn.

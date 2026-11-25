@@ -152,8 +152,12 @@ def ws_recv(sock):
             raise ConnectionError("message WS quá lớn")
         mask = _read(sock, 4)
         payload = _read(sock, n)
-        if mask:
-            payload = bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
+        # XOR trên int — unmask từng byte bằng Python loop làm screenshot
+        # vài MB nghẹt hàng giây (hàng chục triệu phép toán)
+        if n:
+            rep = (mask * (n // 4 + 1))[:n]
+            payload = (int.from_bytes(payload, "big")
+                       ^ int.from_bytes(rep, "big")).to_bytes(n, "big")
         if op == 8:
             raise ConnectionError("extension đóng kết nối")
         if op == 9:      # ping → pong (frame từ server không được mask)
@@ -204,6 +208,13 @@ def ext_reader(sock):
         with ext_lock:
             if ext_sock is sock:
                 ext_sock = None
+        # call đang chờ trên kết nối NÀY → fail-fast thay vì treo tới
+        # timeout 20s (entry ghi kèm sock nên call của kết nối mới không
+        # bị giết nhầm)
+        for p in list(pending.values()):
+            if p["res"] is None and p["sock"] is sock:
+                p["res"] = {"ok": False, "err": "extension ngắt kết nối"}
+                p["event"].set()
         print("ext-bridge: extension ngắt kết nối")
 
 def ext_call(action, params, timeout=20):
@@ -215,7 +226,7 @@ def ext_call(action, params, timeout=20):
     if not s:
         return {"ok": False, "err": "extension chưa kết nối — học viên cần mở trình duyệt có cài Trợ Lý AI"}
     ev = threading.Event()
-    pending[rid] = {"event": ev, "res": None}
+    pending[rid] = {"event": ev, "res": None, "sock": s}
     try:
         ws_send(s, json.dumps({"id": rid, "action": action, "params": params}))
     except Exception:
@@ -225,6 +236,8 @@ def ext_call(action, params, timeout=20):
         pending.pop(rid, None)
         return {"ok": False, "err": "extension không trả lời (timeout)"}
     res = pending.pop(rid, {}).get("res")
+    # res None = event set mà không có message (không còn xảy ra — reader
+    # giờ luôn điền res); giữ nhánh an toàn trả ok như trước
     return res if res is not None else {"ok": True}
 
 # ---------- http tối thiểu ----------
@@ -390,9 +403,25 @@ def main():
     srv.bind((BIND, PORT))
     srv.listen(16)
     print(f"ext-bridge: http://localhost:{PORT}  (agent API) + ws/ext (extension)")
+    # thread-per-connection không trần → kết nối treo phình thread vô hạn;
+    # hết 64 slot thì đóng thẳng (backlog nhỏ, không xếp chờ lâu)
+    slots = threading.BoundedSemaphore(64)
+
+    def serve_bounded(c):
+        try:
+            serve_conn(c)
+        finally:
+            slots.release()
+
     while True:
         c, _ = srv.accept()
-        threading.Thread(target=serve_conn, args=(c,), daemon=True).start()
+        if not slots.acquire(blocking=False):
+            try:
+                c.close()
+            except OSError:
+                pass
+            continue
+        threading.Thread(target=serve_bounded, args=(c,), daemon=True).start()
 
 if __name__ == "__main__":
     main()

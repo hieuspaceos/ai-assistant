@@ -114,6 +114,9 @@ def build_profile(cwd):
          ";; osascript = AppleEvents — kenh vuot mat file-sandbox (lai",
          ";; app khac, doc man hinh, lay cookie Safari). Nao khong can.",
          '(deny process-exec (literal "/usr/bin/osascript"))',
+         ";; Binary 'thoat sandbox' (open/launchctl/security/pbpaste...) bi",
+         ";; deny file-read* o cuoi profile — deny-exec literal bi lach bang",
+         ";; `cp binary tmp/x`, con khong doc duoc thi khong exec duoc.",
          ";; TUI cua nao (che do Terminal qua ttyd) ioctl pty de lay size/",
          ";; mode — deny default chan -> 'Scrollback error: io error'.",
          '(allow file-ioctl (regex #"^/dev/ttys[0-9]+$")',
@@ -178,6 +181,21 @@ def build_profile(cwd):
 
     L.append(_sub("file-read* file-write*", _emit_paths(rw)))
     L.append(_sub("file-read*", _emit_paths(ro)))
+
+    # Binary thoát-sandbox (xem comment ở header profile) — cần CẢ HAI:
+    # process-exec chặn chạy binary thật, file-read* chặn `cp` ra chỗ khác
+    # rồi exec bản copy (hardlink vào /usr/bin đã bị macOS chặn sẵn — đã
+    # verify trên máy thật, chỉ copy là đường lách).
+    for b in ("/usr/bin/open", "/bin/launchctl", "/usr/bin/crontab",
+              "/usr/bin/at", "/usr/bin/atq", "/usr/bin/atrm",
+              "/usr/bin/automator", "/usr/bin/osascript",
+              "/usr/bin/security", "/usr/bin/pbcopy", "/usr/bin/pbpaste",
+              "/usr/sbin/screencapture", "/usr/bin/tmutil"):
+        L.append(f'(deny process-exec (literal "{b}"))')
+        L.append(f'(deny file-read* (literal "{b}"))')
+    # Kênh mach đi thẳng tới pboard — chặn cả đường FFI (ctypes/objc)
+    # đọc clipboard qua AppKit, phòng khi binary nào đó sót.
+    L.append('(deny mach-lookup (global-name "com.apple.pasteboard.1"))')
 
     # --- đọc-whitelist ngược: deny mọi vùng user data không được phép ---
     for d in sorted(_deny_siblings(rw | ro)):

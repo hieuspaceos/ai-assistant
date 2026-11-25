@@ -51,7 +51,67 @@ const fname = document.getElementById('fname');
 const hint = document.getElementById('hint');
 let editing = false, dirty = false;
 let undoStack = [];        // [{idx, html}] — snapshot section trước mỗi lần sửa
-let origBody = null;       // body.innerHTML lúc mở viewer → nút "Về bản gốc"
+let origBody = null;       // body.innerHTML lúc vào chế độ sửa → nút "Về bản gốc"
+// Trang my-course giờ chịu CSP "sandbox" → opaque origin → KHÔNG đọc được
+// DOM iframe nữa (đúng ý: script độc trong trang cũng không đọc được gì
+// của portal). Chế độ SỬA nạp trang qua srcdoc — srcdoc cùng origin với
+// clone-view nên sửa được, nhưng phải LỌC <script> ra trước, nếu không
+// script lạ trong trang clone chạy cùng origin → đọc được mã kết nối.
+// Script đã lọc được gắn trở lại đúng chỗ khi lưu/tải file.
+let origHtml = null;       // file gốc nguyên vẹn (để nút Tải về khi không sửa)
+let origSrcdoc = null;     // html đã strip script + gắn <base> — nạp khi sửa
+let scriptsStore = [];     // outerHTML từng <script> theo thứ tự
+
+// DOM để sửa: <script> → comment placeholder (giữ vị trí để gắn lại khi
+// lưu), gắn <base> để ảnh/css/link tương đối resolve đúng thư mục file.
+function prepareEditable(html) {
+  scriptsStore = [];
+  const d = new DOMParser().parseFromString(html, 'text/html');
+  const base = d.createElement('base');
+  base.href = new URL(SRC, location.origin).href;
+  base.setAttribute('data-cs-base', '');
+  d.head.insertBefore(base, d.head.firstChild);
+  d.querySelectorAll('script').forEach(s => {
+    scriptsStore.push(s.outerHTML);
+    s.replaceWith(d.createComment('cs-script-' + (scriptsStore.length - 1)));
+  });
+  // srcdoc chạy CÙNG ORIGIN portal — mọi kênh chạy script khác cũng phải
+  // trung hoà: on* (onclick=... chạy ngay khi học viên bấm/hover trong lúc
+  // sửa), javascript: trong href/action, meta refresh điều hướng iframe.
+  // ĐỔI TÊN thay vì xoá (data-cs-sv-*) để serialize() gắn lại nguyên vẹn —
+  // trang clone dùng onclick cho menu/slider rất nhiều, xoá là phá file.
+  d.querySelectorAll('*').forEach(el => {
+    for (const a of [...el.attributes]) {
+      if (/^on/i.test(a.name) ||
+          (/^(href|src|action|formaction|xlink:href)$/i.test(a.name)
+           && /^\s*javascript:/i.test(a.value))) {
+        el.setAttribute('data-cs-sv-' + a.name, a.value);
+        el.removeAttribute(a.name);
+      }
+    }
+  });
+  d.querySelectorAll('meta[http-equiv="refresh" i]').forEach(m => {
+    m.setAttribute('data-cs-sv-http-equiv', 'refresh');
+    m.removeAttribute('http-equiv');
+  });
+  // iframe LỒNG trong srcdoc thừa hưởng origin portal — đặc biệt
+  // <iframe srcdoc> và javascript: chạy script ngay trong origin mình.
+  // Ép sandbox rỗng trong lúc sửa; trạng thái cũ đi qua data-cs-sv-* để
+  // serialize() gắn lại nguyên (data-cs-added-sandbox = sandbox do MÌNH
+  // thêm → serialize xoá hẳn thay vì khôi phục).
+  d.querySelectorAll('iframe').forEach(f => {
+    if (f.hasAttribute('sandbox'))
+      f.setAttribute('data-cs-sv-sandbox', f.getAttribute('sandbox'));
+    else
+      f.setAttribute('data-cs-added-sandbox', '');
+    f.setAttribute('sandbox', '');
+  });
+  return '<!DOCTYPE html>\n' + d.documentElement.outerHTML;
+}
+function restoreScripts(html) {
+  return html.replace(/<!--cs-script-(\d+)-->/g,
+    (m, i) => scriptsStore[+i] || '');
+}
 
 function sections() {
   return Array.from(frameDoc().querySelectorAll('section[data-cs]'));
@@ -98,8 +158,12 @@ function revertAll() {
 
 fname.textContent = SRC ? SRC.split('/').pop() : '(thiếu ?src=)';
 if (SRC) {
-  frame.src = SRC;
-  frame.onload = () => { origBody = frameDoc() ? frameDoc().body.innerHTML : null; };
+  frame.src = SRC;           // chế độ XEM: trang thật — sandbox CSP giữ script
+                             // chạy được (menu/slider sống) nhưng không đụng
+                             // được gì của portal
+  fetch(SRC).then(r => { if (!r.ok) throw 0; return r.text(); })
+    .then(h => { origHtml = h; origSrcdoc = prepareEditable(h); })
+    .catch(() => {});
 } else hint.textContent = 'Mở kèm ?src=/my-course/ten-file.html';
 
 function toast(t) {
@@ -307,27 +371,35 @@ function onClick(e) {
   else if (kind === 'bg' || el.hasAttribute('data-cs-bg')) popBg(el);
 }
 
-function setEdit(on) {
-  doc = frameDoc();
-  if (!doc) return;
+async function setEdit(on) {
   const b = document.getElementById('btn-edit');
-  editing = on;
-  b.textContent = on ? '✔ Xong — hết sửa' : '✏️ Sửa nội dung';
-  b.classList.toggle('on', on);
-  hint.textContent = on ? 'Đang ở chế độ sửa — bấm vào chữ/ảnh/nút/khối trên trang để chỉnh' : '';
   if (on) {
+    // nạp DOM đã strip script vào srcdoc — chờ load xong mới gắn listener
+    if (!origSrcdoc) { toast('Chưa đọc được file để sửa'); return; }
+    doc = await new Promise(res => {
+      frame.onload = () => res(frameDoc());
+      frame.srcdoc = origSrcdoc;
+    });
+    if (!doc) { toast('Không mở được trang để sửa'); return; }
+    if (origBody === null) origBody = doc.body.innerHTML;
     doc.addEventListener('mouseover', onOver, true);
     doc.addEventListener('mouseout', onOut, true);
     doc.addEventListener('click', onClick, true);
     doc.querySelectorAll('section[data-cs]').forEach(s => outline(s, true));
   } else {
-    doc.removeEventListener('mouseover', onOver, true);
-    doc.removeEventListener('mouseout', onOut, true);
-    doc.removeEventListener('click', onClick, true);
-    doc.querySelectorAll('section[data-cs],[data-cs-text],[data-cs-img],[data-cs-link],[data-cs-bg]')
-      .forEach(s => outline(s, false));
-    killPop(); killChip(); hoverEl = null;
+    if (dirty && !confirm('Có thay đổi chưa lưu — thoát sửa sẽ mất thay đổi đó?')) return;
+    // thoát sửa → tải lại bản ĐÃ LƯU trên đĩa; DOM srcdoc bị huỷ nên
+    // listener cũ chết theo, chỉ cần dọn trạng thái editor
+    undoStack = []; editingEl = null; hoverEl = null; dirty = false;
+    document.getElementById('btn-undo').disabled = true;
+    document.getElementById('btn-revert').disabled = true;
+    frame.onload = null;
+    frame.src = SRC;
   }
+  editing = on;
+  b.textContent = on ? '✔ Xong — hết sửa' : '✏️ Sửa nội dung';
+  b.classList.toggle('on', on);
+  hint.textContent = on ? 'Đang ở chế độ sửa — bấm vào chữ/ảnh/nút/khối trên trang để chỉnh' : '';
 }
 
 function serialize() {
@@ -337,7 +409,23 @@ function serialize() {
   c.querySelectorAll('[contenteditable]').forEach(s => s.removeAttribute('contenteditable'));
   // bỏ UI của editor (popover, nhãn khối) — giữ lại _csSty (màu chủ đạo đã đổi)
   c.querySelectorAll('#ce-pop,#ce-chip').forEach(s => s.remove());
-  return '<!DOCTYPE html>\n' + c.outerHTML;
+  c.querySelectorAll('base[data-cs-base]').forEach(s => s.remove());  // <base> chỉ để sửa
+  // gắn lại thuộc tính bị trung hoà lúc sửa (on*, javascript:, meta refresh)
+  c.querySelectorAll('*').forEach(el => {
+    for (const a of [...el.attributes]) {
+      if (a.name.startsWith('data-cs-sv-')) {
+        el.setAttribute(a.name.slice(11), a.value);
+        el.removeAttribute(a.name);
+      }
+    }
+  });
+  // iframe mình ép sandbox="" lúc sửa → xoá hẳn (sandbox CŨ của trang đã
+  // được vòng sv-* trên khôi phục đúng giá trị)
+  c.querySelectorAll('iframe[data-cs-added-sandbox]').forEach(f => {
+    f.removeAttribute('sandbox');
+    f.removeAttribute('data-cs-added-sandbox');
+  });
+  return restoreScripts('<!DOCTYPE html>\n' + c.outerHTML);
 }
 
 document.getElementById('btn-edit').onclick = () => setEdit(!editing);
@@ -350,8 +438,9 @@ frame.addEventListener('load', () => {
     .getPropertyValue('--cs-primary').trim();
   document.getElementById('btn-theme').hidden = !v;
 });
-document.getElementById('btn-theme').onclick = () => {
-  if (!editing) setEdit(true);
+document.getElementById('btn-theme').onclick = async () => {
+  if (!editing) await setEdit(true);
+  if (!editing || !frameDoc()) return;   // setEdit có thể fail (file đọc lỗi)
   const root = frameDoc().documentElement;
   const cur = getComputedStyle(root).getPropertyValue('--cs-primary').trim();
   const p = showPop(frameDoc().body,
@@ -372,19 +461,30 @@ document.getElementById('btn-theme').onclick = () => {
 };
 
 document.getElementById('btn-save').onclick = async () => {
+  // chỉ lưu được khi đang sửa — chế độ xem là trang sandbox, không có gì
+  // để lưu (và frameDoc() là null vì opaque origin)
+  if (!editing || !frameDoc()) { toast('Bấm "Sửa nội dung" trước rồi hãy lưu'); return; }
   try {
     const r = await bfetch(BRIDGE + '/api/save-page', { method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ file: SRC, html: serialize() }) });
     const d = await r.json();
-    if (d.ok) { dirty = false; toast('Đã lưu lại trang ✓'); }
+    if (d.ok) {
+      // Cập nhật bản "gốc" theo đúng thứ vừa ghi — nếu không, lần VÀO SỬA
+      // kế tiếp srcdoc nạp lại bản cũ trước khi lưu → mất sạch thay đổi
+      origHtml = serialize();
+      origSrcdoc = prepareEditable(origHtml);   // placeholders khớp lại vì thứ tự script giữ nguyên
+      dirty = false; toast('Đã lưu lại trang ✓');
+    }
     else toast(d.err || 'Không lưu được');
   } catch (e) { toast('Không nói được với trợ lý — dùng nút Tải về thay thế'); }
 };
 
 document.getElementById('btn-dl').onclick = () => {
+  const html = editing && frameDoc() ? serialize() : origHtml;
+  if (!html) { toast('Chưa đọc được file'); return; }
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([serialize()], { type: 'text/html' }));
+  a.href = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
   a.download = (SRC.split('/').pop() || 'trang.html').replace(/\.html?$/i, '') + '-da-chinh.html';
   a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 };

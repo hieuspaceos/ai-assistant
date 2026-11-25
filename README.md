@@ -136,7 +136,7 @@ ai-assistant/
   secrets. Belt-and-suspenders on top: every bridge requires the
   connection code, Terminal mode asks for it again inside the shell
   (`term-gate`), permission cards only accept live pending requests,
-  course/clone pages run under `connect-src 'none'`, and on macOS the
+  course/clone pages run sandboxed to an opaque origin (can't read the connection code or frame the portal), and on macOS the
   brain runs inside a Seatbelt sandbox generated from
   `permissions.json` — see `docs/SECURITY.md`.
 

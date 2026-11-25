@@ -103,6 +103,7 @@ const T = {
     apps:'Muốn trợ lý dùng app nào?', appsLead:'Chọn các ứng dụng bạn hay dùng — trợ lý sẽ hướng dẫn kết nối từng cái sau. Không chọn cũng không sao.',
     next:'Tiếp →', back:'← Quay lại', start:'Bắt đầu dùng →',
     done:'Xong hết!', doneLead:'Trợ lý đã sẵn sàng. Mình sẽ đưa bạn tới portal — chỗ hỏi trợ lý và bắt đầu khoá học.',
+    pendingNote:'Vài thay đổi đang chờ bạn duyệt — vào portal, bấm "Đồng ý" trong thẻ chat là xong nhé.',
     appNote:'Riêng <b>Trình duyệt</b>: cần cài thêm một gói nhỏ vào Chrome/Edge — trợ lý sẽ hướng dẫn khi bạn cần dùng tới.',
     errFolder:'Không thấy folder này trên máy — kiểm tra lại đường dẫn nhé',
     errEmpty:'Gõ đường dẫn folder trước đã (ví dụ ~/Documents hoặc D:\\work)',
@@ -145,6 +146,7 @@ const T = {
     apps:'Which apps should the assistant use?', appsLead:'Pick the apps you use — the assistant will guide you through connecting each one later. Skipping is fine too.',
     next:'Next →', back:'← Back', start:'Start using it →',
     done:'All set!', doneLead:'Your assistant is ready. Taking you to the portal — where you can ask it things and start your course.',
+    pendingNote:'A few changes need your approval — press "Đồng ý" on the chat card in the portal to finish.',
     appNote:'For the <b>Browser</b>: it needs one small add-on in Chrome/Edge — the assistant will guide you when you first need it.',
     errFolder:'That folder isn\'t on this machine — check the path',
     errEmpty:'Type a folder path first (e.g. ~/Documents or D:\\work)',
@@ -193,6 +195,7 @@ const APP_PRESETS = [
   { id:'trinh-duyet',   type:'browser', vi:'Trình duyệt (extension)', en:'Browser (extension)' },
 ];
 let selFolders = new Set(['~/Downloads']);
+let needConfirm = false;   // bước finish có request nào trả pending → báo ở màn cuối
 let selApps = new Set();
 let brainData = null, selBrain = '', customBrain = '';
 
@@ -399,9 +402,10 @@ function stepFolder(){
     const v=s.querySelector('#cf').value.trim();
     if(!v){ s.querySelector('#fe').textContent=t('errEmpty'); return; }
     try{
-      const r=await bfetch(BRIDGE+'/api/permissions',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({path:v,access:'read'})});
-      if(r.ok){ folders.push(v); selFolders.add(v); s.querySelector('#cf').value=''; s.querySelector('#fe').textContent=''; render(); }
+      // Chỉ KIỂM folder có tồn tại không — quyền thật ghi một lần ở bước
+      // cuối bằng batch (POST /api/permissions giờ tạo thẻ xác nhận)
+      const d=await bfetch(BRIDGE+'/api/check-path?path='+encodeURIComponent(v)).then(r=>r.json());
+      if(d.isdir){ folders.push(v); selFolders.add(v); s.querySelector('#cf').value=''; s.querySelector('#fe').textContent=''; render(); }
       else s.querySelector('#fe').textContent=t('errFolder');
     }catch(e){ s.querySelector('#fe').textContent=t('errBridge'); }
   };
@@ -440,12 +444,19 @@ function stepApps(){
 
 async function finish(){
   const btn=document.getElementById('fin'); btn.disabled=true; btn.textContent=t('saving');
+  needConfirm=false;
   try{
-    await bfetch(BRIDGE+'/api/setup',{method:'POST',headers:{'Content-Type':'application/json'},
+    const rs=await bfetch(BRIDGE+'/api/setup',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({language:lang,learner_name:learnerName})});
-    for(const p of selFolders)
-      await bfetch(BRIDGE+'/api/permissions',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({path:p,access:'read'})}).catch(()=>{});
+    const ds=await rs.json().catch(()=>({}));
+    if(ds.pending) needConfirm=true;
+    // Tất cả folder gộp MỘT request = một thẻ xác nhận duy nhất
+    if(selFolders.size){
+      const rp=await bfetch(BRIDGE+'/api/permissions',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({paths:[...selFolders],access:'read'})}).catch(()=>null);
+      const dp=rp?await rp.json().catch(()=>({})):{};
+      if(dp.pending) needConfirm=true;
+    }
     // App đã có trong connections.json → chạy probe; app chưa có → upsert đăng ký mới
     // (upsert mới dùng /api/connections — check-connection 404 với app chưa đăng ký)
     const k=await bfetch(BRIDGE+'/api/connections').then(r=>r.json()).catch(()=>({apps:[]}));
@@ -481,6 +492,7 @@ function stepDone(){
   const s=document.getElementById('step');
   s.innerHTML=`<div class="done-check">🎓</div><h1 style="text-align:center">${t('done')}</h1>
     <p class="lead" style="text-align:center">${t('doneLead')}</p>
+    ${needConfirm?`<p class="note" style="text-align:center">${t('pendingNote')}</p>`:''}
     <div class="row"><span></span><button class="btn pri">${t('start')}</button></div>`;
   s.querySelector('button').onclick=()=>{ location.href='index.html'; };
 }

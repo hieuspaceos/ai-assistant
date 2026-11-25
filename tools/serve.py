@@ -7,7 +7,7 @@ trong .devin/, không được lộ ra web.
 
   python3 tools/serve.py [port] [root]
 """
-import http.server, os, sys, urllib.parse
+import http.server, os, sys, threading, urllib.parse
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
 ROOT = os.path.realpath(sys.argv[2] if len(sys.argv) > 2 else "..")
@@ -23,11 +23,18 @@ ROOT_PREFIX = ROOT + os.sep
 EXTRA_MIME = {".woff": "font/woff", ".woff2": "font/woff2", ".ttf": "font/ttf"}
 
 # CSP cho .html dưới vùng nội dung (slide/clone do agent sinh — nguồn duy
-# nhất có thể bị prompt-injection). connect-src 'none' là chìa khoá: script
-# trong đó vẫn chạy nhưng KHÔNG gọi được bridge :7682/:7684 hay gửi data đi
-# đâu bằng JS. KHÔNG áp cho /web/ (portal phải gọi bridge được).
+# nhất có thể bị prompt-injection). Hai lớp:
+#  - sandbox → trang rơi vào OPAQUE ORIGIN: không đọc được localStorage
+#    (bridge_token), không DOM-đọc được iframe/window.open tới portal,
+#    không register được service worker. allow-top-navigation/popups giữ
+#    link + target=_blank của trang clone sống; KHÔNG có allow-same-origin
+#    — có nó thì mọi thứ mất nghĩa.
+#  - connect-src 'none' → script không fetch/XHR/WS được đâu cả.
+# KHÔNG áp cho /web/ (portal phải gọi bridge được). clone-view sửa trang
+# qua srcdoc thay vì đọc DOM iframe vì trang giờ opaque.
 CSP_PATHS = ("/my-course/", "/intro/")
-CSP = ("default-src 'self'; "
+CSP = ("sandbox allow-scripts allow-top-navigation allow-popups allow-modals; "
+       "default-src 'self'; "
        "script-src 'self' 'unsafe-inline' https:; "
        "style-src 'self' 'unsafe-inline' https:; "
        "img-src 'self' data: https:; "
@@ -45,6 +52,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     # manifest...) một TCP connection + một thread mới. Content-Length đã
     # được gửi trên mọi response file nên keep-alive hợp lệ.
     protocol_version = "HTTP/1.1"
+
+    def setup(self):
+        super().setup()
+        # chống slow-drip: client nhỏ giọt header giữ thread vô hạn;
+        # keep-alive idle bị đóng sau 30s thì browser tự mở lại.
+        self.connection.settimeout(30)
 
     def log_message(self, *a):
         pass
@@ -137,6 +150,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
             self.send_header("Accept-Ranges", "bytes")
             self.send_header("Content-Length", str(end - start + 1))
+            # CSP phải đi kèm MỌI response của vùng nội dung — kể cả 206;
+            # bỏ sót thì trang độc đoạn Range trả về render không sandbox
+            raw_path = urllib.parse.unquote(
+                urllib.parse.urlparse(self.path).path)
+            if raw_path.lower().startswith(CSP_PATHS) \
+                    and raw_path.lower().endswith((".html", ".htm")):
+                self.send_header("Content-Security-Policy", CSP)
             self.end_headers()
             # CẠM BẪY: KHÔNG được `return f` — copyfile() của base class sẽ
             # gửi từ start TỚI EOF, nhiều hơn Content-Length → vỡ keep-alive
@@ -167,7 +187,27 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         return f
 
+class BoundedServer(http.server.ThreadingHTTPServer):
+    # thread-per-connection không trần → kết nối treo phình thread/fd;
+    # nắp 64 slot, quá hạn xếp backlog. daemon_threads để Ctrl+C gọn.
+    daemon_threads = True
+    _slots = threading.BoundedSemaphore(64)
+
+    def process_request(self, request, client_address):
+        self._slots.acquire()
+        try:
+            super().process_request(request, client_address)
+        except Exception:
+            self._slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._slots.release()
+
 if __name__ == "__main__":
-    with http.server.ThreadingHTTPServer((BIND, PORT), Handler) as srv:
+    with BoundedServer((BIND, PORT), Handler) as srv:
         print(f"portal: http://localhost:{PORT}/web/  (root={ROOT})")
         srv.serve_forever()

@@ -5,7 +5,7 @@ Spawn mỗi bridge THẬT trên port động với CWD tạm (não giả → dea
 nhưng bridge vẫn sống — đúng thiết kế). Không cần dep ngoài, không cần
 não thật. Chạy: python3 tools/test-bridges.py"""
 import json, os, secrets, shutil, socket, subprocess, sys, tempfile, threading, time
-import urllib.error, urllib.request
+import urllib.error, urllib.request, urllib.parse
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOOLS = os.path.join(ROOT, "tools")
@@ -723,6 +723,106 @@ def main():
         # sửa tay không spawn lệnh lạ — audit S2)
         check("38b. load_brain validate cmd/terminal",
               're.fullmatch(r"[A-Za-z0-9_.-]+", str(out["cmd"]))' in src_cb)
+
+        # 39: batch permissions — nhiều folder = MỘT card 202; folder không
+        # tồn tại đi vào "skipped" chứ không làm hỏng cả batch (audit N5)
+        pd1 = tempfile.mkdtemp(prefix="troly-p1-")
+        pd2 = tempfile.mkdtemp(prefix="troly-p2-")
+        s, b, _ = http("POST", b3 + f"/api/permissions?token={TOKEN}",
+                       {"paths": [pd1, pd2, "/nonexistent-xyz-123"],
+                        "access": "read"})
+        rid39 = b.get("pending")
+        s39, _, _ = http("POST", b3 + f"/api/respond?token={TOKEN}",
+                         {"id": rid39, "optionId": "ok"},
+                         headers={"Origin": "http://localhost:8080"})
+        perm39 = {}
+        s39b, perm39, _ = http("GET", b3 + f"/api/permissions?token={TOKEN}")
+        got39 = {os.path.realpath(os.path.expanduser(f.get("path", "")))
+                 for f in (perm39.get("folders") or [])}
+        check("39. batch permissions → 1 card → cả hai folder vào",
+              s == 202 and bool(rid39) and s39 == 200
+              and "/nonexistent-xyz-123" in (b.get("skipped") or [])
+              and os.path.realpath(pd1) in got39
+              and os.path.realpath(pd2) in got39,
+              f"{s}/{s39} {b}")
+        shutil.rmtree(pd1, ignore_errors=True)
+        shutil.rmtree(pd2, ignore_errors=True)
+
+        # 40: folder nhạy cảm bị từ chối NGAY, không tạo card (card bấm đại
+        # "Đồng ý" vẫn mở ~/.ssh nếu chỉ gate — audit S6)
+        home = os.path.expanduser("~")
+        for sp in ("/", home, os.path.join(home, ".ssh")):
+            if not os.path.isdir(os.path.expanduser(sp)):
+                continue
+            s, b, _ = http("POST", b3 + f"/api/permissions?token={TOKEN}",
+                           {"path": sp, "access": "read"})
+            check(f"40. sensitive path {sp!r} → 400, no pending",
+                  s == 400 and not b.get("pending"), f"{s} {b}")
+            break
+        # trong batch cũng phải chặn
+        s, b, _ = http("POST", b3 + f"/api/permissions?token={TOKEN}",
+                       {"paths": [home], "access": "read"})
+        check("40b. batch chứa home → 400, no pending",
+              s == 400 and not b.get("pending"), f"{s} {b}")
+
+        # 41: GET /api/check-path — onboarding kiểm folder trước khi thêm
+        s, b, _ = http("GET", b3 + "/api/check-path?token=" + TOKEN
+                       + "&path=" + urllib.parse.quote(wd))
+        s2, b2, _ = http("GET", b3 + "/api/check-path?token=" + TOKEN
+                         + "&path=/nonexistent-xyz-123")
+        check("41. check-path → isdir true/false",
+              s == 200 and b.get("isdir") is True
+              and s2 == 200 and b2.get("isdir") is False,
+              f"{b} {b2}")
+
+        # 42: open_url javascript:/data: bị từ chối ở /api/connections
+        # (nút "Mở trang" chạy script trong origin portal — audit S5)
+        s, _, _ = http("POST", b3 + f"/api/connections?token={TOKEN}",
+                       {"app": {"id": "evil", "open_url": "javascript:alert(1)"}})
+        s2, _, _ = http("POST", b3 + f"/api/connections?token={TOKEN}",
+                        {"app": {"id": "okapp", "open_url": "https://x.com"}})
+        check("42. open_url javascript: → 400, https: → 200",
+              s == 400 and s2 == 200, f"{s}/{s2}")
+
+        # 43: /api/setup gọi lại khi config đã có language → 202 card
+        # (re-setup đè skill pack = đáng ngờ — audit S5). First-run chạy luôn.
+        # Cần workdir RIÊNG — b3 chia wd với test 16 đã setup rồi.
+        wd4 = make_workdir()
+        cb4 = free_port()
+        procs.append(spawn("chat-bridge.py", cb4, wd4))
+        b4 = f"http://127.0.0.1:{cb4}"
+        ok43 = wait_health(b4 + "/api/health")
+        s, b, _ = http("POST", b4 + f"/api/setup?token={TOKEN}",
+                       {"language": "vi", "learner_name": "t"})
+        s2, b2, _ = http("POST", b4 + f"/api/setup?token={TOKEN}",
+                         {"language": "vi", "learner_name": "t"})
+        rid43 = b2.get("pending")
+        s3, _, _ = http("POST", b4 + f"/api/respond?token={TOKEN}",
+                        {"id": rid43, "optionId": "ok"},
+                        headers={"Origin": "http://localhost:8080"})
+        check("43. setup lần đầu → ok; lần 2 → 202 → respond → 200",
+              ok43 and s == 200 and s2 == 202 and bool(rid43) and s3 == 200,
+              f"{s}/{s2}/{s3}")
+        shutil.rmtree(wd4, ignore_errors=True)
+
+        # 44: serve.py trả CSP sandbox cho /my-course/ + /intro/ — trang
+        # không tin chạy ở opaque origin, không đọc được localStorage/DOM
+        # portal (audit N1). Không có allow-same-origin (đặt vào là hỏng).
+        csp44 = ""
+        for line in open(os.path.join(TOOLS, "serve.py"),
+                         encoding="utf-8").read().splitlines():
+            if "sandbox" in line:
+                csp44 += line
+        check("44. CSP sandbox my-course/intro (không same-origin)",
+              "sandbox allow-scripts" in csp44
+              and "allow-same-origin" not in csp44, csp44[:80])
+
+        # 45: bridge-token chỉ gắn vào port bridge — không gắn cho :8080
+        # (request tới /my-course/ kèm token → service worker ăn — audit N2)
+        bt = open(os.path.join(ROOT, "web", "bridge-token.js"),
+                  encoding="utf-8").read()
+        check("45. bfetch chỉ gắn token cho 7682/7684",
+              "BRIDGE_PORTS" in bt and "7682" in bt and "7684" in bt)
     finally:
         for p in procs:
             try:

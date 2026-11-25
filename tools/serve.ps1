@@ -23,10 +23,12 @@ $mime = @{
   '.woff'='font/woff'; '.woff2'='font/woff2'; '.ttf'='font/ttf'
 }
 
-# CSP cho .html duoi my-course/intro/ (noi dung agent sinh) - script van
-# chay nhung connect-src 'none' chan goi bridge :7682/:7684 va moi fetch/
-# XHR/WS. KHONG ap cho /web/ - portal phai goi bridge duoc.
-$csp = "default-src 'self'; script-src 'self' 'unsafe-inline' https:; " +
+# CSP cho .html duoi my-course/intro/ (noi dung agent sinh). Hai lop:
+# sandbox -> OPAQUE ORIGIN (khong doc duoc localStorage/iframe portal/
+# service worker; KHONG them allow-same-origin) + connect-src 'none' chan
+# moi fetch/XHR/WS. KHONG ap cho /web/ - portal phai goi bridge duoc.
+$csp = "sandbox allow-scripts allow-top-navigation allow-popups allow-modals; " +
+       "default-src 'self'; script-src 'self' 'unsafe-inline' https:; " +
        "style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https:; " +
        "font-src 'self' data: https:; media-src 'self' data:; " +
        "connect-src 'none'; form-action 'none'; base-uri 'none'; " +

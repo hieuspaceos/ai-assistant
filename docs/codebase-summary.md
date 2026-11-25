@@ -16,10 +16,10 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 
 | File | Vai trò |
 |---|---|
-| `serve.py` / `serve.ps1` | Static server: chặn dotfiles, Host check chống rebinding, CSP `/my-course/`+`/intro/`, Range, keep-alive |
+| `serve.py` / `serve.ps1` | Static server: chặn dotfiles, Host check chống rebinding, CSP `sandbox` opaque-origin `/my-course/`+`/intro/`, Range, keep-alive |
 | `chat-bridge.py` / `.ps1` | Chat portal ↔ não ACP (`brain.json` chọn não, `/api/brain` đổi nóng); API config/permissions/connections/secrets/save-page; long-poll + prompt_lock + respond-gate; spawn não qua Seatbelt (macOS) |
 | `term-gate.sh` / `.cmd` | Cửa gác giữa ttyd và não — đòi mã kết nối (từ `?arg=`) trước khi exec não; macOS bọc sandbox-exec |
-| `gen-sandbox.py` | Sinh `.devin/agent.sb` từ `permissions.json` — whitelist write + deny-enumerate read (quirk Darwin) |
+| `gen-sandbox.py` | Sinh `.devin/agent.sb` từ `permissions.json` — whitelist write + deny-enumerate read + deny exec binary thoát-sandbox |
 | `setup-agent-user.ps1` | Khung Windows: user hạn chế `troly-agent` + icacls theo permissions (phần spawn cross-user chưa verify) |
 | `launcher.py` | Supervisor của bản đóng gói (`troly`/`TroLyAI.exe`) — tự dựng `~/TroLyAI`, spawn 4 process |
 | `build.sh` | Đóng gói binary một file (PyInstaller) |

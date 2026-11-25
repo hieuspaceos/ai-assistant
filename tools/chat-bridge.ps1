@@ -106,18 +106,42 @@ $BrainPresets = @(
         desc=@{ vi="App miễn phí — cần tự nối model (API key) của bạn";                en="Free app — needs your own model (API key) connected" } }
 )
 
+# Interpreter/exec helper không được làm "não" tự nhập — args của chúng
+# là code-exec trần (parity BRAIN_CMD_DENY trong chat-bridge.py).
+$BrainCmdDeny = @("python3","python","py","sh","bash","zsh","fish","dash",
+    "osascript","node","deno","bun","ruby","perl","php","pwsh",
+    "powershell","cmd","env","nice","xargs","find","make","rake",
+    "npm","npx","yarn","pnpm","gem","pip","pip3","curl","wget",
+    "nc","ncat","socat","busybox","open","rundll32","regsvr32",
+    "mshta","wscript","cscript","wmic","certutil","bitsadmin",
+    "eval","exec","launchctl",
+    "ssh","scp","sftp","rsync","ftp","telnet","rlogin","rsh",
+    "tmux","screen","script","expect","lldb","gdb","dtrace",
+    "automator","swift","sudo","crontab","at","atq","atrm",
+    "sandbox-exec","sqlite3","mysql","psql","redis-cli","mongosh",
+    "mongo","qlmanage","spctl","codesign",
+    "security","pbcopy","pbpaste","screencapture")
+
 function Get-Brain {
     # brain.json → não đang dùng; id khớp preset thì lấy preset làm nền;
     # thiếu file/cmd → preset devin (tên binary vẫn override được bằng
     # tham số -Devin như trước). Y hệt load_brain() trong chat-bridge.py.
     try { $b = Get-Content $BrainFp -Raw -Encoding UTF8 | ConvertFrom-Json } catch { $b = $null }
+    $fromPreset = $false
     if ($b -and -not $b.cmd -and $b.id) {
         $p = $BrainPresets | Where-Object { $_.id -eq $b.id } | Select-Object -First 1
-        if ($p) { $b = $p }
+        if ($p) { $b = $p; $fromPreset = $true }
     }
-    if ($b -and $b.cmd) {
+    # cmd/terminal phải là tên lệnh trần; cmd do FILE tự khai nằm trong
+    # deny-list cũng rơi về devin — trước đây chỉ check ở POST /api/brain,
+    # còn brain.json sửa tay ("/bin/evil", "powershell") vẫn spawn thẳng.
+    if ($b -and $b.cmd -and ([string]$b.cmd -match '^[A-Za-z0-9_.-]+$') -and
+        ($fromPreset -or -not ($BrainCmdDeny -contains ([string]$b.cmd).ToLower()))) {
         if (-not $b.PSObject.Properties["args"]) { $b | Add-Member -NotePropertyName args -NotePropertyValue @() }
-        if (-not $b.PSObject.Properties["terminal"] -or -not $b.terminal) { $b | Add-Member -NotePropertyName terminal -NotePropertyValue $b.cmd -Force }
+        if (-not $b.PSObject.Properties["terminal"] -or -not $b.terminal -or
+            ([string]$b.terminal -notmatch '^[A-Za-z0-9_.-]+$')) {
+            $b | Add-Member -NotePropertyName terminal -NotePropertyValue $b.cmd -Force
+        }
         return $b
     }
     return [pscustomobject]@{ id="devin"; label="Devin"; cmd=$Devin; args=@("acp","--process-model","in-process"); terminal=$Devin }
@@ -159,6 +183,27 @@ function New-Gate($title, [scriptblock]$applyFn) {
             @{ optionId = "__cancel__"; name = "Không" })
     })
     return $rid
+}
+
+# Folder NHẠY CẢM không được cấp quyền dù request hợp lệ — card xác nhận
+# không bảo vệ được người bấm đại "Đồng ý" (parity path_sensitive() py).
+function Test-SensitivePath($p) {
+    $rp = [IO.Path]::GetFullPath([string]$p).TrimEnd('\', '/')
+    $home = [IO.Path]::GetFullPath($env:USERPROFILE).TrimEnd('\', '/')
+    if ($rp -match '^[A-Za-z]:$' -or $rp -ieq $home) { return $true }
+    $sens = @("$home\.ssh", "$home\.gnupg", "$home\.aws", "$home\.kube",
+        "$home\.config\gh", "$home\.claude", "$home\.codex", "$home\.gemini",
+        "$home\.opencode", "$home\.config\opencode", "$home\.config\devin",
+        "$home\AppData\Local\devin",
+        "$env:LOCALAPPDATA\Google\Chrome\User Data",
+        "$env:LOCALAPPDATA\Microsoft\Edge\User Data",
+        "$env:APPDATA\Microsoft\Credentials",
+        "$env:WINDIR", "$env:ProgramFiles", "${env:ProgramFiles(x86)}")
+    foreach ($s in $sens) {
+        if (-not $s) { continue }
+        if ($rp -ieq $s -or $rp.ToLower().StartsWith(($s + '\').ToLower())) { return $true }
+    }
+    return $false
 }
 
 # Dòng stdout của acp chạy qua event -> queue, main loop xử lý
@@ -548,6 +593,13 @@ try {
             elseif ($ctx.Request.HttpMethod -eq "GET" -and $path -eq "/api/config") {
                 Send-Json $ctx (Load-Json $ConfigFp @{})
             }
+            elseif ($ctx.Request.HttpMethod -eq "GET" -and $path -eq "/api/check-path") {
+                # onboarding hỏi "folder này có tồn tại không" trước khi thêm —
+                # POST /api/permissions tạo card nên không dùng để kiểm được.
+                # Chỉ trả isdir, không lộ metadata; vẫn đòi token.
+                $p0 = Expand-Path ([string]$ctx.Request.QueryString["path"]).Trim()
+                Send-Json $ctx @{ ok = $true; isdir = ($p0 -and (Test-Path $p0 -PathType Container)) }
+            }
             elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/prompt") {
                 $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
                 $body = $reader.ReadToEnd() | ConvertFrom-Json
@@ -594,14 +646,7 @@ try {
                     }
                     # Interpreter/exec helper không được làm "não" tự nhập —
                     # args của chúng là code-exec trần (python -c, find -exec)
-                    $cmdDeny = @("python3","python","py","sh","bash","zsh","fish","dash",
-                        "osascript","node","deno","bun","ruby","perl","php","pwsh",
-                        "powershell","cmd","env","nice","xargs","find","make","rake",
-                        "npm","npx","yarn","pnpm","gem","pip","pip3","curl","wget",
-                        "nc","ncat","socat","busybox","open","rundll32","regsvr32",
-                        "mshta","wscript","cscript","wmic","certutil","bitsadmin",
-                        "eval","exec","launchctl")
-                    if ($cmdDeny -contains $cmd.ToLower()) {
+                    if ($BrainCmdDeny -contains $cmd.ToLower()) {
                         Send-Json $ctx @{ err = "lệnh này chạy code tuỳ ý — không dùng làm não được" } 400
                         continue
                     }
@@ -753,26 +798,49 @@ try {
             elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/permissions") {
                 $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
                 $body = $reader.ReadToEnd() | ConvertFrom-Json
-                $p = Expand-Path ([string]$body.path).Trim()
                 $lv = [string]$body.access
+                # Batch {"paths":[...]} = MỘT card — onboarding thêm nhiều
+                # folder không spam card (parity chat-bridge.py)
+                $raw = @()
+                if ($body.paths) { $raw = @($body.paths) } else { $raw = @($body.path) }
+                if ($raw.Count -gt 20) {
+                    Send-Json $ctx @{ err = "quá nhiều folder một lần" } 400
+                    continue
+                }
+                $paths = @(); $bad = @(); $sensitive = $null
+                foreach ($r0 in $raw) {
+                    $p0 = Expand-Path ([string]$r0).Trim()
+                    if (-not $p0 -or -not (Test-Path $p0 -PathType Container)) {
+                        $bad += [string]$r0; continue
+                    }
+                    if (Test-SensitivePath $p0) { $sensitive = $p0; break }
+                    $paths += $p0
+                }
                 if ($lv -ne "read" -and $lv -ne "read-write") {
                     Send-Json $ctx @{ err = "access phải là read hoặc read-write" } 400
-                } elseif (-not (Test-Path $p -PathType Container)) {
+                } elseif ($sensitive) {
+                    Send-Json $ctx @{ err = "folder chứa dữ liệu nhạy cảm — không cấp quyền được: $sensitive" } 400
+                } elseif (-not $paths.Count) {
                     Send-Json $ctx @{ err = "không thấy folder này trên máy" } 404
                 } else {
                     # Consent gate — permissions.json là "đồ chìa khoá": agent
                     # tự cấp quyền được nếu endpoint này ghi thẳng
                     $note2 = ([string]$body.note)
                     $note2 = $note2.Substring(0, [Math]::Min(120, $note2.Length))
-                    $rid = New-Gate "Thêm quyền $lv cho folder $p?" ({
+                    $disp = if ($paths.Count -eq 1) { $paths[0] } else { "$($paths.Count) folder" }
+                    $rid = New-Gate "Thêm quyền $lv cho $disp`?" ({
                         $q = Load-Json $PermFp @{ folders = @() }
                         # so sánh sau Expand-Path — entry cũ ghi "~/Downloads" vẫn khớp được
-                        $arr = @($q.folders | Where-Object { (Expand-Path $_.path) -ne $p })
-                        $arr += @{ path = $p; access = $lv; note = $note2 }
+                        $arr = @($q.folders | Where-Object { $paths -notcontains (Expand-Path $_.path) })
+                        foreach ($p0 in $paths) {
+                            $arr += @{ path = $p0; access = $lv; note = $note2 }
+                        }
                         $q.folders = $arr
                         Save-Json $PermFp $q
                     }.GetNewClosure())
-                    Send-Json $ctx @{ pending = $rid; msg = "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để có hiệu lực" } 202
+                    $resp = @{ pending = $rid; msg = "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để có hiệu lực" }
+                    if ($bad.Count) { $resp.skipped = $bad }
+                    Send-Json $ctx $resp 202
                 }
             }
             elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/remove-permission") {
@@ -794,6 +862,10 @@ try {
                 } elseif ($body.app.probe -and -not (Test-Probe $body.app.probe)) {
                     # client ghi probe tuỳ ý = oracle/exfil — chỉ nhận schema cố định
                     Send-Json $ctx @{ err = "kiểu kết nối không hỗ trợ" } 400
+                } elseif ($body.app.open_url -and ([string]$body.app.open_url -notmatch '^https?://')) {
+                    # open_url là link nút "Mở trang" trong portal — javascript:/
+                    # data: chạy được script trong origin portal → chỉ nhận http(s)
+                    Send-Json $ctx @{ err = "open_url chỉ nhận link http(s)" } 400
                 } else {
                     $k = Load-Json $ConnFp @{ apps = @() }
                     # thay tại chỗ để giữ thứ tự hiển thị trong panel Cài đặt
@@ -875,41 +947,53 @@ try {
                 if ($lang -ne "vi" -and $lang -ne "en") {
                     Send-Json $ctx @{ err = "language phải là vi hoặc en" } 400
                 } else {
-                    New-Item -ItemType Directory -Force -Path $McDir | Out-Null
-                    Save-Json $ConfigFp @{ language = $lang; learner_name = $name }
-                    # Đồng bộ tên + recipes (công thức nhanh) vào manifest —
-                    # recipes đi kèm pack ngôn ngữ nên sidebar đúng lệnh, đúng tiếng
-                    $mf = Join-Path $McDir "manifest.json"
-                    try {
-                        $m = Get-Content $mf -Raw -Encoding UTF8 | ConvertFrom-Json
-                        if ($name) {
-                            $m | Add-Member -NotePropertyName learner_name -NotePropertyValue $name -Force
-                        }
-                        $rec = Load-Json (Join-Path $SkillPacks "recipes\$lang.json") @{}
-                        if ($rec -and $rec.recipes) {
-                            $m | Add-Member -NotePropertyName recipes -NotePropertyValue $rec.recipes -Force
-                        }
-                        Save-Json $mf $m
-                    } catch {}
-                    # Skill pack đè lên .devin\skills nhưng skill học viên TỰ
-                    # TẠO (không có trong pack) phải giữ: dir cũ backup sang
-                    # skills.bak rồi merge phần riêng về.
-                    $pack = Join-Path $SkillPacks $lang
-                    if (Test-Path $pack -PathType Container) {
-                        $bak = "$SkillsDir.bak"
-                        if (Test-Path $SkillsDir) {
-                            if (Test-Path $bak) { Remove-Item $bak -Recurse -Force }
-                            Move-Item $SkillsDir $bak
-                        }
-                        Copy-Item $pack $SkillsDir -Recurse
-                        if (Test-Path $bak) {
-                            Get-ChildItem $bak -Directory | ForEach-Object {
-                                $dst = Join-Path $SkillsDir $_.Name
-                                if (-not (Test-Path $dst)) { Copy-Item $_.FullName $dst -Recurse }
+                    $applySetup = {
+                        New-Item -ItemType Directory -Force -Path $McDir | Out-Null
+                        Save-Json $ConfigFp @{ language = $lang; learner_name = $name }
+                        # Đồng bộ tên + recipes (công thức nhanh) vào manifest —
+                        # recipes đi kèm pack ngôn ngữ nên sidebar đúng lệnh, đúng tiếng
+                        $mf = Join-Path $McDir "manifest.json"
+                        try {
+                            $m = Get-Content $mf -Raw -Encoding UTF8 | ConvertFrom-Json
+                            if ($name) {
+                                $m | Add-Member -NotePropertyName learner_name -NotePropertyValue $name -Force
+                            }
+                            $rec = Load-Json (Join-Path $SkillPacks "recipes\$lang.json") @{}
+                            if ($rec -and $rec.recipes) {
+                                $m | Add-Member -NotePropertyName recipes -NotePropertyValue $rec.recipes -Force
+                            }
+                            Save-Json $mf $m
+                        } catch {}
+                        # Skill pack đè lên .devin\skills nhưng skill học viên TỰ
+                        # TẠO (không có trong pack) phải giữ: dir cũ backup sang
+                        # skills.bak rồi merge phần riêng về.
+                        $pack = Join-Path $SkillPacks $lang
+                        if (Test-Path $pack -PathType Container) {
+                            $bak = "$SkillsDir.bak"
+                            if (Test-Path $SkillsDir) {
+                                if (Test-Path $bak) { Remove-Item $bak -Recurse -Force }
+                                Move-Item $SkillsDir $bak
+                            }
+                            Copy-Item $pack $SkillsDir -Recurse
+                            if (Test-Path $bak) {
+                                Get-ChildItem $bak -Directory | ForEach-Object {
+                                    $dst = Join-Path $SkillsDir $_.Name
+                                    if (-not (Test-Path $dst)) { Copy-Item $_.FullName $dst -Recurse }
+                                }
                             }
                         }
+                    }.GetNewClosure()
+                    # Setup đã chạy rồi (config có language) mà bị gọi lại → agent
+                    # có thể đang cố đè skills/config — qua card xác nhận. Lần đầu
+                    # thật (onboarding) thì chạy luôn, không cần card.
+                    $cfg = Load-Json $ConfigFp @{}
+                    if ($cfg -and $cfg.language) {
+                        $rid = New-Gate "Chạy lại thiết lập ban đầu — sẽ cài đè bộ skill?" $applySetup
+                        Send-Json $ctx @{ pending = $rid; msg = "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để chạy lại" } 202
+                    } else {
+                        & $applySetup
+                        Send-Json $ctx @{ ok = $true }
                     }
-                    Send-Json $ctx @{ ok = $true }
                 }
             }
             elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/check-connection") {
