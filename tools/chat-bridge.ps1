@@ -247,13 +247,237 @@ function Test-RwGrantOk($p) {
 # Dòng stdout của acp chạy qua event -> queue, main loop xử lý
 $lineQueue = New-Object 'System.Collections.Concurrent.ConcurrentQueue[string]'
 
+# ---------- sandbox: spawn não dưới user hạn chế "troly-agent" ----------
+# Khi .devin\agent-user.cred tồn tại (setup-agent-user.ps1 đã chạy), não
+# được spawn bằng CreateProcessWithLogonW dưới user kém quyền — stdio ACP
+# đi qua anonymous pipe (handles kernel object, inherit cross-user được).
+# Bridge kill bằng Job Object handle của chính nó tạo (KHÔNG phải
+# OpenProcess/TerminateProcess — non-admin không mở được process user khác).
+# Job tạo kèm KILL_ON_JOB_CLOSE-ish: TerminateJobObject giết cả cây con.
+$script:AcpIn = $null      # FileStream ghi vào stdin não (chỉ sandbox)
+$script:AcpOut = $null     # stdout reader của não (chỉ sandbox)
+$script:AcpHandle = [IntPtr]::Zero   # process handle (creator = full access)
+$script:AcpJob = [IntPtr]::Zero      # Job Object → kill tree
+$script:AcpReader = $null  # thread đọc stdout (chỉ sandbox)
+
+$AgentCredFp = Join-Path $WorkDir ".devin\agent-user.cred"
+
+function Get-AgentCred {
+    # @{user, password} hoặc $null. Cred là DPAPI blob — chỉ đúng Windows
+    # user của học viên giải mã được (troly-agent đọc file cũng vô dụng).
+    if ($env:TROLY_NO_SANDBOX -eq "1" -or -not (Test-Path $AgentCredFp)) {
+        return $null
+    }
+    try {
+        $sec = ConvertTo-SecureString (Get-Content $AgentCredFp -Raw).Trim()
+        $pw = [Net.NetworkCredential]::new("x", $sec).Password
+        if (-not $pw) { return $null }
+        return @{ user = "troly-agent"; password = $pw }
+    } catch { return $null }
+}
+
+# C# spawn helper — CreateProcessWithLogonW + anonymous pipes + Job Object.
+# Add-Type compile một lần khi script chạy (cached theo type name).
+if (-not ([System.Management.Automation.PSTypeName]"TroLy.AgentSpawn").Type) {
+Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.IO;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+
+namespace TroLy {
+public static class AgentSpawn {
+    [StructLayout(LayoutKind.Sequential)]
+    struct SA { public int n; public IntPtr sd; public bool inherit; }
+    [StructLayout(LayoutKind.Sequential)]
+    struct PI { public IntPtr proc, thread; public int pid, tid; }
+    [StructLayout(LayoutKind.Sequential)]
+    struct SI {
+        public int cb; public string reserved, desktop, title;
+        public int x, y, xSize, ySize, xCnt, yCnt, fill, flags;
+        public short show, res2; public IntPtr res2p;
+        public IntPtr inH, outH, errH;
+    }
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool CreatePipe(out IntPtr r, out IntPtr w, ref SA sa, uint size);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern IntPtr GetCurrentProcess();
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool DuplicateHandle(IntPtr srcP, IntPtr src, IntPtr dstP,
+        out IntPtr dst, uint access, bool inherit, uint options);
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool CreateProcessWithLogonW(string user, string domain,
+        string password, int logonFlags, string app, string cmdline,
+        int flags, IntPtr env, string cwd, ref SI si, out PI pi);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool CloseHandle(IntPtr h);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern IntPtr CreateJobObject(IntPtr attr, string name);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool AssignProcessToJobObject(IntPtr job, IntPtr proc);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool TerminateJobObject(IntPtr job, uint exitCode);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool TerminateProcess(IntPtr proc, uint exitCode);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool GetExitCodeProcess(IntPtr proc, out int code);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern IntPtr CreateFileW(string name, uint access, uint share,
+        ref SA sa, uint disp, uint flags, IntPtr tmpl);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool SetInformationJobObject(IntPtr job, int cls,
+        IntPtr info, uint len);
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct JOBBASIC {
+        public long pTime, jTime;
+        public uint flags, minWS, maxWS, active, affinity, prio, sched;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    struct IOC { public ulong a, b, c, d, e, f; }
+    [StructLayout(LayoutKind.Sequential)]
+    struct JOBEXT {
+        public JOBBASIC basic; public IOC io;
+        public UIntPtr pMem, jMem, pPeak, jPeak;
+    }
+
+    const int STILL_ACTIVE = 259;
+
+    public sealed class Result {
+        public int Pid;
+        public IntPtr Process;      // handle con — creator có full access
+        public IntPtr Job;          // Job Object → TerminateJobObject kill tree
+        public SafeFileHandle StdinWrite;
+        public SafeFileHandle StdoutRead;
+        public string Error;
+    }
+
+    static IntPtr InheritableDup(IntPtr h) {
+        // đầu pipe phía child cần inherit; đầu phía bridge giữ không-inherit
+        IntPtr d;
+        if (!DuplicateHandle(GetCurrentProcess(), h, GetCurrentProcess(),
+                             out d, 0, true, 2))  // DUPLICATE_SAME_ACCESS
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        return d;
+    }
+
+    static IntPtr NulWrite() {
+        var sa = new SA { n = Marshal.SizeOf<SA>(), inherit = false };
+        return CreateFileW("NUL", 0x40000000, 3, ref sa, 3, 0, IntPtr.Zero);
+    }
+
+    // envBlock: "K=V\0K=V\0\0" — Marshal.StringToHGlobalUni giữ \0 trong
+    // chuỗi + thêm \0 cuối → block unicode double-null đúng chuẩn.
+    public static Result Start(string user, string password, string cmdline,
+                               string workdir, string envBlock) {
+        var r = new Result();
+        var sa = new SA { n = Marshal.SizeOf<SA>(), inherit = false };
+        IntPtr inR, inW, outR, outW;
+        if (!CreatePipe(out inR, out inW, ref sa, 0) ||
+            !CreatePipe(out outR, out outW, ref sa, 0)) {
+            r.Error = "CreatePipe: " + Marshal.GetLastWin32Error();
+            return r;
+        }
+        IntPtr cIn, cOut, cErr;
+        try {
+            cIn = InheritableDup(inR);
+            cOut = InheritableDup(outW);
+            cErr = InheritableDup(NulWrite());   // stderr → NUL (như .py DEVNULL)
+        } catch (Exception e) {
+            r.Error = "dup: " + e.Message; return r;
+        }
+        var si = new SI { cb = Marshal.SizeOf<SI>() };
+        si.flags = 0x100;                       // STARTF_USESTDHANDLES
+        si.inH = cIn; si.outH = cOut; si.errH = cErr;
+        IntPtr env = Marshal.StringToHGlobalUni(envBlock);
+        PI pi;
+        try {
+            bool ok = CreateProcessWithLogonW(user, ".", password, 1,
+                null, cmdline,
+                0x400 | 0x08000000,              // UNICODE_ENV | NO_WINDOW
+                env, workdir, ref si, out pi);
+            if (!ok) {
+                r.Error = "CreateProcessWithLogonW: " +
+                          Marshal.GetLastWin32Error();
+                CloseHandle(cIn); CloseHandle(cOut); CloseHandle(cErr);
+                CloseHandle(inR); CloseHandle(inW);
+                CloseHandle(outR); CloseHandle(outW);
+                return r;
+            }
+        } finally { Marshal.FreeHGlobal(env); }
+        CloseHandle(cIn); CloseHandle(cOut); CloseHandle(cErr);
+        CloseHandle(inR); CloseHandle(outW);    // bridge chỉ giữ đầu của mình
+        IntPtr job = CreateJobObject(IntPtr.Zero, null);
+        if (job != IntPtr.Zero) {
+            // KILL_ON_JOB_CLOSE (0x2000): het handle job -> kernel giet ca
+            // cay. Bridge chet dot ngot / bi force-kill thi con van khong
+            // thanh process mo coi.
+            var ext = new JOBEXT();
+            ext.basic.flags = 0x2000;
+            IntPtr p = Marshal.AllocHGlobal(Marshal.SizeOf<JOBEXT>());
+            try {
+                Marshal.StructureToPtr(ext, p, false);
+                SetInformationJobObject(job, 9, p,
+                    (uint)Marshal.SizeOf<JOBEXT>());
+            } finally { Marshal.FreeHGlobal(p); }
+            AssignProcessToJobObject(job, pi.proc);
+        }
+        CloseHandle(pi.thread);
+        r.Pid = pi.pid; r.Process = pi.proc; r.Job = job;
+        r.StdinWrite = new SafeFileHandle(inW, true);
+        r.StdoutRead = new SafeFileHandle(outR, true);
+        return r;
+    }
+
+    public static bool IsAlive(IntPtr hProcess) {
+        int code;
+        if (!GetExitCodeProcess(hProcess, out code)) return false;
+        return code == STILL_ACTIVE;
+    }
+
+    // Kill tree qua Job — không cần quyền trên từng process (non-admin
+    // không TerminateProcess được process user khác; Job Object thì được
+    // vì bridge là owner của job). Fallback giết process chính.
+    public static void Kill(IntPtr hJob, IntPtr hProcess) {
+        if (hJob != IntPtr.Zero) {
+            TerminateJobObject(hJob, 1);
+            CloseHandle(hJob);
+        } else if (hProcess != IntPtr.Zero) {
+            TerminateProcess(hProcess, 1);
+        }
+    }
+}
+}
+'@ -ReferencedAssemblies System.IO.FileSystem, System.Runtime.InteropServices, Microsoft.Win32.Primitives, System.ComponentModel.Primitives
+}
+
+function Test-BrainAlive {
+    if ($script:AcpHandle -ne [IntPtr]::Zero) {
+        return [TroLy.AgentSpawn]::IsAlive($script:AcpHandle)
+    }
+    return ($script:AcpProc -and -not $script:AcpProc.HasExited)
+}
+
+function Stop-Brain {
+    # Sandbox: giết cả cây qua Job Object (non-admin không Kill được
+    # process user khác — handle Job của chính bridge mới là đường đi).
+    if ($script:AcpHandle -ne [IntPtr]::Zero) {
+        try { [TroLy.AgentSpawn]::Kill($script:AcpJob, $script:AcpHandle) } catch {}
+        $script:AcpHandle = [IntPtr]::Zero; $script:AcpJob = [IntPtr]::Zero
+        return
+    }
+    try { if ($script:AcpProc -and -not $script:AcpProc.HasExited) { $script:AcpProc.Kill($true) } } catch {}
+}
+
 function Send-Acp($obj) {
     $json = ($obj | ConvertTo-Json -Depth 20 -Compress)
     # Ghi byte UTF-8 thẳng vào stream — không qua WriteLine vì WriteLine
     # dùng Console.InputEncoding (OEM codepage) làm hỏng tiếng Việt có dấu.
     $bytes = [System.Text.Encoding]::UTF8.GetBytes($json + "`n")
-    $script:AcpProc.StandardInput.BaseStream.Write($bytes, 0, $bytes.Length)
-    $script:AcpProc.StandardInput.BaseStream.Flush()
+    $w = if ($script:AcpIn) { $script:AcpIn } else { $script:AcpProc.StandardInput.BaseStream }
+    $w.Write($bytes, 0, $bytes.Length)
+    $w.Flush()
 }
 
 function Call-Acp($method, $params) {
@@ -275,18 +499,83 @@ function Push-Event($ev) {
     }
 }
 
+function Start-BrainSandboxed($brain, $cred) {
+    # Spawn não dưới user "troly-agent" kém quyền (setup-agent-user đã cấp
+    # ACL). Trả $true khi spawn + handshake được đẩy đi; $false → caller
+    # rơi về spawn thường (vẫn hơn kẹt chết, kèm event cảnh báo).
+    $cmdline = '"' + $brain.cmd + '"'
+    foreach ($a in @($brain.args)) { $cmdline += ' "' + $a + '"' }
+    $home2 = "C:\Users\$($cred.user)"
+    $envPairs = [ordered]@{
+        SystemRoot = $env:SystemRoot; windir = $env:windir
+        SystemDrive = $env:SystemDrive; ComSpec = $env:ComSpec
+        PATHEXT = $env:PATHEXT; PATH = $env:PATH
+        TEMP = "C:\Windows\Temp"; TMP = "C:\Windows\Temp"
+        USERPROFILE = $home2; HOMEDRIVE = "C:"; HOMEPATH = "\Users\$($cred.user)"
+        APPDATA = "$home2\AppData\Roaming"; LOCALAPPDATA = "$home2\AppData\Local"
+        USERNAME = $cred.user; USERDOMAIN = $env:COMPUTERNAME
+        COMPUTERNAME = $env:COMPUTERNAME
+        # npx adapter: cache RIENG trong profile troly-agent — nếu xài
+        # chung ~/.npm của chủ thì agent ghi được package vào cache chủ
+        # → chủ npx exec code agent đặt = thoát sandbox.
+        NPM_CONFIG_CACHE = "$home2\.npm-cache"
+        BRIDGE_TOKEN = $script:BridgeToken
+    }
+    $envBlock = (($envPairs.GetEnumerator() |
+                  ForEach-Object { "$($_.Key)=$($_.Value)" }) -join "`0") + "`0"
+    $res = [TroLy.AgentSpawn]::Start($cred.user, $cred.password,
+                                   $cmdline, $WorkDir, $envBlock)
+    if (-not $res -or $res.Error) {
+        Push-Event ([ordered]@{ t = "err"; msg = "không sandbox được não ($($res.Error)) — trợ lý đang chạy quyền đầy đủ" })
+        return $false
+    }
+    $script:AcpHandle = $res.Process
+    $script:AcpJob = $res.Job
+    $script:AcpIn = New-Object IO.FileStream($res.StdinWrite, [IO.FileAccess]::Write)
+    $script:AcpOut = New-Object IO.StreamReader($res.StdoutRead, [Text.Encoding]::UTF8)
+    $script:AcpReader = [Threading.Thread]::new(
+        [Threading.ParameterizedThreadStart]{
+            param($o)
+            $rr = $o[0]; $qq = $o[1]
+            try {
+                while (($l = $rr.ReadLine()) -ne $null) {
+                    if ($l.Trim()) { $qq.Enqueue($l.Trim()) }
+                }
+            } catch {}
+        })
+    $script:AcpReader.IsBackground = $true
+    $script:AcpReader.Start(@($script:AcpOut, $lineQueue))
+    $script:AcpDead = $false
+    Call-Acp "initialize" @{
+        protocolVersion = 1
+        clientCapabilities = @{
+            fs = @{ readTextFile = $false; writeTextFile = $false }
+            terminal = $false
+        }
+    } | Out-Null
+    Call-Acp "session/new" @{ cwd = $WorkDir; mcpServers = @() } | Out-Null
+    return $true
+}
+
 function Start-Brain {
     # Bật (hoặc đổi) não: giết agent cũ nếu còn sống, spawn theo brain.json
     # rồi bắt tay ACP chuẩn (initialize + session/new).
     $brain = Get-Brain
-    # HasExited ném lỗi trên process chưa start được (spawn fail lần trước)
-    # → bọc try: giết được thì giết, không thì bỏ qua
-    try { if ($script:AcpProc -and -not $script:AcpProc.HasExited) { $script:AcpProc.Kill() } } catch {}
+    Stop-Brain   # giết não cũ — cả hai đường (Process.Kill / Job Object)
     if ($script:AcpSub) {
         try { Unregister-Event -SourceIdentifier $script:AcpSub.SourceIdentifier } catch {}
         $script:AcpSub = $null
     }
+    foreach ($s in @($script:AcpIn, $script:AcpOut)) {
+        try { if ($s) { $s.Dispose() } } catch {}
+    }
+    $script:AcpIn = $null; $script:AcpOut = $null; $script:AcpReader = $null
+    $script:AcpProc = $null
     $script:SessionId = $null
+    # Có cred user hạn chế → spawn trong sandbox (S4); lỗi → về đường
+    # thường kèm cảnh báo (degrade về policy-only chứ không kẹt chết)
+    $cred = Get-AgentCred
+    if ($cred -and (Start-BrainSandboxed $brain $cred)) { return }
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $brain.cmd
     $psi.Arguments = [string]::Join(" ", @($brain.args))
@@ -557,7 +846,7 @@ try {
         if ($script:PromptBusy -and $script:PromptSince -and
             ((Get-Date) - $script:PromptSince).TotalSeconds -gt $TurnTimeout) {
             Push-Event ([ordered]@{ t = "err"; msg = "trợ lý bị kẹt quá lâu — mình đang khởi động lại não" })
-            try { if ($script:AcpProc -and -not $script:AcpProc.HasExited) { $script:AcpProc.Kill() } } catch {}
+            Stop-Brain
             $script:AcpDead = $true   # prompt tiếp theo đi đường Start-Brain self-heal
         }
         try {
@@ -656,7 +945,7 @@ try {
             elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/prompt") {
                 $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
                 $body = $reader.ReadToEnd() | ConvertFrom-Json
-                if ($script:AcpDead -or -not $script:AcpProc -or $script:AcpProc.HasExited) {
+                if ($script:AcpDead -or -not (Test-BrainAlive)) {
                     # não chết (process rớt hoặc chưa cài) → thử bật lại một lần
                     Start-Brain
                     Send-Json $ctx @{ err = "đang khởi động lại trợ lý — gửi lại sau vài giây" } 503
@@ -800,7 +1089,7 @@ try {
                             result = @{ outcome = @{ outcome = "selected"; optionId = $body.optionId } }
                         }
                     }
-                    try { if (-not $script:AcpDead -and $script:AcpProc -and -not $script:AcpProc.HasExited) { Send-Acp $payload } } catch {}
+                    try { if (-not $script:AcpDead -and (Test-BrainAlive)) { Send-Acp $payload } } catch {}
                     Send-Json $ctx @{ ok = $true }
                 }
             }
@@ -1123,5 +1412,5 @@ try {
     }
 } finally {
     $listener.Stop()
-    try { $script:AcpProc.Kill() } catch {}
+    Stop-Brain   # Job Object cũng đóng → cả cây process của não chết sạch
 }

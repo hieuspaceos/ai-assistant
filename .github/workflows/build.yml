@@ -16,8 +16,39 @@ jobs:
           python tools/test-parity.py
           python tools/test-packs.py
 
+  # S4 — smoke test vung cat Windows: lint .ps1, tao user han che +
+  # ACL that, spawn cross-user qua AgentSpawn, e2e chat-bridge.ps1 +
+  # fakebrain.exe (nao ACP gia tra "pong:<username>" — verify duoc nao
+  # thuc su chay duoi troly-agent).
+  test-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: lint .ps1
+        run: |
+          $bad = 0
+          Get-ChildItem tools -Filter *.ps1 -Recurse | ForEach-Object {
+            $errs = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+                $_.FullName, [ref]$null, [ref]$errs) | Out-Null
+            foreach ($e in $errs) {
+              Write-Host "PARSE $($_.FullName): $($e.Message) @$($e.Extent.StartLineNumber)"
+              $bad++
+            }
+          }
+          if ($bad) { exit 1 }
+      - name: setup restricted user + ACL
+        run: tools/setup-agent-user.ps1
+      - name: build fake ACP brain
+        run: |
+          dotnet new console -o tools/fakebrain -n fakebrain -f net8.0 --force | Out-Null
+          Copy-Item tools/test-fakebrain.cs tools/fakebrain/Program.cs -Force
+          dotnet build tools/fakebrain -c Release | Out-Null
+      - name: sandbox smoke test
+        run: tools/test-agent-spawn.ps1
+
   build:
-    needs: test
+    needs: [test, test-windows]
     strategy:
       matrix:
         include:
