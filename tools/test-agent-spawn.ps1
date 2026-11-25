@@ -125,6 +125,7 @@ Remove-Item $okf -Force -ErrorAction SilentlyContinue
 
 # --- 5. stdio 2 chieu + 6. IsAlive/Kill qua Job ---
 $r = [TroLy.AgentSpawn]::Start($AgentUser, $pw, '"fakebrain"', $work, $envBlock)
+if ($r.Error) { Write-Host "    (err: $($r.Error))" -ForegroundColor Yellow }
 Check "spawn fakebrain" (-not $r.Error)
 if (-not $r.Error) {
     $w = [IO.FileStream]::new($r.StdinWrite, [IO.FileAccess]::Write)
@@ -160,7 +161,12 @@ try {
             "-File","tools\chat-bridge.ps1","-Port","7699" `
         -WorkingDirectory $Root `
         -RedirectStandardOutput $brOut -RedirectStandardError $brErr
-    $tok = (Get-Content (Join-Path $Root ".devin\bridge.token") -Raw).Trim()
+    # token do bridge tu sinh luc khoi dong — cho file xuat hien
+    $tokFp = Join-Path $Root ".devin\bridge.token"
+    for ($i = 0; $i -lt 40 -and -not (Test-Path $tokFp); $i++) {
+        Start-Sleep -Milliseconds 250
+    }
+    $tok = (Get-Content $tokFp -Raw -ErrorAction SilentlyContinue).Trim()
     $ready = $false
     for ($i = 0; $i -lt 90 -and -not $ready; $i++) {
         try {
@@ -169,6 +175,14 @@ try {
         } catch { Start-Sleep -Milliseconds 500 }
     }
     Check "bridge + sandboxed brain ready" $ready
+    if (-not $ready) {
+        foreach ($f in @($brOut, $brErr)) {
+            if (Test-Path $f) {
+                Write-Host "---- $f ----"
+                Get-Content $f -Tail 20 -ErrorAction SilentlyContinue
+            }
+        }
+    }
     if ($ready) {
         $evs = (Invoke-RestMethod `
             "http://127.0.0.1:7699/api/poll?since=0&token=$tok" `
