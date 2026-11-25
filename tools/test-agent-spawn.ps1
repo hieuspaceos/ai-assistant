@@ -91,8 +91,9 @@ function Spawn-ReadAll($cmdline) {
     # spawn -> doc het stdout toi khi con exit -> kill -> tra @{out|err}
     $r = [TroLy.AgentSpawn]::Start($AgentUser, $pw, $cmdline, $work, $envBlock)
     if ($r.Error) { return @{ err = $r.Error } }
-    $out = (New-Object IO.StreamReader(
-        $r.StdoutRead, [Text.Encoding]::UTF8)).ReadToEnd()
+    $out = ([IO.StreamReader]::new(
+        [IO.FileStream]::new($r.StdoutRead, [IO.FileAccess]::Read),
+        [Text.Encoding]::UTF8)).ReadToEnd()
     [TroLy.AgentSpawn]::Kill($r.Job, $r.Process)
     return @{ out = $out }
 }
@@ -126,8 +127,10 @@ Remove-Item $okf -Force -ErrorAction SilentlyContinue
 $r = [TroLy.AgentSpawn]::Start($AgentUser, $pw, '"fakebrain"', $work, $envBlock)
 Check "spawn fakebrain" (-not $r.Error)
 if (-not $r.Error) {
-    $w = New-Object IO.FileStream($r.StdinWrite, [IO.FileAccess]::Write)
-    $rr = New-Object IO.StreamReader($r.StdoutRead, [Text.Encoding]::UTF8)
+    $w = [IO.FileStream]::new($r.StdinWrite, [IO.FileAccess]::Write)
+    $rr = [IO.StreamReader]::new(
+        [IO.FileStream]::new($r.StdoutRead, [IO.FileAccess]::Read),
+        [Text.Encoding]::UTF8)
     $b = [Text.Encoding]::UTF8.GetBytes(
         '{"jsonrpc":"2.0","id":42,"method":"initialize","params":{}}' + "`n")
     $w.Write($b, 0, $b.Length); $w.Flush()

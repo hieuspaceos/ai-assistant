@@ -531,8 +531,13 @@ function Start-BrainSandboxed($brain, $cred) {
     }
     $script:AcpHandle = $res.Process
     $script:AcpJob = $res.Job
-    $script:AcpIn = New-Object IO.FileStream($res.StdinWrite, [IO.FileAccess]::Write)
-    $script:AcpOut = New-Object IO.StreamReader($res.StdoutRead, [Text.Encoding]::UTF8)
+    # ::new() resolve overload theo kiểu thật — New-Object sẽ coerce
+    # SafeFileHandle thành string rồi chọn ctor (string path, FileMode)
+    # và đi tìm file "Microsoft.Win32.SafeHandles.SafeFileHandle".
+    $script:AcpIn = [IO.FileStream]::new($res.StdinWrite, [IO.FileAccess]::Write)
+    $script:AcpOut = [IO.StreamReader]::new(
+        [IO.FileStream]::new($res.StdoutRead, [IO.FileAccess]::Read),
+        [Text.Encoding]::UTF8)
     $script:AcpReader = [Threading.Thread]::new(
         [Threading.ParameterizedThreadStart]{
             param($o)
