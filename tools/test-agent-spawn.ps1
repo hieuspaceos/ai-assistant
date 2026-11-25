@@ -124,6 +124,12 @@ Check "write my-course\" ((Test-Path $okf) -and
 Remove-Item $okf -Force -ErrorAction SilentlyContinue
 
 # --- 5. stdio 2 chieu + 6. IsAlive/Kill qua Job ---
+# Diag truoc: troly-agent nhin thay + chay duoc fakebrain khong?
+# (stderr cua con di vao NUL nen bat "2>&1" trong cmd de loi lo ra stdout)
+$r2 = Spawn-ReadAll "cmd.exe /c `"dir `"$FakeBin`" 2>&1`""
+Write-Host "  dir bin: $((($r2.out -split "`n") | Select-Object -Last 4) -join ' | ')"
+$r3 = Spawn-ReadAll 'cmd.exe /c "fakebrain <NUL 2>&1"'
+Write-Host "  fakebrain via cmd: $(($r3.out -replace '\s+',' ').Trim())"
 $r = [TroLy.AgentSpawn]::Start($AgentUser, $pw, '"fakebrain"', $work, $envBlock)
 if ($r.Error) { Write-Host "    (err: $($r.Error))" -ForegroundColor Yellow }
 Check "spawn fakebrain" (-not $r.Error)

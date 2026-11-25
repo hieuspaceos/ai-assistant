@@ -129,7 +129,7 @@ trong options).
 | Kẻ có token → tự duyệt quyền | `/api/respond` chỉ nhận `id` đang pending trong map (TTL 600s) + `optionId` phải khớp danh sách đã phát — option sai → 400 nhưng card không bị giết, id hợp lệ dùng một lần rồi tiêu. `__cancel__` cũng phải có id pending |
 | Prompt đan xen → rối session | `/api/prompt` giữ `prompt_lock` (`.ps1`: `$PromptBusy`) — prompt thứ hai trong lúc lượt đang chạy → 409; mở lại khi `done`/`err`/`ready` |
 | Não treo giữa lượt → chat kẹt 409 | **Watchdog lượt**: não sống nhưng không trả `done`/`err` quá `TROLY_TURN_TIMEOUT` (mặc định 1200s) → bridge báo lỗi "kẹt" cho học viên rồi giết process — prompt tiếp theo đi đường `spawn_brain` self-heal. `.py` dùng `threading.Timer` + `turn_gen` chống timer cũ giết nhầm lượt mới; `.ps1` đơn luồng nên check theo mỗi request tick |
-| Não bị injection → đọc/ghi file ngoài quyền | macOS: não chạy trong Seatbelt (`agent.sb` — **write-allowlist**: chỉ `my-course/`, `.devin/skills/`, `.logs/`, tmp — mọi thứ khác deny theo default; deny-write tường minh 4 JSON điều khiển; **deny `process-exec` + `file-read*`** cho binary thoát-sandbox — `open`/`launchctl`/`crontab`/`at*` (spawn/job chạy NGOÀI sandbox), `security` (keychain), `pbcopy`/`pbpaste` (clipboard — thêm deny mach-lookup pasteboard), `screencapture`, `automator`, `osascript`, `tmutil`; đọc chỉ vùng được phép, `network-bind` deny, `bridge.token` deny-ghi, secrets deny-đọc). Residual: `network-outbound` mở (não cần gọi LLM API) → exfil data đã đọc hợp lệ vẫn được; dir user mới tạo giữa 2 lần regen đọc được (deny enumeration là snapshot); extension/browser session nằm NGOÀI sandbox theo bản chất — kênh đó trông vào lớp duyệt + consent gate. **Windows: agent chạy full quyền user — đọc được `secrets.local.json` và mọi file của máy.** Coi Windows = policy-only (không enforcement) cho tới khi spawn cross-user (`setup-agent-user.ps1`) hoàn thiện |
+| Não bị injection → đọc/ghi file ngoài quyền | macOS: não chạy trong Seatbelt (`agent.sb` — **write-allowlist**: chỉ `my-course/`, `.devin/skills/`, `.logs/`, tmp — mọi thứ khác deny theo default; deny-write tường minh 4 JSON điều khiển; **deny `process-exec` + `file-read*`** cho binary thoát-sandbox — `open`/`launchctl`/`crontab`/`at*` (spawn/job chạy NGOÀI sandbox), `security` (keychain), `pbcopy`/`pbpaste` (clipboard — thêm deny mach-lookup pasteboard), `screencapture`, `automator`, `osascript`, `tmutil`; đọc chỉ vùng được phép, `network-bind` deny, `bridge.token` deny-ghi, secrets deny-đọc). Residual: `network-outbound` mở (não cần gọi LLM API) → exfil data đã đọc hợp lệ vẫn được; dir user mới tạo giữa 2 lần regen đọc được (deny enumeration là snapshot); extension/browser session nằm NGOÀI sandbox theo bản chất — kênh đó trông vào lớp duyệt + consent gate. **Windows (sau `setup-agent-user.ps1`, admin một lần):** não spawn dưới user hạn chế `troly-agent` qua `CreateProcessWithLogonW` (`TroLy.AgentSpawn` trong `chat-bridge.ps1` — anonymous pipes đưa stdio ACP, Job Object `KILL_ON_JOB_CLOSE` để kill cả cây + chống process mồ côi khi bridge chết). ACL tương đương Seatbelt: RX toàn project; ghi chỉ `my-course/`+`.devin/skills/`+`.logs/`; deny-write `tools/`/`web/`/`extension/`/`.git/`/`brain.json`/4 JSON điều khiển/`bot.md`; deny `secrets.local.json`/`mcp_config.local.json`/`.devin/agent-user.cred`; `bridge.token` đọc được nhưng deny-ghi; thư mục binary + config của não đang chọn được grant RX (CLI cần config chủ để chạy — y hệt macOS nơi agent cùng user). Residual: chưa chạy setup → cred vắng → spawn thường (degrade về policy + event cảnh báo); quyền folder **mới** chỉ enforce sau khi chạy lại setup (permissions.json cập nhật ngay nhưng ACL chưa kịp); mạng mở → exfil như macOS |
 
 ## permissions.json — ngăn tủ được phép
 
@@ -150,10 +150,13 @@ trong options).
   sửa `permissions.json`/`brain.json`/`agent.sb` rồi chờ respawn.
   Terminal mode qua `term-gate.sh` cũng bị bọc. Escape hatch debug:
   `TROLY_NO_SANDBOX=1`.
-  Trên Windows hiện vẫn là **policy** (user hạn chế + ACL đang triển
-  khai — `setup-agent-user.ps1`, spawn cross-user chưa verify) — tức
-  agent Windows đọc/ghi được mọi thứ của user kể cả secrets; cân nhắc
-  khi cho agent đọc dữ liệu không tin cậy trên Windows.
+  Trên Windows, sau `setup-agent-user.ps1` (admin, một lần) não chạy
+  dưới user `troly-agent` với NTFS ACL tương đương — spawn qua
+  `TroLy.AgentSpawn` + Job Object, credential DPAPI trong
+  `.devin/agent-user.cred` (chỉ chủ giải mã). Khác macOS: ACL không tự
+  regen theo permissions.json — grant folder mới enforce sau khi chạy
+  lại setup. Chưa setup → não chạy full quyền user (policy-only + event
+  cảnh báo).
 - Folder khác → đọc `permissions.json`; chưa có → **hỏi học viên**,
   được đồng ý mới `POST /api/permissions` (mặc định xin `read`; chỉ xin
   `read-write` khi thật sự cần ghi và báo trước việc ghi cụ thể).

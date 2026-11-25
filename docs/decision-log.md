@@ -3,6 +3,47 @@
 Các quyết định kiến trúc và **tại sao** — để sau này không gỡ ngược lại
 vì quên lý do. Mới nhất lên đầu.
 
+## 2026 — Audit v8 (S4): Windows sandbox = user hạn chế + CreateProcessWithLogonW
+
+**Não Windows chạy dưới user `troly-agent` kém quyền, không phải
+AppContainer và không phải "ACL cùng user".** Vì: Windows không có cơ
+chế nào hạn chế filesystem của process *cùng* user (chmod ngược được),
+nên chỉ cross-user hoặc AppContainer mới có nghĩa. AppContainer đúng
+semantic Seatbelt hơn nhưng cần capability SID per-folder + P/Invoke
+phức tạp và ma trận test rộng hơn nhiều. Cross-user spawn dùng
+`CreateProcessWithLogonW` qua `TroLy.AgentSpawn` (C# Add-Type nhúng
+trong `chat-bridge.ps1`): stdio ACP qua anonymous pipes (handle inherit
+qua spawn được — khác `runas`/`Start-Process -Credential` không redirect
+stdio), Job Object `KILL_ON_JOB_CLOSE` để kill cả cây (non-admin không
+`TerminateProcess` được process user khác — handle Job của chính bridge
+mới là đường đi, và handle đóng hết thì kernel tự giết con mồ côi).
+Credential `troly-agent` ngẫu nhiên, giữ DPAPI trong
+`.devin/agent-user.cred` — chỉ Windows user chủ giải mã, agent đọc file
+cũng vô dụng.
+
+**ACL mirror Seatbelt, không phải "cấp full project".** RX toàn cây +
+ghi chỉ `my-course/`, `.devin/skills/`, `.logs/` + deny-write tường minh
+`tools/`, `web/`, `extension/`, `.git/`, `brain.json`, JSON điều khiển,
+`bot.md` — agent ghi được mã nguồn bridge là code chạy quyền chủ.
+Secrets deny-F. `bridge.token` deny-W (vẫn đọc được để gọi bridge).
+Brain CLI cần binary dir + config dir của chủ (`~/.config/devin`,
+`~/.claude`…) — grant RX đúng não đang chọn, y hệt macOS nơi agent cùng
+user nên đọc sẵn. KHÔNG grant `~/.npm`: cache chủ mà agent ghi được =
+đặt package độc cho chủ `npx` chạy = thoát sandbox — con dùng
+`NPM_CONFIG_CACHE` riêng trong profile `troly-agent`.
+
+**Degrade mềm + test CI Windows thật.** Cred vắng hoặc spawn lỗi → về
+đường spawn thường kèm event cảnh báo (policy-only như trước, không
+kẹt UX). `TROLY_NO_SANDBOX=1` tắt hẳn. CI `test-windows` chạy
+`setup-agent-user.ps1` thật + smoke test `AgentSpawn` (whoami,
+deny-read/write, stdio 2 chiều, Job kill) + e2e `chat-bridge.ps1` với
+`fakebrain.exe` trả `pong:troly-agent` — chứng minh não thật chạy dưới
+user hạn chế chứ không phải fallback. Residual đã biết: grant folder
+mới qua `/api/permissions` chỉ enforce sau khi chạy lại setup (ACL
+không regen tự động như Seatbelt); consent gate Windows vẫn đường
+Origin (dialog native ở đây sẽ là proof được — `troly-agent` không
+điều khiển GUI session chủ — nhưng chưa implement).
+
 ## 2026 — Audit v7: consent gate macOS = proof-of-human, xoá bài vào thùng rác
 
 **Card nội bộ (`local-*`) trên macOS duyệt qua hộp thoại native
