@@ -16,7 +16,13 @@ command -v pyinstaller >/dev/null || {
 SEP=":"; [ "$(uname -s)" = "MINGW64_NT"* ] && SEP=";"   # win dùng ;
 STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT
 cp -R my-course "$STAGE/my-course"
-rm -rf "$STAGE/my-course/clone-work"
+# clone-work: DOM site thật của bên thứ 3 (IP/privacy). .shots: screenshot
+# tab của máy build — có thể chứa tin nhắn học viên. .bak: bản nháp undo.
+# bot.md: trợ lý đang active của máy build — không seed cho học viên mới.
+# (troly.spec _collect lọc y hệt — giữ 2 đường build đồng nhất.)
+rm -rf "$STAGE/my-course/clone-work" "$STAGE/my-course/.shots"
+rm -f "$STAGE/my-course/bot.md"
+find "$STAGE/my-course" -name '*.bak' -delete
 # hidden-import: child "vai" chạy qua runpy TRONG cùng frozen interpreter —
 # PyInstaller chỉ thấy import tĩnh của launcher nên phải khai tay module
 # mà tools/*.py cần, không thì child chết ModuleNotFoundError

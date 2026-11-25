@@ -379,10 +379,17 @@ def main():
             def log_message(self, *a):
                 pass
             def do_GET(self):
-                # chặn dotfile/dot-folder giống serve.py — server này cũng
-                # phục vụ project root, chứa .devin/secrets.local.json
+                # chặn dotfile/dot-folder + JSON điều khiển giống serve.py —
+                # server này cũng phục vụ project root, chứa .devin/
+                # secrets.local.json và các file quyền/cấu hình
                 parts = [p for p in urlparse(self.path).path.split('/') if p]
                 if any(p.startswith('.') for p in parts):
+                    self.send_error(404)
+                    return
+                low = [p.lower() for p in parts]
+                if (len(low) == 2 and low[0] == "my-course" and low[1] in (
+                        "permissions.json", "connections.json", "config.json",
+                        "bots.json", "bot.md")) or low == ["brain.json"]:
                     self.send_error(404)
                     return
                 if self.path.startswith('/player.html'):

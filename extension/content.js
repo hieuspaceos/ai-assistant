@@ -25,9 +25,13 @@ function visible(el) {
 }
 
 function labelOf(el) {
+  // KHÔNG đọc .value của ô password — mật khẩu đang gõ sẽ lọt vào
+  // snapshot gửi về agent (actQuery đã chặn; đây là lỗ hổng còn lại).
   const t = (el.getAttribute('aria-label') ||
              el.getAttribute('placeholder') ||
-             el.innerText || el.value || el.name || el.title || '');
+             el.innerText ||
+             (el.matches('input[type="password"]') ? '' : el.value) ||
+             el.name || el.title || '');
   return String(t).replace(/\s+/g, ' ').trim().slice(0, 80);
 }
 

@@ -368,6 +368,37 @@ prompt_lock = threading.Lock()
 # thread của nó vẫn broadcast event vào store → stream trộn + process rác.
 spawn_lock = threading.Lock()
 
+# Watchdog lượt treo: não sống nhưng không bao giờ trả done/err (API kẹt,
+# tool loop vô hạn) → prompt_lock giữ mãi → mọi /api/prompt 409 vĩnh viễn
+# và học viên không có nút nào tự gỡ. Mỗi lượt một Timer; turn_gen để
+# timer của lượt cũ (vừa hết hạn đúng lúc lượt mới bắt đầu) không giết
+# nhầm. TROLY_TURN_TIMEOUT giây — override cho test/debug.
+try:
+    TURN_TIMEOUT = int(os.environ.get("TROLY_TURN_TIMEOUT") or 1200)
+except ValueError:
+    TURN_TIMEOUT = 1200
+turn_gen = [0]
+
+def _turn_watchdog(gen):
+    """Quá TURN_TIMEOUT mà prompt_lock vẫn giữ → não đang treo giữa lượt.
+    Báo UI (event err cũng mở lock) rồi giết process — prompt tiếp theo
+    đi đường spawn_brain self-heal giống não chết thường."""
+    if gen != turn_gen[0] or not prompt_lock.locked():
+        return
+    old = acp
+    if old is not None:
+        # prompt mới vào spawn_brain ngay, không chờ stdout đóng; reader
+        # cũ không báo "dừng đột ngột" trùng với lỗi timeout bên dưới
+        old.dead = True
+        old.expect_death = True
+    broadcast({"t": "err",
+               "msg": "trợ lý bị kẹt quá lâu — mình đang khởi động lại não"})
+    if old is not None and old.proc:
+        try:
+            old.proc.terminate()
+        except Exception:
+            pass
+
 def broadcast(ev):
     global event_base
     with store_lock:
@@ -417,6 +448,7 @@ class Acp:
         self.next_id = 10
         self.session_id = None
         self.dead = False
+        self.expect_death = False  # True khi BRIDGE tự giết (watchdog/đổi não)
         self.lock = threading.Lock()
         self.proc = None
         self.brain_id = brain.get("id", brain["cmd"])
@@ -466,10 +498,13 @@ class Acp:
                 # không được để reader chết, nếu không dead không bao giờ
                 # được set và self-heal ở /api/prompt không chạy
                 continue
-        # stdout đóng = devin acp chết → báo UI thay vì để chat treo im lặng
+        # stdout đóng = devin acp chết → báo UI thay vì để chat treo im lặng.
+        # expect_death: chính bridge giết (watchdog timeout/đổi não) —
+        # đã báo lỗi đúng nghĩa rồi, không thêm "dừng đột ngột" gây hoang.
         self.dead = True
-        broadcast({"t": "err",
-                   "msg": "trợ lý vừa dừng đột ngột — chạy lại file start rồi thử lại"})
+        if not self.expect_death:
+            broadcast({"t": "err",
+                       "msg": "trợ lý vừa dừng đột ngột — chạy lại file start rồi thử lại"})
 
     def _dispatch(self, m):
         # Kết quả của session/new (bất kể id nào)
@@ -1074,6 +1109,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"err": "chưa có session"}, 503); return
             if not prompt_lock.acquire(blocking=False):
                 self._json({"err": "trợ lý đang xử lý câu trước"}, 409); return
+            turn_gen[0] += 1   # đánh dấu lượt mới NGAY khi giữ lock — timer
+                             # lượt cũ thấy gen lệch → không giết nhầm lượt này
             try:
                 acp.call("session/prompt", {
                     "sessionId": acp.session_id,
@@ -1081,6 +1118,8 @@ class Handler(BaseHTTPRequestHandler):
             except (BrokenPipeError, OSError):
                 prompt_lock.release()   # não chết ngay khi gửi → không kẹt busy
                 self._json({"err": "trợ lý đã dừng — chạy lại file start"}, 503); return
+            threading.Timer(TURN_TIMEOUT, _turn_watchdog,
+                            args=(turn_gen[0],)).start()
             self._json({"ok": True})
         elif path == "/api/respond":
             rid = data.get("id")
@@ -1578,6 +1617,7 @@ def spawn_brain():
         old = acp
         acp = Acp(load_brain())
         if old and old.proc:
+            old.expect_death = True   # đổi não là có chủ đích, không phải crash
             try:
                 old.proc.terminate()
                 # wait ngắn để stdout đóng hẳn — não cũ đang sống lèo

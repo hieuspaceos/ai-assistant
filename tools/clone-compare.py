@@ -23,10 +23,24 @@ Ba chế độ (không cần cài thêm gì — BMP parse tay, không dùng Pill
 import json, math, os, re, struct, subprocess, sys, tempfile, urllib.request
 
 BRIDGE = os.environ.get("BROWSER_BRIDGE", "http://127.0.0.1:7684")
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 PX_TOL = 2.0
 RGB_TOL = 8
 SHOT_TOL = 40  # lệch kênh màu tính là "khác"
+
+
+def _bridge_token():
+    """Mọi /api/* của ext-bridge đều đòi "mã kết nối" — env
+    $BRIDGE_TOKEN (agent có sẵn) hoặc file .devin/bridge.token."""
+    tok = os.environ.get("BRIDGE_TOKEN")
+    if tok:
+        return tok.strip()
+    try:
+        return open(os.path.join(ROOT, ".devin", "bridge.token"),
+                    encoding="utf-8").read().strip()
+    except OSError:
+        return ""
 
 
 def _px(v):
@@ -144,7 +158,8 @@ def harvest_mode(clone_fp, tab_id, bridge, out_fp):
         sel = f'[data-cs-ref="{ref}"]'
         body = json.dumps({"action": "styles", "tabId": int(tab_id), "sel": sel}).encode()
         req = urllib.request.Request(bridge + "/api/browser", data=body,
-                                     headers={"Content-Type": "application/json"})
+                                     headers={"Content-Type": "application/json",
+                                              "X-Bridge-Token": _bridge_token()})
         try:
             res = json.load(urllib.request.urlopen(req, timeout=15))
         except Exception as e:

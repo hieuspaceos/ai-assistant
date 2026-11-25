@@ -290,7 +290,14 @@ def handle_api(method, path, body):
         if not isinstance(d, dict):
             return {"ok": False, "err": "body phải là json object"}
         action = d.pop("action", "")
-        res = ext_call(action, d)
+        # tinsert mode 'char' gõ từng phím qua CDP ~35ms/ký tự — text dài
+        # vượt timeout mặc định 20s: bridge báo lỗi trong khi typing vẫn
+        # đang chạy → agent retry → gõ trùng. Timeout theo độ dài, kẹp 120s.
+        timeout = 20
+        if action == "tinsert" and d.get("mode") == "char":
+            timeout = min(120, max(20,
+                          int(10 + len(str(d.get("text") or "")) * 0.045)))
+        res = ext_call(action, d, timeout=timeout)
         # screenshot lớn → ghi file, trả đường dẫn cho gọn
         if res.get("ok") and res.get("png_b64"):
             d2 = os.path.join(os.path.abspath(CWD), "my-course", ".shots")
@@ -341,6 +348,20 @@ def serve_conn(sock):
                 # read_http đặt timeout 15s để đọc header — phải gỡ ra, nếu
                 # không WS rớt sau 15s im lặng (extension flap liên tục)
                 sock.settimeout(None)
+                # TCP keepalive: kết nối half-open (ngủ máy, mất FIN/RST)
+                # giữ recv treo vô hạn → ext_sock "connected" ảo mãi, mọi
+                # ext_call hết 20s timeout. Probe chết → kernel gửi RST →
+                # reader bị đánh thức và dọn slot.
+                try:
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+                    if hasattr(socket, "TCP_KEEPIDLE"):        # Linux
+                        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 30)
+                        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)
+                        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+                    elif hasattr(socket, "TCP_KEEPALIVE"):     # macOS
+                        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPALIVE, 30)
+                except OSError:
+                    pass
                 ext_version = (urllib.parse.parse_qs(pu.query).get("v") or [None])[0]
                 with ext_lock:
                     old = ext_sock
@@ -363,6 +384,20 @@ def serve_conn(sock):
                         try:
                             ws_send(sock, json.dumps({"t": "ping"}))
                         except Exception:
+                            # send fail mà reader vẫn kẹt trong recv → chủ
+                            # động gỡ slot + shutdown đánh thức reader,
+                            # không thì "connected" ảo treo vô hạn.
+                            with ext_lock:
+                                if ext_sock is sock:
+                                    ext_sock = None
+                            try:
+                                sock.shutdown(socket.SHUT_RDWR)
+                            except Exception:
+                                pass
+                            try:
+                                sock.close()
+                            except Exception:
+                                pass
                             return
                 threading.Thread(target=pinger, daemon=True).start()
                 ext_reader(sock)

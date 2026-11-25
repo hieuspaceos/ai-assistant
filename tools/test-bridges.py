@@ -1004,6 +1004,66 @@ def main():
         check("53. remove-connection → 202 → approve → gỡ",
               s == 202 and bool(rid53) and s53 == 200 and gone53,
               f"{s}/{s53}")
+
+        # 54: watchdog lượt treo — não trả handshake rồi im với prompt.
+        # Không watchdog thì prompt_lock kẹt 409 vĩnh viễn. Shebang chỉ
+        # chạy trên POSIX; Windows skip (CI test job là ubuntu).
+        if os.name != "nt":
+            fbdir = os.path.join(wd, "fakebin")
+            os.makedirs(fbdir, exist_ok=True)
+            fake = os.path.join(fbdir, "fake-brain")
+            with open(fake, "w") as f:
+                f.write("#!/usr/bin/env python3\n"
+                        "import sys, json, time\n"
+                        "for line in sys.stdin:\n"
+                        "    m = json.loads(line)\n"
+                        "    r = {'jsonrpc': '2.0', 'id': m.get('id')}\n"
+                        "    if m.get('method') == 'initialize':\n"
+                        "        r['result'] = {}; print(json.dumps(r), flush=True)\n"
+                        "    elif m.get('method') == 'session/new':\n"
+                        "        r['result'] = {'sessionId': 's1'}; print(json.dumps(r), flush=True)\n"
+                        "    elif m.get('method'):\n"
+                        "        time.sleep(3600)\n")
+            os.chmod(fake, 0o755)
+            json.dump({"id": "fake", "cmd": "fake-brain", "args": []},
+                      open(os.path.join(wd, "brain.json"), "w"))
+            env = dict(os.environ,
+                       PATH=fbdir + os.pathsep + os.environ["PATH"],
+                       TROLY_TURN_TIMEOUT="2",
+                       # test đang nhắm watchdog, không nhắm Seatbelt —
+                       # tắt để kết quả không phụ thuộc macOS sandbox
+                       TROLY_NO_SANDBOX="1")
+            cb4 = free_port()
+            p4 = subprocess.Popen([sys.executable,
+                                   os.path.join(TOOLS, "chat-bridge.py"),
+                                   str(cb4), wd], env=env,
+                                  stdout=subprocess.DEVNULL,
+                                  stderr=subprocess.DEVNULL)
+            procs.append(p4)
+            b4 = f"http://127.0.0.1:{cb4}"
+            check("54. bridge fake-brain lên", wait_health(b4 + "/api/health"))
+            ready = False
+            for _ in range(50):
+                s, b, _ = http("GET", b4 + f"/api/poll?since=0", token=TOKEN)
+                if any(e.get("t") == "ready"
+                       for e in (b or {}).get("events", [])):
+                    ready = True
+                    break
+                time.sleep(0.2)
+            check("54a. session sẵn sàng", ready)
+            s, b, _ = http("POST", b4 + "/api/prompt", {"text": "hi"}, token=TOKEN)
+            check("54b. prompt đầu ok", s == 200 and b.get("ok"), str(s))
+            s, _, _ = http("POST", b4 + "/api/prompt", {"text": "nữa"}, token=TOKEN)
+            check("54c. prompt thứ 2 → 409 khi busy", s == 409, str(s))
+            time.sleep(3.5)      # TROLY_TURN_TIMEOUT=2 → watchdog đã chạy
+            s, _, _ = http("POST", b4 + "/api/prompt", {"text": "nữa"}, token=TOKEN)
+            check("54d. sau timeout → 503 self-heal (không kẹt 409)",
+                  s == 503, str(s))
+            s, b, _ = http("GET", b4 + f"/api/poll?since=0", token=TOKEN)
+            msgs = [e.get("msg", "") for e in (b or {}).get("events", [])
+                    if e.get("t") == "err"]
+            check("54e. err báo 'kẹt' cho học viên",
+                  any("kẹt" in m for m in msgs), str(msgs))
     finally:
         for p in procs:
             try:

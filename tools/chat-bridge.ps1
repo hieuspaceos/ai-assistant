@@ -167,8 +167,14 @@ $MaxEvents = 3000
 # /api/respond trước đây nhận id/optionId tuỳ ý → tự duyệt thay học viên.
 $script:PermPending = @{}      # id -> @{ options = @(optionId); ts = epoch }
 $script:PromptBusy = $false    # serialize /api/prompt — 2 prompt đồng thời → 409
+$script:PromptSince = $null    # mốc bắt đầu lượt — cho watchdog tick dưới main loop
 $PermTtl = 600                 # perm treo >10 phút coi như chết
 $PermMax = 200                 # trần chống phình
+
+# Não treo giữa lượt quá lâu → watchdog giết + mở prompt (parity
+# TURN_TIMEOUT bên .py). TROLY_TURN_TIMEOUT giây — override cho test.
+$TurnTimeout = 1200
+try { if ($env:TROLY_TURN_TIMEOUT) { $TurnTimeout = [int]$env:TROLY_TURN_TIMEOUT } } catch {}
 
 # Consent gate (parity với chat-bridge.py): write đặc quyền qua card do
 # bridge tự phát. RESIDUAL: agent cũng gọi /api/respond được — card chặn
@@ -544,6 +550,16 @@ try {
         $ctx = $null
         try { $ctx = $listener.GetContext() } catch { break }
         Drain-Queue
+        # Watchdog lượt treo (parity _turn_watchdog bên .py): não sống nhưng
+        # không trả done/err quá $TurnTimeout → PromptBusy kẹt 409 vĩnh viễn.
+        # Loop đơn luồng không có Timer nên mỗi request là một nhịp — portal
+        # poll ~1s nên tick đủ dày; Push-Event err tự clear PromptBusy.
+        if ($script:PromptBusy -and $script:PromptSince -and
+            ((Get-Date) - $script:PromptSince).TotalSeconds -gt $TurnTimeout) {
+            Push-Event ([ordered]@{ t = "err"; msg = "trợ lý bị kẹt quá lâu — mình đang khởi động lại não" })
+            try { if ($script:AcpProc -and -not $script:AcpProc.HasExited) { $script:AcpProc.Kill() } } catch {}
+            $script:AcpDead = $true   # prompt tiếp theo đi đường Start-Brain self-heal
+        }
         try {
             $path = $ctx.Request.Url.AbsolutePath
             $origin = $ctx.Request.Headers["Origin"]
@@ -653,6 +669,7 @@ try {
                 } else {
                     try {
                         $script:PromptBusy = $true
+                        $script:PromptSince = Get-Date
                         Call-Acp "session/prompt" @{
                             sessionId = $script:SessionId
                             prompt = @(@{ type = "text"; text = $body.text })
