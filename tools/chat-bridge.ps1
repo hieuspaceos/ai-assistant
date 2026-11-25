@@ -815,8 +815,13 @@ try {
                     $target = Join-Path $course $folder
                     if ((Test-Path $target -PathType Container) -and
                         ((Resolve-Path $target).Path.StartsWith($course + [IO.Path]::DirectorySeparatorChar))) {
-                        $rid = New-Gate "Xoá hẳn bài học $folder?" ({
-                            Remove-Item $target -Recurse -Force
+                        $rid = New-Gate "Xoá bài học $folder? (vào thùng rác — khôi phục được)" ({
+                            # không xoá hẳn — move vào .trash/ để khôi phục
+                            # được; tên kèm timestamp + hex tránh đụng tên
+                            $trash = Join-Path $course ".trash"
+                            New-Item -ItemType Directory -Force -Path $trash | Out-Null
+                            $dst = Join-Path $trash ($folder + "-" + (Get-Date -Format "yyyyMMdd-HHmmss") + "-" + ([guid]::NewGuid().ToString("N").Substring(0,6)))
+                            Move-Item $target $dst
                             $mf = Join-Path $course "manifest.json"
                             try {
                                 $m = Get-Content $mf -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -824,7 +829,7 @@ try {
                                 Save-Json $mf $m
                             } catch {}
                         }.GetNewClosure())
-                        Send-Json $ctx @{ pending = $rid; msg = "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để xoá" } 202
+                        Send-Json $ctx @{ pending = $rid; msg = "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để xoá (bài giữ trong thùng rác)" } 202
                     } else {
                         Send-Json $ctx @{ err = "không thấy folder bài" } 404
                     }

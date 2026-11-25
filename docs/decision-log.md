@@ -3,6 +3,37 @@
 Các quyết định kiến trúc và **tại sao** — để sau này không gỡ ngược lại
 vì quên lý do. Mới nhất lên đầu.
 
+## 2026 — Audit v7: consent gate macOS = proof-of-human, xoá bài vào thùng rác
+
+**Card nội bộ (`local-*`) trên macOS duyệt qua hộp thoại native
+`osascript`, không qua HTTP.** Vì: `/api/respond` đòi Origin loopback
+nhưng Origin chỉ là header — agent giữ token thì giả được Origin và tự
+duyệt card chính mình, nên gate chỉ là "nghi thức + hiển thị". Trên
+macOS, `osascript` nằm trong deny-exec của Seatbelt và agent không
+điều khiển GUI → dialog do BRIDGE spawn là bằng chứng người bấm thật.
+`respond ok` qua HTTP giờ trả `403` (card không bị consume — chờ
+dialog); `__cancel__` vẫn nhận qua HTTP để học viên từ chối từ chat và
+giết luôn dialog đang mở. GUI không chạy được (headless/SSH/
+`TROLY_NO_NATIVE_GATE=1`) → phát lại card không cờ native, về đường
+Origin cũ — degrade về đúng mức an toàn trước đây chứ không kẹt UX.
+Windows giữ đường Origin: agent full quyền inject được input nên dialog
+native ở đó không phải proof — chờ sandbox Windows (S4).
+
+**`/api/delete-lesson` move vào `my-course/.trash/` thay vì `rmtree`.**
+Vì: đây là hành động phá duy nhất bấm nhầm "Đồng ý" là không cứu được
+— học viên không-coder dễ bấm vội. Tên trong trash kèm
+`timestamp-hex` tránh đụng khi xoá lại cùng tên; manifest vẫn gỡ entry
+ngay. `.trash/` vào filter build (build.sh + troly.spec) — dữ liệu làm
+việc, không seed. Khôi phục = move ngược + trả entry manifest.
+
+**Watchdog lượt treo (`TROLY_TURN_TIMEOUT`, mặc định 1200s).** Vì:
+não sống nhưng im với prompt → `prompt_lock`/`$PromptBusy` kẹt 409
+vĩnh viễn, không đường thoát cho người không-coder. Timer
+(`threading.Timer` + `turn_gen` chống giết nhầm lượt mới; ps1 check
+theo request tick vì đơn luồng) → báo "kẹt" cho học viên + kill →
+prompt sau self-heal qua `spawn_brain`. `expect_death` để kill chủ
+động không bị báo trùng "dừng đột ngột" — đổi não cũng hết message giả.
+
 ## 2026 — Audit v6: ba lỗi sót sau 5 vòng lock-down
 
 **`path_sensitive` so HAI chiều, không một.** Vì: deny-list folder nhạy

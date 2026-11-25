@@ -339,21 +339,102 @@ PERM_MAX = 200            # trần chống phình
 # thật: agent cũng gọi được /api/respond → card chỉ chặn im lặng + bắt
 # phải nghi thức đủ bước, không chặn tuyệt đối kẻ cố ý. Respond cho card
 # nội bộ bắt buộc Origin trình duyệt — thêm một vòng nữa.
-local_pending = {}        # "local-<hex>" -> {"apply": fn, "ts": epoch}
+local_pending = {}        # "local-<hex>" -> {"apply","ts","ev","native","proc"}
+
+# Proof-of-human cho consent gate (macOS): nút "Đồng ý" thật sự nằm trong
+# hộp thoại native do BRIDGE spawn — agent trong Seatbelt không exec được
+# osascript và không điều khiển GUI → không giả/bấm được (Origin + token
+# trên /api/respond chỉ là vòng thủ, không phải bằng chứng người bấm).
+# TROLY_NO_NATIVE_GATE=1 hoặc không có GUI → fallback đường Origin cũ.
+NATIVE_GATE = (sys.platform == "darwin"
+               and shutil.which("osascript") is not None
+               and os.environ.get("TROLY_NO_NATIVE_GATE") != "1")
+
+def _asq(s):
+    """AppleScript string literal — escape \\ và " để title không phá
+    script. Kẹp độ dài vì dialog nhỏ."""
+    return '"' + str(s)[:400].replace('\\', '\\\\').replace('"', '\\"') + '"'
 
 def gate_local(title, apply_fn):
     """Tạo card xác nhận → trả pending id cho caller trả 202. Khi học viên
     bấm Đồng ý ở /api/respond → apply_fn() mới chạy (one-shot + TTL y
-    card xin phép của não)."""
+    card xin phép của não). Trên macOS, "Đồng ý" chỉ đến từ hộp thoại
+    native (_native_confirm) — nút trong chat chỉ còn "Không"."""
     with store_lock:
         while len(local_pending) >= PERM_MAX:
             local_pending.pop(next(iter(local_pending)), None)
         rid = "local-" + secrets.token_hex(8)
-        local_pending[rid] = {"apply": apply_fn, "ts": time.time()}
-    broadcast({"t": "perm", "id": rid, "title": title,
-               "options": [{"optionId": "ok", "name": "Đồng ý"},
-                           {"optionId": "__cancel__", "name": "Không"}]})
+        ev = {"t": "perm", "id": rid, "title": title,
+              "options": [{"optionId": "ok", "name": "Đồng ý"},
+                          {"optionId": "__cancel__", "name": "Không"}]}
+        rec = {"apply": apply_fn, "ts": time.time(), "ev": ev,
+               "native": NATIVE_GATE, "proc": None}
+        local_pending[rid] = rec
+    broadcast(dict(ev, native=True) if rec["native"] else ev)
+    if rec["native"]:
+        threading.Thread(target=_native_confirm, args=(rid,), daemon=True).start()
     return rid
+
+def _native_fallback(rid):
+    """GUI không chạy được (headless/SSH/osascript lỗi) → hạ về đường
+    Origin cũ: phát lại card KHÔNG cờ native để nút Đồng ý trong chat
+    dùng được. Kém an toàn hơn dialog nhưng không kẹt học viên."""
+    with store_lock:
+        rec = local_pending.get(rid)
+        if rec is not None:
+            rec["native"] = False
+    broadcast({"t": "perm_done", "id": rid})
+    if rec is not None:
+        broadcast(rec["ev"])
+
+def _native_confirm(rid):
+    """Chờ hộp thoại macOS — "Đồng ý" ở đây mới là bằng chứng có người
+    bấm. Hết hạn/từ chối/cancel qua chat đều đóng card + hủy apply."""
+    title = ((local_pending.get(rid) or {}).get("ev") or {}).get("title") or \
+            "Trợ lý muốn làm một việc"
+    script = ("display dialog " + _asq(title) +
+              ' with title "Trợ Lý AI — xin phép" with icon note '
+              'buttons {"Không", "Đồng ý"} default button "Không" '
+              'cancel button "Không" giving up after ' + str(int(PERM_TTL)))
+    try:
+        p = subprocess.Popen(["osascript", "-e", script],
+                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                             text=True)
+    except Exception:
+        p = None
+    if p is None:
+        return _native_fallback(rid)
+    with store_lock:
+        rec = local_pending.get(rid)
+        if rec is None:              # cancel từ chat trước khi spawn xong
+            try:
+                p.terminate()
+            except Exception:
+                pass
+            return
+        rec["proc"] = p
+    try:
+        out, _ = p.communicate(timeout=PERM_TTL + 60)
+        approved = "button returned:Đồng ý" in out
+        gui_failed = p.returncode != 0 and not approved
+    except Exception:
+        approved = False
+        gui_failed = True
+        try:
+            p.kill()
+        except Exception:
+            pass
+    if gui_failed:
+        return _native_fallback(rid)
+    with store_lock:
+        rec = local_pending.pop(rid, None)
+    broadcast({"t": "perm_done", "id": rid})
+    if rec is None or not approved:
+        return
+    try:
+        rec["apply"]()
+    except Exception as e:
+        broadcast({"t": "err", "msg": "làm không được — " + str(e)[:120]})
 
 # long-poll /api/poll: client chờ tới khi có event mới (tối đa wait ms)
 # thay vì poll chặt mỗi ~1s — giảm ~97% request và độ trễ hiển thị ~0.
@@ -1145,19 +1226,27 @@ class Handler(BaseHTTPRequestHandler):
                     and time.time() - lrec["ts"] <= PERM_TTL
                 # chỉ pop khi đủ điều kiện — thiếu Origin/oid lạ KHÔNG được
                 # giết card (agent bơm request rác vẫn không DoS được nút
-                # xác nhận của học viên)
+                # xác nhận của học viên). Card native (macOS) mà oid="ok"
+                # cũng không pop: approve chỉ qua hộp thoại GUI — request
+                # này sẽ nhận 403 gợi ý ở dưới, card vẫn pending chờ.
                 lvalid = (lfresh and oid in ("ok", "__cancel__")
-                          and bool(o) and is_local_origin(o))
+                          and bool(o) and is_local_origin(o)
+                          and not (lrec.get("native") and oid == "ok"))
                 if lvalid:
                     local_pending.pop(rid, None)
             # Card nội bộ (consent gate — đổi quyền/xoá bài/đổi não): trả
             # lời phải kèm Origin trình duyệt — agent gọi tay thường không
-            # có Origin (giả vẫn được, chỉ là thêm một vòng thủ).
+            # có Origin (giả vẫn được, chỉ là thêm một vòng thủ). Trên
+            # macOS có NATIVE_GATE thì "ok" còn bị chặn hẳn — chỉ nút
+            # trong hộp thoại native mới là proof-of-human.
             if rec is None and lrec is not None:
                 if not lfresh:
                     self._json({"err": "yêu cầu không còn hiệu lực"}, 404); return
                 if not (o and is_local_origin(o)):
                     self._json({"err": "thiếu Origin trình duyệt"}, 403); return
+                if lrec.get("native") and oid == "ok":
+                    self._json({"err": "bấm Đồng ý trong hộp thoại trên "
+                                "màn hình máy bạn"}, 403); return
                 if not lvalid:
                     self._json({"err": "lựa chọn không hợp lệ"}, 400); return
                 if oid == "ok":
@@ -1166,6 +1255,16 @@ class Handler(BaseHTTPRequestHandler):
                     except Exception as e:
                         self._json({"err": "làm không được — "
                                     + str(e)[:120]}, 500); return
+                else:
+                    # cancel từ chat: giết luôn hộp thoại native đang mở
+                    # và đóng card (event perm_done → UI remove).
+                    p = lrec.get("proc")
+                    if p is not None:
+                        try:
+                            p.terminate()
+                        except Exception:
+                            pass
+                    broadcast({"t": "perm_done", "id": rid})
                 self._json({"ok": True}); return
             if rec is None or time.time() - rec["ts"] > PERM_TTL:
                 self._json({"err": "yêu cầu không còn hiệu lực"}, 404); return
@@ -1246,7 +1345,15 @@ class Handler(BaseHTTPRequestHandler):
             if not target.startswith(course + os.sep) or not os.path.isdir(target):
                 self._json({"err": "không thấy folder bài"}, 404); return
             def _apply(target=target, folder=folder, course=course):
-                shutil.rmtree(target)
+                # không xoá hẳn — move vào my-course/.trash/ để khôi phục
+                # được (bấm nhầm Đồng ý vẫn cứu lại bài); tên kèm timestamp
+                # + hex ngắn tránh đụng khi xoá lại folder cùng tên
+                trash = os.path.join(course, ".trash")
+                os.makedirs(trash, exist_ok=True)
+                dst = os.path.join(trash, folder + "-" +
+                                   time.strftime("%Y%m%d-%H%M%S") + "-" +
+                                   secrets.token_hex(3))
+                shutil.move(target, dst)
                 mf = os.path.join(course, "manifest.json")
                 try:
                     m = json.load(open(mf, encoding="utf-8"))
@@ -1256,10 +1363,11 @@ class Handler(BaseHTTPRequestHandler):
                               ensure_ascii=False, indent=2)
                 except Exception:
                     pass
-            # xoá dữ liệu là hành động phá — qua card xác nhận của học viên
-            rid = gate_local(f"Xoá hẳn bài học {folder}?", _apply)
+            # xoá bài là hành động phá nhưng hoàn tác được — qua card xác
+            # nhận của học viên, bài nằm lại trong my-course/.trash/
+            rid = gate_local(f"Xoá bài học {folder}? (vào thùng rác — khôi phục được)", _apply)
             self._json({"pending": rid,
-                        "msg": "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để xoá"}, 202)
+                        "msg": "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để xoá (bài giữ trong thùng rác)"}, 202)
         elif path == "/api/save-page":
             # clone-view.html lưu bản đã chỉnh — chỉ cho ghi file .html
             # trong my-course/, chặn path ra ngoài

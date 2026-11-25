@@ -175,6 +175,7 @@ const STR = {
     ph: 'Nhắn cho trợ lý… (VD: /phong-van) · Enter gửi, Shift+Enter xuống dòng',
     send: 'Gửi', busy: 'Trợ lý đang làm việc', permSuffix: ' — bạn cho phép không?',
     noOpt: 'Không đồng ý', errPfx: 'Ừm, có lỗi nhỏ: ',
+    nativeHint: 'Xác nhận trong hộp thoại vừa hiện trên màn hình máy bạn — trợ lý không tự bấm được nút đó.',
   },
   en: {
     hints: [{label: 'Start the interview', text: '/interview'},
@@ -185,6 +186,7 @@ const STR = {
     ph: 'Message the assistant… (e.g. /interview) · Enter sends, Shift+Enter new line',
     send: 'Send', busy: 'The assistant is working', permSuffix: ' — allow it?',
     noOpt: 'Decline', errPfx: 'Hmm, small hiccup: ',
+    nativeHint: 'Confirm in the dialog on your screen — the assistant cannot click that button for you.',
   },
 };
 let S = STR.vi;
@@ -300,19 +302,30 @@ function addTool(title, status) {
 function addPerm(ev) {
   const d = document.createElement('div');
   d.className = 'perm';
+  d.dataset.permId = ev.id;   // perm_done từ bridge sẽ đóng card theo id này
   const t = document.createElement('div');
   t.className = 'perm-title';
   t.textContent = (ev.title || 'Trợ lý muốn làm một việc') + S.permSuffix;
   d.appendChild(t);
+  // Card native (macOS): nút "Đồng ý" thật nằm trong hộp thoại hệ điều hành
+  // — chat chỉ giải thích + cho nút "Không" để từ chối/đóng dialog.
+  if (ev.native) {
+    const h = document.createElement('div');
+    h.className = 'perm-title';
+    h.textContent = S.nativeHint;
+    d.appendChild(h);
+  }
   const btns = document.createElement('div'); btns.className = 'perm-btns';
   // không có option nào → vẫn phải có nút, không thì agent chờ vô hạn
-  const opts = (ev.options && ev.options.length)
-    ? ev.options
-    : [{name: S.noOpt, optionId: '__cancel__'}];
+  const opts = ev.native
+    ? [{name: S.noOpt, optionId: '__cancel__'}]
+    : ((ev.options && ev.options.length)
+       ? ev.options
+       : [{name: S.noOpt, optionId: '__cancel__'}]);
   opts.forEach((o, i) => {
     const b = document.createElement('button');
     b.textContent = o.name;
-    if (i === 0) b.className = 'primary';
+    if (i === 0 && !ev.native) b.className = 'primary';
     b.onclick = async () => {
       d.remove();
       // bridge giờ siết respond: id không còn pending → 404 (card replay từ
@@ -379,6 +392,11 @@ function handleEvent(ev) {
   else if (ev.t === 'text') { removeTyping(); addText(ev.text); }
   else if (ev.t === 'tool') addTool(ev.title, ev.status);
   else if (ev.t === 'perm') { removeTyping(); flushBubble(); addPerm(ev); }
+  else if (ev.t === 'perm_done') {
+    // bridge đã có quyết định (hộp thoại native/cancel) → đóng card treo
+    const c = msgs.querySelector('[data-perm-id="' + ev.id + '"]');
+    if (c) c.remove();
+  }
   else if (ev.t === 'done') { flushBubble(); setBusy(false); curBubble = null; }
   else if (ev.t === 'err') { flushBubble(); addErr(ev.msg); setBusy(false); }
 }

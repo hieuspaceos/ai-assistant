@@ -69,9 +69,14 @@ extension = cánh tay trên trình duyệt · serve.py = file tĩnh.
   điểm, tranh chấp → 409), long-poll output, quản lý permissions/
   connections/config/secrets, lưu trang clone (`/api/save-page`).
 - `/api/respond` chỉ nhận `id` còn pending trong map (TTL 600s,
-  one-shot) — không trả lời được câu hỏi của session cũ.
+  one-shot) — không trả lời được câu hỏi của session cũ. Card nội bộ
+  (`local-*`, consent gate) trên macOS duyệt qua **hộp thoại native**
+  (`osascript display dialog`) do bridge spawn — nút "Đồng ý" HTTP bị
+  chặn vì agent giả được Origin nhưng không exec/bấm được GUI ngoài
+  sandbox; quyết định phát event `perm_done` đóng card trong chat.
 - Sandbox ghi file: chỉ `.html` dưới `my-course/`; tự tạo `.bak` trước
-  khi ghi đè. Chi tiết endpoint: `api-reference.md`.
+  khi ghi đè; "xoá bài" là move vào `my-course/.trash/` chứ không xoá
+  hẳn. Chi tiết endpoint: `api-reference.md`.
 
 ### 3. ttyd — :7681 (tuỳ chọn)
 - **Mục đích:** chế độ Terminal — `ttyd -p 7681 -W -a <gate>` nhúng CLI

@@ -135,7 +135,10 @@ ai-assistant/
   announces before touching files, works on copies, blocks pasted
   secrets. Belt-and-suspenders on top: every bridge requires the
   connection code, Terminal mode asks for it again inside the shell
-  (`term-gate`), permission cards only accept live pending requests,
+  (`term-gate`), permission cards only accept live pending requests
+  (and on macOS the "Allow" button lives in a native OS dialog the
+  sandboxed agent can't fake or click), "delete lesson" moves the
+  folder to `my-course/.trash/` so a misclick is recoverable,
   course/clone pages run sandboxed to an opaque origin (can't read the connection code or frame the portal), and on macOS the
   brain runs inside a Seatbelt sandbox generated from
   `permissions.json` — write-allowlist (`my-course/` only) plus hard

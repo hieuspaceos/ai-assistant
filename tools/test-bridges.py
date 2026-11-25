@@ -92,6 +92,9 @@ def make_workdir():
     return d
 
 def main():
+    # native gate (macOS dialog) sẽ bật thật khi chạy trên Mac — tắt để
+    # test đường fallback Origin, khỏi bị hộp thoại văng lên màn hình.
+    os.environ["TROLY_NO_NATIVE_GATE"] = "1"
     wd = make_workdir()
     wd2 = None
     procs = []
@@ -1064,6 +1067,39 @@ def main():
                     if e.get("t") == "err"]
             check("54e. err báo 'kẹt' cho học viên",
                   any("kẹt" in m for m in msgs), str(msgs))
+
+        # 55: delete-lesson → bài vào my-course/.trash/ chứ không mất hẳn
+        # (bấm nhầm Đồng ý vẫn khôi phục được), manifest bỏ entry.
+        # Dùng b3: base/b2 bị test restart giết sớm; b3 sống tới cuối, cùng wd.
+        les = os.path.join(wd, "my-course", "lesson-99-rac")
+        os.makedirs(les, exist_ok=True)
+        open(os.path.join(les, "lesson.md"), "w").write("# bài test")
+        mfp = os.path.join(wd, "my-course", "manifest.json")
+        m55 = json.load(open(mfp))
+        m55.setdefault("lessons", []).append({"folder": "lesson-99-rac",
+                                              "title": "t"})
+        json.dump(m55, open(mfp, "w"))
+        s, b, _ = http("POST", b3 + f"/api/delete-lesson?token={TOKEN}",
+                       {"folder": "lesson-99-rac"},
+                       headers={"Origin": "http://localhost:8080"})
+        rid55 = b.get("pending")
+        s55, b55, _ = http("POST", b3 + f"/api/respond?token={TOKEN}",
+                           {"id": rid55, "optionId": "ok"},
+                           headers={"Origin": "http://localhost:8080"})
+        trash_dir = os.path.join(wd, "my-course", ".trash")
+        trashed = [d for d in os.listdir(trash_dir)
+                   if d.startswith("lesson-99-rac-")] \
+            if os.path.isdir(trash_dir) else []
+        m55b = json.load(open(mfp))
+        check("55. delete-lesson → .trash, khôi phục được",
+              s == 202 and s55 == 200
+              and not os.path.exists(les)
+              and len(trashed) == 1
+              and os.path.exists(os.path.join(trash_dir, trashed[0],
+                                              "lesson.md"))
+              and all(b.get("folder") != "lesson-99-rac"
+                      for b in m55b.get("lessons", [])),
+              f"{s}/{s55}/{trashed}/{str(b)[:60]}/{str(b55)[:60]}")
     finally:
         for p in procs:
             try:

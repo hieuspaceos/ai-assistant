@@ -18,9 +18,11 @@ STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT
 cp -R my-course "$STAGE/my-course"
 # clone-work: DOM site thật của bên thứ 3 (IP/privacy). .shots: screenshot
 # tab của máy build — có thể chứa tin nhắn học viên. .bak: bản nháp undo.
+# .trash: bài học viên vừa xoá — là dữ liệu làm việc, không seed.
 # bot.md: trợ lý đang active của máy build — không seed cho học viên mới.
 # (troly.spec _collect lọc y hệt — giữ 2 đường build đồng nhất.)
-rm -rf "$STAGE/my-course/clone-work" "$STAGE/my-course/.shots"
+rm -rf "$STAGE/my-course/clone-work" "$STAGE/my-course/.shots" \
+       "$STAGE/my-course/.trash"
 rm -f "$STAGE/my-course/bot.md"
 find "$STAGE/my-course" -name '*.bak' -delete
 # hidden-import: child "vai" chạy qua runpy TRONG cùng frozen interpreter —
