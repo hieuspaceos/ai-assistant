@@ -130,8 +130,15 @@ Remove-Item $okf -Force -ErrorAction SilentlyContinue
 # --- 5. stdio 2 chieu + 6. IsAlive/Kill qua Job ---
 # Diag truoc: troly-agent nhin thay + chay duoc fakebrain khong?
 # (stderr cua con di vao NUL nen bat "2>&1" trong cmd de loi lo ra stdout)
-$r2 = Spawn-ReadAll "cmd.exe /c `"dir `"$FakeBin`" 2>&1`""
-Write-Host "  dir bin: $((($r2.out -split "`n") | Select-Object -Last 4) -join ' | ')"
+$r0 = Spawn-ReadAll 'cmd.exe /c "set P" 2>&1'
+$cp = ($r0.out -split "`n" | Where-Object { $_ -match "^PATH=" }) -join " "
+Write-Host "  child PATH: $($cp.Substring(0, [Math]::Min(200, $cp.Length)))"
+$r2 = Spawn-ReadAll "cmd.exe /c `"where fakebrain & dir `"$FakeBin`" 2>&1`""
+Write-Host "  where/dir: $(($r2.out -replace '\s+',' ').Substring(0, [Math]::Min(300, ($r2.out -replace '\s+',' ').Length)))"
+if ($exe) {
+    $r4 = Spawn-ReadAll "cmd.exe /c `"icacls `"$($exe.FullName)`" 2>&1`""
+    Write-Host "  icacls exe: $(($r4.out -replace '\s+',' ').Trim())"
+}
 $r3 = Spawn-ReadAll 'cmd.exe /c "fakebrain <NUL 2>&1"'
 Write-Host "  fakebrain via cmd: $(($r3.out -replace '\s+',' ').Trim())"
 $r = if ($FakeBin) {
