@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Trợ lý AI: trợ lý tiếng Việt trong máy bạn</title>
 <meta name="description" content="Trợ lý AI tiếng Việt làm việc thật trên máy bạn: đọc tin Zalo, cập nhật Sheet, xử lý file, dựng trang web — và tự dạy bạn dùng nó qua một khoá học riêng. Không cần biết code.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://troly.hieuspace.com/">
+<meta property="og:title" content="Trợ lý AI: trợ lý tiếng Việt trong máy bạn">
+<meta property="og:description" content="Đọc Zalo, cập nhật Sheet, xử lý file, dựng trang web — và tự dạy bạn dùng nó qua một khoá học riêng. Không cần biết code.">
+<meta property="og:image" content="https://troly.hieuspace.com/assets/portal.png">
+<meta property="og:locale" content="vi_VN">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
@@ -19,8 +26,10 @@
   <nav aria-label="Mục chính">
     <a href="#vong-quay">Vòng quay</a>
     <a href="#xem">Xem nó làm</a>
+    <a href="#quy-trinh">Quy trình</a>
     <a href="#noi">Đấu nối</a>
     <a href="#can-gi">Cần gì</a>
+    <a href="#cho-cty">Công ty</a>
     <a href="#tai">Tải về</a>
   </nav>
 </header>
@@ -163,7 +172,7 @@
       </div>
       <div class="row">
         <dt>Trình duyệt</dt>
-        <dd>Chrome hoặc Edge, cài extension <strong>Trợ Lý AI</strong></dd>
+        <dd>Chrome hoặc Edge, cài extension <strong>Trợ Lý AI</strong> — cách cài có trong <a href="https://github.com/hieuspaceos/ai-assistant/blob/main/SETUP.md">hướng dẫn cài đặt</a>.</dd>
       </div>
       <div class="row">
         <dt>Não AI</dt>
@@ -209,6 +218,32 @@
     </div>
   </section>
 
+
+  <!-- packaged workflows -->
+  <section class="section container" id="quy-trinh">
+    <div class="headblock">
+      <h2>Việc lặp lại, gói thành một nút</h2>
+      <p class="lead">Quy trình đóng gói sẵn trên portal — điền vài ô, bấm Chạy. Nó tự kiểm trước giờ chạy, tự soi kết quả sau khi xong.</p>
+    </div>
+    <dl class="rows">
+      <div class="row">
+        <dt>Điền vài ô</dt>
+        <dd>Mỗi quy trình là một thẻ: "gom hoá đơn theo tour", "báo cáo tuần"… — điền chỗ trống rồi bấm, không phải nghĩ câu nhờ.</dd>
+      </div>
+      <div class="row">
+        <dt>Tự kiểm trước khi chạy</dt>
+        <dd>Thiếu kết nối (chưa nối trình duyệt, chưa cắm app công ty) nó báo ngay trên thẻ — không chạy bừa rồi lỗi giữa chừng.</dd>
+      </div>
+      <div class="row">
+        <dt>Checklist sau khi xong</dt>
+        <dd>Nó tự soi file vừa tạo (đúng folder, đủ số lượng) và đưa checklist để bạn duyệt — sai chỗ nào tick, nó sửa vòng sau.</dd>
+      </div>
+      <div class="row">
+        <dt>Công ty gói quy trình riêng</dt>
+        <dd>Cty đóng gói công thức nội bộ (báo giá, báo cáo, đăng tin) thành pack — nhân viên mở portal là thấy nút của nhà mình.</dd>
+      </div>
+    </dl>
+  </section>
 
   <!-- dedicated integrations -->
   <section class="section container" id="noi">
@@ -259,11 +294,42 @@
     </table>
   </section>
 
+  <!-- for companies -->
+  <section class="section container" id="cho-cty">
+    <div class="headblock">
+      <h2>Và cho cả công ty</h2>
+      <p class="lead">Một code base — mỗi cty cấu hình riêng bằng pack, không cần fork code.</p>
+    </div>
+    <dl class="plugs">
+      <div class="plug">
+        <dt><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="4" width="22" height="15" rx="2"/><path d="M10 23h8"/><path d="M7 12h6M7 15h9"/></svg>Fleet console</dt>
+        <dd>Dashboard thấy máy nào đang dùng, bản nào, lỗi gì — chỉ số đếm, không thấy nội dung chat</dd>
+      </div>
+      <div class="plug">
+        <dt><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M14 3l10 5.5v11L14 25 4 19.5v-11z"/><path d="M14 3v11M4 8.5l10 5.5 10-5.5"/></svg>Pack cấu hình</dt>
+        <dd>Skill, quy trình, bot, luật riêng của cty — đẩy một gói xuống mọi máy</dd>
+      </div>
+      <div class="plug">
+        <dt><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M20 11a6 6 0 0 0-12 0v4H6v10h16V15h-2z"/><path d="M14 19v3"/></svg>Cập nhật có chữ ký</dt>
+        <dd>Release ký ed25519, máy tự kéo về, rollback được — tin khoá, không tin server</dd>
+      </div>
+      <div class="plug">
+        <dt><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 21h20M6 21V9h16v12M10 9V5h8v4"/></svg>Tự host hoặc hosted</dt>
+        <dd>Collector chạy trên máy IT của cty hoặc thuê sẵn của vendor — máy chỉ push ra ngoài</dd>
+      </div>
+    </dl>
+    <p class="lead" style="margin-top: var(--space-xl)">Muốn triển khai cho đội của bạn?
+      <a href="https://github.com/hieuspaceos/ai-assistant/issues">Nhắn qua GitHub</a> —
+      kể ngắn quy mô và việc cần tự động hoá.</p>
+  </section>
+
   <!-- privacy statement -->
   <section class="statement">
     <div class="container">
       <p class="big">Không gì rời máy bạn khi bạn không cho phép.</p>
-      <p class="small">Mã khoá mọi cửa; folder nào được mở do bạn.
+      <p class="small">Mã khoá mọi cửa; folder nào được mở do bạn. Chữ đọc được
+        từ trang ngoài được đánh dấu "không phải lệnh"; não không thừa hưởng
+        secret trên máy.
         <a href="privacy.html">Chính sách riêng tư</a>.</p>
     </div>
   </section>
