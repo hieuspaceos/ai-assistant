@@ -1,0 +1,41 @@
+name = "troly-fleet"
+main = "src/index.js"
+compatibility_date = "2025-11-26"
+
+# route vendor-hosted: troly.hieuspace.com/fleet* — worker nhận path có
+# prefix /fleet và tự normalize (normPath trong index.js)
+routes = [
+  { pattern = "troly.hieuspace.com/fleet*", zone_name = "hieuspace.com" },
+]
+
+# dashboard collector-web/ — mọi request qua worker trước để /api/* và
+# prefix /fleet xử lý đúng, path còn lại mới rơi về static assets
+[assets]
+directory = "../collector-web"
+binding = "ASSETS"
+run_worker_first = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "troly-fleet-db"
+database_id = "90411a34-02c4-4829-a494-afd0f7ed5b0f"      # điền sau khi `wrangler d1 create`
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "troly-fleet-assets"
+
+# mirror_loop (6h, như py) + telemetry_loop (hàng ngày, như py)
+[triggers]
+crons = ["7 */6 * * *", "30 2 * * *"]
+
+[vars]
+# UPSTREAM_URL — mirror kéo release từ đây (để trống = tắt mirror)
+# UPSTREAM_URL = "https://troly.hieuspace.com/releases/latest.json"
+# TELEMETRY_URL — vendor-hosted tier là điểm NHẬN org-ping, không gửi
+
+# Secrets (wrangler secret put — KHÔNG ghi vào file này):
+#   ORGS_JSON     : {"<ORG>": {"beacon_secret":"...","license_secret":"...",
+#                              "admin_key":"..."}}
+#   VENDOR_KEY    : key đọc /api/org-pings + scope "*" mọi org
+#   TELEMETRY_KEY : key X-Admin-Key khi telemetry_loop gửi (chỉ cần nếu
+#                   collector này là customer-hosted ping về vendor)
