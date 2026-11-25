@@ -141,6 +141,19 @@ if ($exe) {
 }
 $r3 = Spawn-ReadAll 'cmd.exe /c "fakebrain <NUL 2>&1"'
 Write-Host "  fakebrain via cmd: $(($r3.out -replace '\s+',' ').Trim())"
+if ($exe) {
+    # exec full path tai cho qua cmd (cmd xu ly redirect, con AgentSpawn
+    # khong — nen test exec qua cmd dung <NUL cua cmd)
+    $rA = Spawn-ReadAll "cmd.exe /c `"`"$($exe.FullName)`" <NUL 2>&1`""
+    Write-Host "  exec tai D:: $(($rA.out -replace '\s+',' ').Trim())"
+    # copy sang C:\Windows\Temp (world-writable) + grant RX, exec lai
+    $cpdir = Join-Path $tmp "fbbin"
+    New-Item -ItemType Directory -Force $cpdir | Out-Null
+    Copy-Item (Join-Path $exe.DirectoryName "*") $cpdir -Force
+    icacls $cpdir /grant "${AgentUser}:(OI)(CI)RX" /Q | Out-Null
+    $rB = Spawn-ReadAll "cmd.exe /c `"`"$cpdir\fakebrain.exe`" <NUL 2>&1`""
+    Write-Host "  exec tai C:\Temp: $(($rB.out -replace '\s+',' ').Trim())"
+}
 # spawn bang FULL PATH — y het Start-BrainSandboxed (PATH-search cua
 # child fail khi troly-agent khong enumerate duoc dir)
 $r = if ($exe) {
