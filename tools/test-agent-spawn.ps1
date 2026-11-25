@@ -141,8 +141,10 @@ if ($exe) {
 }
 $r3 = Spawn-ReadAll 'cmd.exe /c "fakebrain <NUL 2>&1"'
 Write-Host "  fakebrain via cmd: $(($r3.out -replace '\s+',' ').Trim())"
-$r = if ($FakeBin) {
-    [TroLy.AgentSpawn]::Start($AgentUser, $pw, '"fakebrain"', $work, $envBlock)
+# spawn bang FULL PATH — y het Start-BrainSandboxed (PATH-search cua
+# child fail khi troly-agent khong enumerate duoc dir)
+$r = if ($exe) {
+    [TroLy.AgentSpawn]::Start($AgentUser, $pw, "`"$($exe.FullName)`"", $work, $envBlock)
 } else { @{ Error = "fakebrain.exe khong build duoc" } }
 if ($r.Error) { Write-Host "    (err: $($r.Error))" -ForegroundColor Yellow }
 Check "spawn fakebrain" (-not $r.Error)

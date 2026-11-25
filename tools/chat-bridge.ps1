@@ -503,7 +503,12 @@ function Start-BrainSandboxed($brain, $cred) {
     # Spawn não dưới user "troly-agent" kém quyền (setup-agent-user đã cấp
     # ACL). Trả $true khi spawn + handshake được đẩy đi; $false → caller
     # rơi về spawn thường (vẫn hơn kẹt chết, kèm event cảnh báo).
-    $cmdline = '"' + $brain.cmd + '"'
+    # Resolve cmd -> full path: PATH-search của child có thể fail khi
+    # troly-agent không enumerate được dir chứa binary (deny-read chỉ
+    # cho traverse) — full path bỏ qua search, chỉ cần exec trên file.
+    $cmdPath = $brain.cmd
+    try { $cmdPath = (Get-Command $brain.cmd -ErrorAction Stop).Source } catch {}
+    $cmdline = '"' + $cmdPath + '"'
     foreach ($a in @($brain.args)) { $cmdline += ' "' + $a + '"' }
     $home2 = "C:\Users\$($cred.user)"
     $envPairs = [ordered]@{
