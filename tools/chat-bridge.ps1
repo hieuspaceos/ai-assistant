@@ -490,7 +490,10 @@ function Call-Acp($method, $params) {
     return $id
 }
 
+$script:RunId = 0        # parity .py — bump ở /api/prompt, event kèm run_id
+
 function Push-Event($ev) {
+    if (-not $ev.Contains("run_id")) { $ev["run_id"] = $script:RunId }
     [void]$script:EventStore.Add($ev)
     if ($ev.t -in @("ready", "done", "err")) {
         $script:PermPending.Clear()   # lượt mới/kết thúc/lỗi → perm cũ hết hạn
@@ -592,6 +595,39 @@ function Start-Brain {
     # (bản .py dùng stderr=DEVNULL tương đương)
     $psi.UseShellExecute = $false
     $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+    # env scrub (parity content_guard.scrub_env): não kế thừa TOÀN BỘ env
+    # user — `printenv` trong sandbox đọc được OPENAI_API_KEY/AWS đang
+    # set. Spawn bằng allowlist; cty truyền thêm qua env-allowlist.json.
+    $keep = @("PATH","HOME","USER","USERNAME","LOGNAME","LANG","LC_ALL",
+        "LC_CTYPE","TZ","TMPDIR","TEMP","TMP","SHELL","TERM",
+        "BRIDGE_TOKEN","BRAIN_TERM","TROLY_DATA",
+        "SystemRoot","SystemDrive","WINDIR","APPDATA","LOCALAPPDATA",
+        "USERPROFILE","HOMEDRIVE","HOMEPATH","COMSPEC","PATHEXT",
+        "ProgramData","ProgramFiles","ProgramFiles(x86)","PSModulePath",
+        "NUMBER_OF_PROCESSORS","OS","PROCESSOR_ARCHITECTURE",
+        "XDG_CONFIG_HOME","XDG_DATA_HOME","XDG_CACHE_HOME",
+        "XDG_RUNTIME_DIR","DISPLAY","SSH_AUTH_SOCK",
+        "DBUS_SESSION_BUS_ADDRESS",
+        # proxy vars — cấu hình mạng, máy sau proxy cty cần não lên net
+        "HTTP_PROXY","HTTPS_PROXY","NO_PROXY","ALL_PROXY",
+        "http_proxy","https_proxy","no_proxy","all_proxy")
+    try {
+        $exf = Join-Path $WorkDir ".devin\env-allowlist.json"
+        if (Test-Path $exf) {
+            $exd = Get-Content $exf -Raw | ConvertFrom-Json
+            foreach ($k in @($exd.extra)) { $keep += [string]$k }
+        }
+    } catch {}
+    $psi.EnvironmentVariables.Clear()
+    $dropped = 0
+    foreach ($kv in [System.Environment]::GetEnvironmentVariables().GetEnumerator()) {
+        if ($keep -contains $kv.Key -or $kv.Key.StartsWith("TROLY_")) {
+            $psi.EnvironmentVariables[$kv.Key] = [string]$kv.Value
+        } else { $dropped++ }
+    }
+    if ($dropped -gt 0) {
+        Push-Event ([ordered]@{ t = "env_scrub"; dropped = $dropped })
+    }
     $script:AcpProc = New-Object System.Diagnostics.Process
     $script:AcpProc.StartInfo = $psi
     try { $null = $script:AcpProc.Start() } catch {
@@ -669,14 +705,73 @@ function Drain-Queue {
                 $opts += [ordered]@{ optionId = $o.optionId; name = $o.name; kind = $o.kind }
                 $optIds += [string]$o.optionId
             }
+            # kẹp độ dài title do não gửi — phình thì lọt thẳng vào store
+            $ttl = if ($tc.title) { [string]$tc.title } else { "Trợ lý muốn làm một việc" }
+            if ($ttl.Length -gt 200) { $ttl = $ttl.Substring(0, 200) }
+            # exec allowlist (parity content_guard): lệnh khớp glob trong
+            # .devin/exec-allowlist.json → auto-duyệt không card. Denylist
+            # metachar lọc pattern độc (file bị sửa tay).
+            $alMatched = $null
+            try {
+                $alf = Join-Path $WorkDir ".devin\exec-allowlist.json"
+                if (Test-Path $alf) {
+                    $alPats = @((Get-Content $alf -Raw | ConvertFrom-Json).patterns)
+                    # parity .py — ưu tiên field LỆNH (cmd/command); text/
+                    # input chứa văn bản bất kỳ, não đặt chuỗi hiền vào
+                    # đó mà toolCall làm việc khác thì auto-duyệt bừa.
+                    $cands = @()
+                    if ($tc.rawInput) {
+                        foreach ($k in @("cmd","command")) {
+                            if ($tc.rawInput.$k -is [string] -and
+                                $tc.rawInput.$k.Trim()) {
+                                $cands += $tc.rawInput.$k
+                            }
+                        }
+                    }
+                    if (-not $cands.Count) { $cands = @($ttl) }
+                    foreach ($pat in $alPats) {
+                        $pl = ([string]$pat).Trim()
+                        if (-not $pl -or $pl.ToLower() -match '[|<>;&`]|(\$\()|sudo|rm |curl|wget|certutil|powershell|bash|python|node |sh |eval') { continue }
+                        # pattern phải bắt đầu bằng tên lệnh — `*`/`?` trần
+                        # khớp mọi lệnh = tắt gate (parity .py)
+                        if ($pl[0] -notmatch '[a-zA-Z0-9._-]') { continue }
+                        foreach ($c in $cands) {
+                            $cn = ($c -replace '\s+', ' ').Trim()
+                            # parity .py — lệnh chứa metachar (chain/
+                            # redirect) không auto-duyệt dù khớp glob:
+                            # "git status *" cũng nuốt "&& rm -rf ~"
+                            if ($cn -match '[|<>;&`]|(\$\()') { continue }
+                            if ($cn -like $pl -or $cn -like "$pl *") {
+                                $alMatched = $pl; break
+                            }
+                        }
+                        if ($alMatched) { break }
+                    }
+                }
+            } catch {}
+            if ($alMatched) {
+                $allow = $null
+                foreach ($o in $opts) {
+                    if ([string]$o.kind -match '^(?i)allow') { $allow = $o; break }
+                }
+                $pick = if ($allow) { $allow.optionId } elseif ($opts.Count) { $opts[0].optionId } else { $null }
+                Push-Event ([ordered]@{ t = "perm:auto"; title = $ttl; pattern = $alMatched })
+                try {
+                    if ($null -ne $pick) {
+                        Send-Acp ([ordered]@{ jsonrpc = "2.0"; id = $m.id
+                            result = @{ outcome = @{ outcome = "selected"; optionId = $pick } } })
+                    } else {
+                        Send-Acp ([ordered]@{ jsonrpc = "2.0"; id = $m.id
+                            error = @{ code = -32602; message = "không có option duyệt" } })
+                    }
+                } catch {}
+                continue
+            }
             if ($script:PermPending.Count -ge $PermMax) { $script:PermPending.Clear() }
             $script:PermPending[[string]$m.id] = @{
                 options = $optIds
                 ts = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
             }
-            # kẹp độ dài title do não gửi — phình thì lọt thẳng vào store
-            $ttl = if ($tc.title) { [string]$tc.title } else { "Trợ lý muốn làm một việc" }
-            if ($ttl.Length -gt 200) { $ttl = $ttl.Substring(0, 200) }
             Push-Event ([ordered]@{
                 t = "perm"; id = $m.id
                 title = $ttl
@@ -989,7 +1084,27 @@ try {
                 # POST /api/permissions tạo card nên không dùng để kiểm được.
                 # Chỉ trả isdir, không lộ metadata; vẫn đòi token.
                 $p0 = Expand-Path ([string]$ctx.Request.QueryString["path"]).Trim()
-                Send-Json $ctx @{ ok = $true; isdir = ($p0 -and (Test-Path $p0 -PathType Container)) }
+                # parity .py: path nhạy cảm → false luôn (oracle dò file)
+                Send-Json $ctx @{ ok = $true; isdir = ($p0 -and
+                    -not (Test-SensitivePath $p0) -and
+                    (Test-Path $p0 -PathType Container)) }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "GET" -and $path -eq "/api/count-glob") {
+                # parity .py — verify workflow hỏi số file khớp glob;
+                # trả SỐ không trả tên. Pattern chỉ trong dir (không ../).
+                $d0 = Expand-Path ([string]$ctx.Request.QueryString["path"]).Trim()
+                $pat = [string]$ctx.Request.QueryString["pattern"]
+                if (-not $pat) { $pat = "*" }
+                if ($pat.Length -gt 100) { $pat = $pat.Substring(0,100) }
+                if ($pat -match '\.\.|/|\\') { $pat = "*" }
+                $cnt = 0
+                if ($d0 -and -not (Test-SensitivePath $d0) -and
+                    (Test-Path $d0 -PathType Container)) {
+                    $cnt = @((Get-ChildItem -Path $d0 -Filter $pat -Force |
+                              Select-Object -First 2001)).Count
+                }
+                Send-Json $ctx @{ ok = $true; count = [Math]::Min($cnt,2000);
+                                  capped = ($cnt -gt 2000) }
             }
             elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/prompt") {
                 $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
@@ -1008,6 +1123,7 @@ try {
                     try {
                         $script:PromptBusy = $true
                         $script:PromptSince = Get-Date
+                        $script:RunId += 1   # parity .py — đếm lượt thật cho beacon
                         Call-Acp "session/prompt" @{
                             sessionId = $script:SessionId
                             prompt = @(@{ type = "text"; text = $body.text })
@@ -1456,6 +1572,25 @@ try {
                     $app | Add-Member -NotePropertyName check_message -NotePropertyValue $res.msg -Force
                     Save-Json $ConnFp $k
                     Send-Json $ctx $res
+                }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/emit-event") {
+                # Endpoint nội bộ: ext-bridge/tools phát event phụ (inj_suspect,
+                # perm:auto, env_scrub, pack_applied, update_applied) vào event
+                # stream để beacon đếm. Whitelist type — không nhận gì lạ.
+                $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
+                $body = $reader.ReadToEnd() | ConvertFrom-Json
+                $t = [string]$body.t
+                if ($t -in @("inj_suspect","perm:auto","env_scrub","pack_applied","update_applied")) {
+                    # parity .py — giữ đủ field để beacon/dashboard đọc
+                    $ev = [ordered]@{ t = $t }
+                    foreach ($k in @("action","patterns","dropped","title","pattern","msg")) {
+                        if ($null -ne $body.$k) { $ev[$k] = $body.$k }
+                    }
+                    Push-Event $ev
+                    Send-Json $ctx @{ ok = $true }
+                } else {
+                    Send-Json $ctx @{ err = "type không nhận" } 400
                 }
             }
             else {

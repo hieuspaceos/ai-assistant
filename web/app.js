@@ -48,6 +48,7 @@ const I18N = {
     folderPh: 'dán đường dẫn folder…',
     readOnly: 'chỉ đọc', readWrite: 'đọc + sửa',
     addBtn: 'Thêm', addFolderBtn: '+ thêm folder',
+    adminLink: 'Dành cho quản trị viên (IT) →',
     delPermTitle: 'Gỡ quyền', recheckTitle: 'Kiểm tra lại',
     btnOpen: 'Mở trang', btnSetup: 'Cài',
     openTitle: 'Mở trang này trên trình duyệt', setupTitle: 'Điền thông tin kết nối',
@@ -89,6 +90,21 @@ const I18N = {
     botImportBtn: 'Nhập trợ lý này',
     botImporting: 'Đang nhập…',
     botImportDone: 'Đã nhập — trợ lý nằm trong menu, bạn tự chọn khi sẵn sàng.',
+    wfTitle: 'Quy trình',
+    wfRun: 'Chạy',
+    wfRunning: 'Đang chạy…',
+    wfCheckTitle: 'kiểm kết quả',
+    wfAllOk: 'Tất cả đúng ✓',
+    wfHasIssue: 'Có vấn đề',
+    wfVerifyOk: 'Máy tự kiểm: đủ ✓',
+    wfVerifyFail: 'Máy tự kiểm: chưa thấy kết quả',
+    wfNeedConn: 'Cần mở trước: {apps} — chạy xong trợ lý sẽ dẫn bạn nối.',
+    wfNeedPerm: 'Trợ lý chưa được phép đọc: {paths} — nó sẽ xin quyền khi chạy, bạn đồng ý là được.',
+    wfBusy: 'Trợ lý đang làm việc khác — đợi xong rồi chạy lại nhé.',
+    wfSentErr: 'Không gửi được cho trợ lý — thử chạy lại file start.',
+    wfIssueFix: 'Quy trình "{title}" vừa chạy có vấn đề ở các mục: {issues} — kiểm tra lại và sửa cho đúng.',
+    wfIssueFixAll: 'Quy trình "{title}" vừa chạy xong nhưng kết quả chưa đúng — kiểm tra lại và sửa.',
+    wfVerifyFailMsg: 'kiểm tra tự động không thấy file kết quả',
   },
   en: {
     loading: 'Loading…',
@@ -125,6 +141,7 @@ const I18N = {
     folderPh: 'paste a folder path…',
     readOnly: 'read-only', readWrite: 'read + write',
     addBtn: 'Add', addFolderBtn: '+ add folder',
+    adminLink: 'For IT administrators →',
     delPermTitle: 'Remove access', recheckTitle: 'Check again',
     btnOpen: 'Open', btnSetup: 'Set up',
     openTitle: 'Open this page in your browser', setupTitle: 'Enter connection details',
@@ -166,6 +183,21 @@ const I18N = {
     botImportBtn: 'Import this assistant',
     botImporting: 'Importing…',
     botImportDone: 'Imported — it\'s in the menu, switch to it when ready.',
+    wfTitle: 'Workflows',
+    wfRun: 'Run',
+    wfRunning: 'Running…',
+    wfCheckTitle: 'check the result',
+    wfAllOk: 'All correct ✓',
+    wfHasIssue: 'There\'s a problem',
+    wfVerifyOk: 'Auto-check: OK ✓',
+    wfVerifyFail: 'Auto-check: result not found',
+    wfNeedConn: 'Open first: {apps} — the assistant will guide you after it runs.',
+    wfNeedPerm: 'The assistant can\'t read: {paths} — it will ask when it runs, just approve.',
+    wfBusy: 'The assistant is busy — wait for it to finish, then run again.',
+    wfSentErr: 'Couldn\'t reach the assistant — try running the start file again.',
+    wfIssueFix: 'The workflow "{title}" just ran with problems in: {issues} — please check and fix.',
+    wfIssueFixAll: 'The workflow "{title}" just finished but the result is wrong — please check and fix.',
+    wfVerifyFailMsg: 'auto-check could not find the output files',
   },
 };
 function t(k) { return (I18N[LANG] && I18N[LANG][k]) || I18N.vi[k] || k; }
@@ -972,6 +1004,278 @@ $('#bot-file').onchange = async (e) => {
   };
 };
 
+/* ---- workflows: quy trình "bấm là chạy" ----
+   File tĩnh my-course/workflows/*.json — card → panel inputs+preflight
+   → POST /api/prompt (kênh gõ tay y hệt) → poll đợi done → checklist
+   người tick + verify tự động (count-glob). Không endpoint mới phía
+   write — gate y nguyên. */
+
+let workflows = [];
+const loc = (o) => (o && (o[LANG] || o.vi)) || '';
+const subst = (s, ins) => String(s || '').replace(/\{\{(\w+)\}\}/g,
+  (m, k) => (ins[k] != null && ins[k] !== '') ? ins[k] : m);
+
+async function loadWorkflows() {
+  try {
+    // :8080 file tĩnh — fetch trần, không gắn token (bridge-token.js)
+    const r = await fetch('/my-course/workflows/index.json?_=' + Date.now());
+    if (!r.ok) return;
+    const idx = await r.json();
+    const wfs = (await Promise.all((idx.workflows || []).map(async (id) => {
+      try {
+        const rr = await fetch('/my-course/workflows/' +
+          encodeURIComponent(id) + '.json?_=' + Date.now());
+        if (!rr.ok) return null;
+        const w = await rr.json();
+        return (w && w.id && w.prompt) ? w : null;
+      } catch { return null; }
+    }))).filter(Boolean);
+    workflows = wfs;
+    renderWorkflows();
+  } catch { /* không có workflows/ → section ẩn, máy cá nhân không nhiễu */ }
+}
+
+function renderWorkflows() {
+  const sec = $('#workflows'), box = $('#workflow-list');
+  if (!workflows.length) { sec.hidden = true; return; }
+  sec.hidden = false;
+  box.innerHTML = '';
+  const depts = {};
+  workflows.forEach(w => { (depts[w.dept || ''] ||= []).push(w); });
+  const multi = Object.keys(depts).length > 1;
+  Object.keys(depts).sort().forEach(dep => {
+    if (multi && dep) {
+      const h = document.createElement('div');
+      h.className = 'wf-dept';
+      h.textContent = dep;
+      box.appendChild(h);
+    }
+    depts[dep].forEach(w => {
+      const card = document.createElement('button');
+      card.className = 'wf-card';
+      card.innerHTML =
+        `<span class="wf-icon">${escapeHtml(w.icon || '⚙️')}</span>` +
+        `<span class="wf-body"><b>${escapeHtml(loc(w.title) || w.id)}</b>` +
+        `<small>${escapeHtml(loc(w.desc))}</small></span>` +
+        `<span class="wf-go">${escapeHtml(t('wfRun'))}</span>`;
+      card.onclick = () => openWorkflow(w);
+      box.appendChild(card);
+    });
+  });
+}
+
+let wfCurrent = null;
+
+function openWorkflow(wf) {
+  wfCurrent = wf;
+  $('#wf-title').textContent = loc(wf.title) || wf.id;
+  $('#wf-desc').textContent = loc(wf.desc);
+  const ib = $('#wf-inputs');
+  ib.innerHTML = '';
+  (wf.inputs || []).forEach(inp => {
+    const row = document.createElement('div');
+    row.className = 'wf-input-row';
+    row.innerHTML =
+      `<label>${escapeHtml(loc(inp.label) || inp.key)}</label>` +
+      `<input data-k="${escapeHtml(inp.key)}" ` +
+      `placeholder="${escapeHtml(inp.placeholder || '')}">`;
+    ib.appendChild(row);
+  });
+  $('#wf-preflight').innerHTML = '';
+  $('#wf-overlay').hidden = false;
+  const first = ib.querySelector('input');
+  if (first) first.focus();
+  runWfPreflight(wf);
+}
+
+// requires.connections → chấm trạng thái app; requires.permissions →
+// folder cần có trong permissions.json. Cảnh báo, KHÔNG chặn cứng —
+// não vẫn xin quyền/dẫn nối khi chạy.
+async function runWfPreflight(wf) {
+  const pf = $('#wf-preflight');
+  const req = wf.requires || {};
+  const warns = [];
+  if ((req.connections || []).length) {
+    try {
+      const c = await (await bfetch(BRIDGE_URL + '/api/connections')).json();
+      const apps = c.apps || [];
+      const missing = req.connections.filter(id => {
+        const a = apps.find(x => x.id === id);
+        return !a || a.status !== 'connected';
+      });
+      if (missing.length) {
+        const names = missing.map(id => {
+          const a = apps.find(x => x.id === id);
+          return (a && (loc(a.name) || a.name)) || id;
+        });
+        warns.push(t('wfNeedConn').replace('{apps}', names.join(', ')));
+      }
+    } catch { /* bridge chết → bỏ preflight, prompt vẫn gửi được */ }
+  }
+  if ((req.permissions || []).length) {
+    try {
+      const p = await (await bfetch(BRIDGE_URL + '/api/permissions')).json();
+      // so theo đuôi path: workflow khai "~/Downloads", permissions
+      // lưu tuyệt đối "/Users/x/Downloads" → đuôi khớp là đủ
+      const granted = (p.folders || []).map(f =>
+        String(f.path || f).replace(/\\/g, '/').toLowerCase());
+      const missing = req.permissions.filter(path => {
+        const rel = String(path).replace(/\\/g, '/')
+          .replace(/^~?\/?/, '').toLowerCase().replace(/\/$/, '');
+        return !granted.some(g =>
+          g.replace(/\/$/, '').endsWith('/' + rel) ||
+          g.replace(/\/$/, '') === rel);
+      });
+      if (missing.length) {
+        warns.push(t('wfNeedPerm').replace('{paths}', missing.join(', ')));
+      }
+    } catch {}
+  }
+  if (warns.length) {
+    pf.innerHTML = warns.map(w =>
+      `<div class="wf-warn">${escapeHtml(w)}</div>`).join('');
+  }
+}
+
+async function runWorkflow() {
+  const wf = wfCurrent;
+  if (!wf) return;
+  const inputs = {};
+  document.querySelectorAll('#wf-inputs input')
+    .forEach(i => { inputs[i.dataset.k] = i.value.trim(); });
+  const text = subst(wf.prompt, inputs);
+  if (!text.trim()) return;
+  $('#wf-run').disabled = true;
+  try {
+    const r = await bfetch(BRIDGE_URL + '/api/prompt', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text})});
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      $('#wf-overlay').hidden = true;
+      await uiAlert(t('wfTitle'), d.err || t('wfBusy'));
+      return;
+    }
+  } catch {
+    $('#wf-overlay').hidden = true;
+    await uiAlert(t('wfTitle'), t('wfSentErr'));
+    return;
+  } finally {
+    $('#wf-run').disabled = false;
+  }
+  $('#wf-overlay').hidden = true;
+  $('#wf-checklist').hidden = true;
+  switchTab('chat');
+  startWfWatch(wf, inputs);
+}
+
+// theo dõi lượt chạy: mốc poll hiện tại → đợi event 'done'/'err'
+let wfWatch = null;
+async function startWfWatch(wf, inputs) {
+  stopWfWatch();
+  try {
+    const d = await (await bfetch(BRIDGE_URL + '/api/poll?since=0')).json();
+    wfWatch = { wf, inputs, after: d.next || 0, tries: 0,
+                timer: setInterval(pollWf, 2000) };
+  } catch { /* bridge mất — không có checklist nhưng prompt đã đi */ }
+}
+function stopWfWatch() {
+  if (wfWatch && wfWatch.timer) clearInterval(wfWatch.timer);
+  wfWatch = null;
+}
+async function pollWf() {
+  if (!wfWatch) return;
+  try {
+    const d = await (await bfetch(
+      BRIDGE_URL + '/api/poll?since=' + wfWatch.after)).json();
+    wfWatch.after = (d.next != null) ? d.next : wfWatch.after;
+    let done = false;
+    for (const ev of (d.events || [])) {
+      if (ev.t === 'done') { done = true; break; }
+      if (ev.t === 'err') { stopWfWatch(); return; }
+    }
+    if (done) { finishWf(); return; }
+    if (++wfWatch.tries > 300) stopWfWatch();   // ~10 phút → ngừng đợi
+  } catch { /* poll lỗi → vòng sau thử tiếp */ }
+}
+
+async function finishWf() {
+  const run = wfWatch;
+  stopWfWatch();
+  if (!run) return;
+  const ver = await runWfVerify(run.wf, run.inputs).catch(() => null);
+  showWfChecklist(run.wf, ver, run.inputs);
+}
+
+// verify tự động: {dir, glob, min_count} → GET /api/count-glob.
+// dir có thể chứa {{input}}; nếu trỏ vào FILE thì lấy folder cha.
+async function runWfVerify(wf, inputs) {
+  const v = wf.verify;
+  if (!v || !v.dir) return null;
+  let dir = subst(v.dir, inputs);
+  if (/\.[A-Za-z0-9]{1,8}$/.test(dir)) dir = dir.replace(/\/[^/]*$/, '');
+  const u = BRIDGE_URL + '/api/count-glob?path=' + encodeURIComponent(dir) +
+    '&pattern=' + encodeURIComponent(v.glob || '*');
+  const d = await (await bfetch(u)).json();
+  const need = v.min_count || 1;
+  return { ok: d.ok && (d.count || 0) >= need, count: d.count || 0, need };
+}
+
+let wfCheckWf = null, wfCheckInputs = {};
+
+function showWfChecklist(wf, ver, inputs) {
+  wfCheckWf = wf;
+  wfCheckInputs = inputs || {};
+  $('#wf-check-title').textContent =
+    (loc(wf.title) || wf.id) + ' — ' + t('wfCheckTitle');
+  const chip = $('#wf-verify-chip');
+  if (ver) {
+    chip.hidden = false;
+    chip.className = ver.ok ? 'ok' : 'fail';
+    chip.textContent = ver.ok ? t('wfVerifyOk') : t('wfVerifyFail');
+  } else chip.hidden = true;
+  $('#wf-check-items').innerHTML = (wf.checklist || []).map((c, i) =>
+    `<label class="wf-check-item"><input type="checkbox" data-i="${i}">` +
+    `<span>${escapeHtml(c)}</span></label>`).join('');
+  $('#wf-checklist').hidden = false;
+  // verify đỏ → tự nhờ não kiểm tra lại (vòng sửa) + theo dõi lượt mới
+  if (ver && !ver.ok) {
+    sendWfFix(wf, [t('wfVerifyFailMsg')], wfCheckInputs, true);
+  }
+}
+
+async function sendWfFix(wf, issues, inputs, rewatch) {
+  const msg = issues.length
+    ? t('wfIssueFix').replace('{title}', loc(wf.title) || wf.id)
+        .replace('{issues}', issues.join('; '))
+    : t('wfIssueFixAll').replace('{title}', loc(wf.title) || wf.id);
+  try {
+    const r = await bfetch(BRIDGE_URL + '/api/prompt', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text: msg})});
+    if (r.ok && rewatch) startWfWatch(wf, inputs || {});
+  } catch { /* bridge mất */ }
+}
+
+$('#wf-run').onclick = runWorkflow;
+$('#wf-close').onclick = () => { $('#wf-overlay').hidden = true; };
+$('#wf-cancel').onclick = () => { $('#wf-overlay').hidden = true; };
+$('#wf-overlay').onclick = (e) => {
+  if (e.target === $('#wf-overlay')) $('#wf-overlay').hidden = true;
+};
+$('#wf-allok').onclick = () => { $('#wf-checklist').hidden = true; };
+$('#wf-issue').onclick = async () => {
+  const wf = wfCheckWf;
+  if (!wf) { $('#wf-checklist').hidden = true; return; }
+  const bad = [...document.querySelectorAll('#wf-check-items input')]
+    .filter(c => !c.checked)
+    .map(c => c.nextElementSibling.textContent);
+  $('#wf-checklist').hidden = true;
+  await sendWfFix(wf, bad, wfCheckInputs, true);
+};
+
+/* ---- /workflows ---- */
+
 // thẻ consent gate chạy xong trong iframe chat (đổi trợ lý, xoá bài,
 // sửa quyền…) → làm mới chip trợ lý + manifest cho khớp state trên đĩa
 window.addEventListener('message', (e) => {
@@ -982,3 +1286,4 @@ window.addEventListener('message', (e) => {
 });
 
 loadBots();
+loadWorkflows();

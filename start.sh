@@ -60,6 +60,11 @@ python3 tools/chat-bridge.py 7682 "$ROOT" >"$LOGDIR/chat-bridge.log" 2>&1 &
 # --- 3. ext-bridge (cong 7684): cau noi extension trong trinh duyet ---
 python3 tools/ext-bridge.py 7684 "$ROOT" >"$LOGDIR/ext-bridge.log" 2>&1 &
 
+# --- 3b. beacon (chi khi may thuoc fleet cty): day snapshot len collector ---
+if [ -f "$ROOT/.devin/fleet.json" ]; then
+  python3 tools/beacon.py "$ROOT" >"$LOGDIR/beacon.log" 2>&1 &
+fi
+
 # --- 4. ttyd (cong 7681, tuy chon): che do Terminal nhung web ---
 if command -v ttyd >/dev/null 2>&1; then
   # ttyd KHONG tu xac thuc → moi ket noi phai qua term-gate: doi ma ket

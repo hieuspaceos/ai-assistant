@@ -28,9 +28,10 @@ LOGDIR = os.path.join(DATA, ".logs")
 
 # Phần "code": được đè khi VERSION mới — không chứa dữ liệu học viên
 CODE_DIRS = ["web", "tools", "extension", "templates", "docs",
+             "collector-web",
              os.path.join(".devin", "skill-packs")]
 CODE_FILES = ["AGENTS.md", "CLAUDE.md", "SETUP.md", "README.md",
-              "requirements.txt", "VERSION"]
+              "requirements.txt", "VERSION", "start.sh", "start.bat"]
 # Phần "dữ liệu": chỉ đổ vào lần đầu, update KHÔNG bao giờ đè
 SEED_DIRS = ["my-course"]
 SEED_FILES = ["brain.json"]
@@ -59,14 +60,86 @@ def _copy_tree(src, dst, overwrite):
             os.makedirs(os.path.dirname(d), exist_ok=True)
             shutil.copy2(s, d)
 
+def apply_pending():
+    """Áp bản update.py đã stage (`.devin/update-pending.json` +
+    `update-stage/`) — chạy TRƯỚC supervisor nên file code không bị
+    process con khoá (Windows). Code cũ giữ lại `.devin/backup-code-*`
+    để `troly --rollback` dựng lại. Trả ver mới áp, hoặc None."""
+    devin = os.path.join(DATA, ".devin")
+    pend_fp = os.path.join(devin, "update-pending.json")
+    stage = os.path.join(devin, "update-stage")
+    if os.path.abspath(DATA) == os.path.abspath(SRC):
+        return None                    # DATA trùng SRC (dev) — bỏ qua
+    try:
+        pend = json.load(open(pend_fp, encoding="utf-8"))
+    except Exception:
+        return None
+    if not pend.get("ver") or not os.path.isdir(stage):
+        return None
+    # chụp code hiện tại trước khi đè — giữ 2 bản gần nhất
+    back = os.path.join(devin,
+                        "backup-code-" + time.strftime("%Y%m%d-%H%M%S"))
+    os.makedirs(back, exist_ok=True)
+    for d in CODE_DIRS:
+        s = os.path.join(DATA, d)
+        if os.path.isdir(s):
+            shutil.copytree(s, os.path.join(back, d))
+    for f in CODE_FILES:
+        s = os.path.join(DATA, f)
+        if os.path.isfile(s):
+            shutil.copy2(s, os.path.join(back, f))
+    # stage chỉ chứa path đã qua whitelist của update.py — copy đè
+    for item in os.listdir(stage):
+        s = os.path.join(stage, item)
+        d = os.path.join(DATA, item)
+        if os.path.isdir(s):
+            shutil.copytree(s, d, dirs_exist_ok=True)
+        else:
+            shutil.copy2(s, d)
+    with open(os.path.join(DATA, "VERSION"), "w") as f:
+        f.write(str(pend["ver"]))
+    shutil.rmtree(stage, ignore_errors=True)
+    os.remove(pend_fp)
+    backs = sorted(b for b in os.listdir(devin)
+                   if b.startswith("backup-code-")
+                   and os.path.isdir(os.path.join(devin, b)))
+    for old in backs[:-2]:
+        shutil.rmtree(os.path.join(devin, old), ignore_errors=True)
+    return str(pend["ver"])
+
+def rollback():
+    """`troly --rollback` — dựng lại code từ backup-code mới nhất khi
+    bản vừa áp hỏng (crash-loop). Version file cũng quay theo."""
+    devin = os.path.join(DATA, ".devin")
+    backs = sorted(b for b in os.listdir(devin)
+                   if b.startswith("backup-code-")
+                   and os.path.isdir(os.path.join(devin, b))) \
+        if os.path.isdir(devin) else []
+    if not backs:
+        print("Không có bản code dự phòng nào để quay lại.")
+        return
+    src = os.path.join(devin, backs[-1])
+    for item in os.listdir(src):
+        s, d = os.path.join(src, item), os.path.join(DATA, item)
+        if os.path.isdir(s):
+            shutil.rmtree(d, ignore_errors=True)
+            shutil.copytree(s, d)
+        else:
+            shutil.copy2(s, d)
+    ver = _read(os.path.join(src, "VERSION"), "?")
+    print(f"Đã quay về bản trước (v{ver}). Mở lại Trợ Lý AI là xong.")
+
 def bootstrap():
-    """Bung payload vào DATA; update-đè-code khi VERSION đổi. Trả về bool
-    'đã update code' — caller báo học viên nếu cần."""
+    """Áp staged update (nếu có), rồi bung payload vào DATA + đè code
+    khi VERSION nguồn đổi. Trả về bool 'đã update code'."""
+    os.makedirs(DATA, exist_ok=True)
+    applied = apply_pending()
     src_ver, dst_ver = _read(os.path.join(SRC, "VERSION"), "0"), \
                        _read(os.path.join(DATA, "VERSION"), "")
-    os.makedirs(DATA, exist_ok=True)
     fresh = not dst_ver
-    if fresh or src_ver != dst_ver:
+    if fresh or (src_ver != dst_ver and not applied):
+        # đã áp staged update thì không đè lại bằng payload nguồn —
+        # staged là bản MỚI HơN exe/bundle đang chạy
         for d in CODE_DIRS:
             s = os.path.join(SRC, d)
             if os.path.isdir(s):
@@ -86,7 +159,7 @@ def bootstrap():
                 shutil.copy2(s, os.path.join(DATA, f))
     os.makedirs(os.path.join(DATA, ".devin"), exist_ok=True)
     os.makedirs(LOGDIR, exist_ok=True)
-    return not fresh and src_ver != dst_ver
+    return bool(applied) or (not fresh and src_ver != dst_ver)
 
 def ensure_token():
     """Sinh 'chìa khoá nhà' một lần, TRƯỚC khi spawn child — cùng thiết kế
@@ -113,12 +186,35 @@ def run_tool(name, argv):
     sys.argv = [script] + argv
     runpy.run_path(script, run_name="__main__")
 
+def run_tool_silent(name, argv):
+    """Subprocess im lặng cho tool chạy nền (update --check…) — KHÔNG
+    dùng run_tool: runpy đổi sys.argv chung, gọi từ thread sẽ phá.
+    FROZEN: sys.executable là troly.exe — gọi qua vai con `troly <name>`
+    chứ không truyền path .py (exe không chạy file py được — argv lạ rơi
+    vào `troly run` → supervisor thứ hai)."""
+    if FROZEN:
+        cmd = [sys.executable, name] + argv
+    else:
+        script = os.path.join(DATA, "tools", name + ".py")
+        if not os.path.isfile(script):
+            return
+        cmd = [sys.executable, script] + argv
+    try:
+        subprocess.Popen(cmd, cwd=DATA,
+                         stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
 # ---------- supervisor ----------
 
-def child_cmd(name, port):
+def child_cmd(name, port=None):
+    # port=None cho vai không có cổng (beacon — chỉ cần DATA)
+    args = [] if port is None else [str(port)]
     if FROZEN:
-        return [sys.executable, name, str(port), DATA]
-    return [sys.executable, os.path.join(DATA, "tools", name + ".py"), str(port), DATA]
+        return [sys.executable, name] + args + [DATA]
+    return [sys.executable, os.path.join(DATA, "tools", name + ".py")] \
+        + args + [DATA]
 
 def spawn(name, cmd, log_fp):
     log = open(log_fp, "ab", buffering=0)
@@ -138,6 +234,10 @@ def supervisor():
     """Spawn mọi child rồi chạy watchdog — gọi ở MAIN thread (signal chỉ
     đăng ký được ở main thread). Trả khi STOPPING, đã terminate hết con."""
     jobs = [("serve", 8080), ("chat-bridge", 7682), ("ext-bridge", 7684)]
+    if os.path.isfile(os.path.join(DATA, ".devin", "fleet.json")):
+        # máy thuộc fleet của một cty — beacon đẩy snapshot lên collector
+        # (push, không mở port; thiếu file → máy cá nhân, không spawn)
+        jobs.append(("beacon", None))
     if platform.system() == "Darwin":
         # Sinh Seatbelt profile trước khi spawn — term-gate bọc não theo
         # file này; chat-bridge regen mỗi spawn nên đây chỉ là phòng bị
@@ -248,11 +348,15 @@ def _stop(*_):
 
 def main():
     a = sys.argv[1:]
-    if a and a[0] in ("serve", "chat-bridge", "ext-bridge"):
+    if a and a[0] in ("serve", "chat-bridge", "ext-bridge", "beacon",
+                      "update", "apply-pack", "backup", "gen-sandbox"):
         run_tool(a[0], a[1:])
         return
     if "--register-startup" in a or "--unregister-startup" in a:
         register_startup("--register-startup" in a)
+        return
+    if "--rollback" in a:
+        rollback()
         return
     # mặc định: `troly` hoặc `troly run`
     updated = bootstrap()
@@ -276,6 +380,11 @@ def main():
         else:
             print(f"Portal: http://localhost:8080/web/?t={tok}")
     threading.Thread(target=_open_when_ready, daemon=True).start()
+    # check update lúc boot — thread phụ (timeout 3s trong update.py
+    # --check), kéo về + stage xong sẽ áp ở lần mở app sau
+    threading.Thread(
+        target=lambda: run_tool_silent("update", [DATA, "--check"]),
+        daemon=True).start()
     supervisor()                                   # tới khi Ctrl-C / kill
 
 if __name__ == "__main__":

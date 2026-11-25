@@ -32,3 +32,26 @@ my-course/clone-work/
 tools/fakebrain/
 .devin/agent-user.cred
 .build-stage.*
+
+# Fleet — machine state + secrets (plan fleet-console)
+.devin/fleet.json
+.devin/machine.id
+.devin/machine.key
+.devin/beacon.cursor
+.devin/fleet-inbox.json
+.devin/license.json
+.devin/pack-version
+collector.json
+collector-data/
+
+# Distribution — update state máy + release artifacts + backup snapshot
+.devin/update-pending.json
+.devin/update-stage/
+.devin/backup-*/
+.devin/backup-code-*/
+.devin/exec-allowlist.json
+.devin/rules.local.md
+releases/
+.wrangler/
+.dev.vars
+worker/node_modules/

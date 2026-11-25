@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trợ lý AI — Fleet</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 38 38'><rect width='38' height='38' rx='11' fill='%23333'/></svg>">
+<style>
+  /* Dashboard fleet cho IT/quản trị cty — chạy trên collector :8790,
+     KHÔNG phải portal :8080. Style tự chứa (không kéo styles.css của
+     portal — collector có thể deploy độc lập chỉ với folder này). */
+  :root {
+    --bg: #faf9f7; --well: #fff; --ink: #2c2a26; --muted: #8a8578;
+    --border: #e4e0d8; --accent: #4a6fa5; --accent-soft: #e8eff8;
+    --bad: #9a2b20; --warn: #8a6210; --ok: #2e6b3a;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.5 -apple-system, "Segoe UI", sans-serif; }
+  .hd { display: flex; align-items: center; gap: 12px; padding: 14px 24px;
+        border-bottom: 1px solid var(--border); background: var(--bg);
+        position: sticky; top: 0; z-index: 2; }
+  .hd .t { font-size: 18px; font-weight: 600; }
+  .hd .sub { color: var(--muted); font-size: 13px; }
+  .hd .sp { flex: 1; }
+  .seats { font-size: 13px; padding: 3px 12px; border-radius: 999px;
+           background: var(--accent-soft); color: var(--accent); }
+  .seats.warn { background: #fdf3e0; color: var(--warn); }
+  .seats.bad { background: #fdf1f0; color: var(--bad); }
+  .btn { font: inherit; font-size: 13px; cursor: pointer;
+         border: 1px solid var(--border); border-radius: 999px;
+         background: var(--well); color: var(--ink); padding: 4px 14px; }
+  .btn:hover { background: var(--accent-soft); }
+  .wrap { max-width: 1150px; padding: 18px 24px 60px; }
+  .pending { border: 1px solid #e8d9a0; background: #fdf9e8;
+             border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; }
+  .pending h3 { margin: 0 0 8px; font-size: 14px; color: var(--warn); }
+  .pending .prow { display: flex; align-items: center; gap: 10px;
+                   padding: 6px 0; font-size: 13px; }
+  .pending .mono { font-family: var(--mono); }
+  table { width: 100%; border-collapse: collapse; background: var(--well);
+          border: 1px solid var(--border); border-radius: 10px;
+          overflow: hidden; }
+  th, td { text-align: left; padding: 9px 12px; font-size: 13px;
+           border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: var(--accent-soft); }
+  tbody tr:last-child td { border-bottom: 0; }
+  tr.stale td { color: var(--muted); }
+  .tag { font-size: 11px; border-radius: 999px; padding: 1px 8px;
+         background: var(--accent-soft); color: var(--accent); }
+  .tag.bad { background: #fdf1f0; color: var(--bad); }
+  .tag.warn { background: #fdf3e0; color: var(--warn); }
+  .tag.ok { background: #eaf4ec; color: var(--ok); }
+  .tag.gray { background: #eee; color: var(--muted); }
+  .mono { font-family: var(--mono); }
+  .err-box { margin: 16px 24px; padding: 12px 16px; border-radius: 10px;
+             background: #fdf1f0; color: var(--bad); font-size: 13px; }
+  /* chi tiết máy — cùng class với web/admin.html để AdmRender đổ vào */
+  .detail { margin-top: 18px; }
+  .adm-grid { display: grid; gap: 14px;
+              grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .adm-card { border: 1px solid var(--border); border-radius: 10px;
+              background: var(--well); padding: 14px; }
+  .adm-card h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; }
+  .adm-row { display: flex; gap: 10px; font-size: 13px; padding: 2px 0; }
+  .adm-row .k { color: var(--muted); min-width: 96px; flex-shrink: 0; }
+  .adm-row .v { word-break: break-all; font-family: var(--mono);
+                font-size: 12px; }
+  .adm-list { margin: 0; padding: 0; list-style: none; font-size: 13px; }
+  .adm-list li { padding: 2px 0; display: flex; gap: 10px;
+                 align-items: baseline; }
+  .adm-list .mono { font-family: var(--mono); word-break: break-all; }
+  .adm-tag { flex-shrink: 0; font-size: 11px; border-radius: 999px;
+             padding: 1px 8px; background: var(--accent-soft);
+             color: var(--accent); }
+  .adm-tag.gray { background: #eee; color: var(--muted); }
+  .adm-ev { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .adm-ev b { color: var(--ink); font-weight: 500; }
+  .adm-empty { color: var(--muted); font-size: 13px; }
+  .usage { margin-top: 14px; }
+  .usage td, .usage th { padding: 5px 10px; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="hd">
+  <div>
+    <div class="t" id="t-title">Fleet — Trợ lý AI</div>
+    <div class="sub" id="t-sub">toàn bộ máy trong công ty</div>
+  </div>
+  <div class="sp"></div>
+  <span class="seats" id="seats" hidden></span>
+  <button class="btn" id="btn-refresh" type="button">Làm mới</button>
+</div>
+<div class="err-box" id="err" hidden></div>
+<div class="wrap" id="wrap" hidden>
+  <div class="pending" id="pending" hidden>
+    <h3 id="t-pending">Máy chờ duyệt</h3>
+    <div id="pending-list"></div>
+  </div>
+  <table>
+    <thead><tr id="cols">
+      <th>Máy / nhân viên</th><th>Não</th><th>Ver / Ext</th>
+      <th>Báo lúc</th><th>Hôm nay</th><th>Bot</th><th>License</th>
+    </tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <div class="detail" id="detail" hidden>
+    <h3 id="dt-title" style="font-size:15px"></h3>
+    <div class="adm-grid">
+      <div class="adm-card"><h3 id="t-sys">Hệ thống</h3><div id="adm-sys"></div></div>
+      <div class="adm-card"><h3 id="t-bot">Trợ lý</h3><div id="adm-bots"></div></div>
+      <div class="adm-card"><h3 id="t-perm">Folder được phép</h3><div id="adm-perms"></div></div>
+      <div class="adm-card"><h3 id="t-conn">Kết nối ứng dụng</h3><div id="adm-conns"></div></div>
+      <div class="adm-card"><h3 id="t-ev">Hoạt động gần đây</h3><div id="adm-evs"></div></div>
+    </div>
+    <table class="usage" id="usage" hidden>
+      <thead><tr><th>Ngày</th><th>Lượt xong</th><th>Lỗi</th>
+                 <th>Xin phép</th><th>Tự duyệt</th><th>Nghi độc</th></tr></thead>
+      <tbody id="usage-rows"></tbody>
+    </table>
+    <button class="btn" id="btn-revoke" type="button"
+            style="margin-top:12px">Thu hồi máy này</button>
+  </div>
+</div>
+<script src="adm-render.js"></script>
+<script>
+/* Admin key đi qua ?key= một lần → sessionStorage → header X-Admin-Key
+   mọi fetch /api/* (pattern giống bridge-token.js — nhưng key này chỉ
+   có IT cty cầm, máy NV không có). */
+const q = new URLSearchParams(location.search);
+if (q.get('key')) {
+  sessionStorage.setItem('fleet_admin_key', q.get('key'));
+  q.delete('key');
+  history.replaceState(null, '', location.pathname +
+    (q.toString() ? '?' + q.toString() : '') + location.hash);
+}
+const KEY = sessionStorage.getItem('fleet_admin_key') || '';
+const api = (p, o) => {
+  o = o || {};
+  o.headers = Object.assign({ 'X-Admin-Key': KEY }, o.headers || {});
+  return fetch(p, o).then(r => { if (!r.ok) throw r.status; return r.json(); });
+};
+const $ = s => document.querySelector(s);
+const esc = AdmRender.esc;
+const I18N = {
+  vi: {
+    title: 'Fleet — Trợ lý AI', sub: 'toàn bộ máy trong công ty',
+    refresh: 'Làm mới', pending: 'Máy chờ duyệt', approve: 'Duyệt',
+    revoke: 'Thu hồi', revoked: 'Thu hồi máy này',
+    noKey: 'Thiếu admin key — mở bằng đường dẫn có ?key=<admin_key> '
+         + 'mà vendor cấp cho IT.',
+    denied: 'Sai admin key hoặc collector chưa chạy.',
+    seats: '{a}/{s} ghế đang dùng', seatsNone: 'chưa có license',
+    ago: { m: ' phút trước', h: ' giờ trước', d: ' ngày trước' },
+    cols: ['Máy / nhân viên', 'Não', 'Ver / Ext', 'Báo lúc', 'Hôm nay',
+           'Bot', 'License'],
+    lic: { ok: 'OK', expiring: 'sắp hạn', expired: 'hết hạn',
+           invalid: 'không hợp lệ', missing: 'thiếu', exceeded: 'vượt ghế' },
+    usageCols: ['Ngày', 'Lượt xong', 'Lỗi', 'Xin phép', 'Tự duyệt',
+                'Nghi độc'],
+  },
+  en: {
+    title: 'Fleet — Trợ lý AI', sub: 'all machines in the company',
+    refresh: 'Refresh', pending: 'Pending machines', approve: 'Approve',
+    revoke: 'Revoke', revoked: 'Revoke this machine',
+    noKey: 'Missing admin key — open with ?key=<admin_key> as issued '
+         + 'to IT by the vendor.',
+    denied: 'Wrong admin key or collector is not running.',
+    seats: '{a}/{s} seats in use', seatsNone: 'no license yet',
+    ago: { m: 'm ago', h: 'h ago', d: 'd ago' },
+    cols: ['Machine / user', 'Brain', 'Ver / Ext', 'Seen', 'Today',
+           'Bot', 'License'],
+    lic: { ok: 'OK', expiring: 'expiring', expired: 'expired',
+           invalid: 'invalid', missing: 'missing', exceeded: 'over seats' },
+    usageCols: ['Day', 'Done', 'Errors', 'Perm', 'Auto', 'Suspect'],
+  },
+};
+let S = I18N.vi;
+const t = k => S[k] || I18N.vi[k] || k;
+
+function ago(ts) {
+  if (!ts) return '—';
+  const d = Math.floor(Date.now() / 1000) - ts;
+  if (d < 3600) return Math.max(1, Math.floor(d / 60)) + t('ago').m;
+  if (d < 86400) return Math.floor(d / 3600) + t('ago').h;
+  return Math.floor(d / 86400) + t('ago').d;
+}
+const licTag = st =>
+  `<span class="tag ${st === 'ok' ? 'ok' : st === 'expiring' ? 'warn' : st ? 'bad' : 'gray'}">${esc(t('lic')[st] || st || '—')}</span>`;
+
+function chrome() {
+  $('#t-title').textContent = t('title');
+  $('#t-sub').textContent = t('sub');
+  $('#btn-refresh').textContent = t('refresh');
+  $('#t-pending').textContent = t('pending');
+  $('#btn-revoke').textContent = t('revoked');
+  $('#cols').innerHTML = t('cols').map(c => `<th>${esc(c)}</th>`).join('');
+  $('#usage').querySelector('thead tr').innerHTML =
+    t('usageCols').map(c => `<th>${esc(c)}</th>`).join('');
+  $('#t-sys').textContent = AdmRender.I18N.vi.sys;
+  $('#t-bot').textContent = AdmRender.I18N.vi.bot;
+  $('#t-perm').textContent = AdmRender.I18N.vi.perm;
+  $('#t-conn').textContent = AdmRender.I18N.vi.conn;
+  $('#t-ev').textContent = AdmRender.I18N.vi.ev;
+}
+
+function loadPending() {
+  api('api/pending').then(d => {
+    const list = d.pending || [];
+    $('#pending').hidden = !list.length;
+    $('#pending-list').innerHTML = list.map(m =>
+      `<div class="prow"><span class="mono">${esc(m.hostname || m.machine_id)}</span>` +
+      `<span class="tag gray">${esc(m.os || '')}</span>` +
+      `<button class="btn" data-approve="${esc(m.machine_id)}">${esc(t('approve'))}</button>` +
+      `<button class="btn" data-revoke="${esc(m.machine_id)}">${esc(t('revoke'))}</button>` +
+      `</div>`).join('');
+  }).catch(() => {});
+}
+
+function load() {
+  Promise.all([api('api/fleet'), api('api/license')])
+    .then(([fleet, lic]) => {
+      $('#err').hidden = true;
+      $('#wrap').hidden = false;
+      const seats = $('#seats');
+      if (lic.seats) {
+        seats.hidden = false;
+        seats.textContent = t('seats')
+          .replace('{a}', lic.active30).replace('{s}', lic.seats);
+        seats.className = 'seats' +
+          (lic.status === 'exceeded' || lic.status === 'expired' ? ' bad'
+           : lic.status !== 'ok' ? ' warn' : '');
+      } else {
+        seats.hidden = false;
+        seats.textContent = t('seatsNone');
+        seats.className = 'seats warn';
+      }
+      $('#rows').innerHTML = (fleet.machines || []).map(m => {
+        const stale = !m.last_seen ||
+          (Date.now() / 1000 - m.last_seen) > 3600;
+        const td = m.today || {};
+        return `<tr class="${stale ? 'stale' : ''}" data-mid="${esc(m.machine_id)}">` +
+          `<td><b>${esc(m.hostname)}</b>` +
+          (m.learner ? ` <span class="mono">${esc(m.learner)}</span>` : '') +
+          `</td>` +
+          `<td>${esc(m.brain || '—')}</td>` +
+          `<td class="mono">${esc(m.version || '?')} / ${esc(m.ext || '?')}</td>` +
+          `<td>${esc(ago(m.last_seen))}</td>` +
+          `<td>${esc(td.done || 0)} ✓` +
+          (td.err ? ` · <span class="tag bad">${esc(td.err)} lỗi</span>` : '') +
+          (td.inj_suspect ? ` · <span class="tag warn">${esc(td.inj_suspect)} nghi độc</span>` : '') +
+          `</td>` +
+          `<td class="mono">${esc(m.bot || '—')}</td>` +
+          `<td>${licTag(m.license_status)}</td></tr>`;
+      }).join('') || `<tr><td colspan="7" class="adm-empty">—</td></tr>`;
+    }).catch(() => {
+      $('#err').hidden = false;
+      $('#err').textContent = KEY ? t('denied') : t('noKey');
+      $('#wrap').hidden = true;
+    });
+}
+
+let curMid = null;
+function detail(mid) {
+  api('api/fleet/' + encodeURIComponent(mid)).then(d => {
+    curMid = mid;
+    $('#detail').hidden = false;
+    $('#dt-title').textContent =
+      (d.hostname || mid) + ' — ' + (d.snapshot.config?.learner_name || '');
+    const snap = d.snapshot || {};
+    AdmRender.renderInto({
+      sys: $('#adm-sys'), bots: $('#adm-bots'), perms: $('#adm-perms'),
+      conns: $('#adm-conns'), evs: $('#adm-evs'),
+    }, {
+      health: snap.health, brain: snap.brain, config: snap.config,
+      bots: snap.bots, perms: snap.perms, conns: snap.conns,
+      counts: d.ev_stats || {},
+    }, S === I18N.en ? AdmRender.I18N.en : AdmRender.I18N.vi);
+    const u = d.usage || [];
+    $('#usage').hidden = !u.length;
+    $('#usage-rows').innerHTML = u.map(x => {
+      const c = x.counts || {};
+      return `<tr><td>${esc(x.day)}</td><td>${esc(c.done || 0)}</td>` +
+        `<td>${esc(c.err || 0)}</td><td>${esc(c.perm || 0)}</td>` +
+        `<td>${esc(c['perm:auto'] || 0)}</td>` +
+        `<td>${esc(c.inj_suspect || 0)}</td></tr>`;
+    }).join('');
+    $('#detail').scrollIntoView({ behavior: 'smooth' });
+  }).catch(() => {});
+}
+
+document.addEventListener('click', e => {
+  const ap = e.target.dataset && e.target.dataset.approve;
+  const rv = e.target.dataset && e.target.dataset.revoke;
+  if (ap || rv) {
+    const ep = ap ? 'api/pair-approve' : 'api/pair-revoke';
+    api(ep, { method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ machine_id: ap || rv }) })
+      .then(() => { loadPending(); load(); });
+    return;
+  }
+  const tr = e.target.closest('tr[data-mid]');
+  if (tr) detail(tr.dataset.mid);
+});
+$('#btn-revoke').onclick = () => {
+  if (!curMid) return;
+  api('api/pair-revoke', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ machine_id: curMid }) })
+    .then(() => { $('#detail').hidden = true; load(); loadPending(); });
+};
+$('#btn-refresh').onclick = () => { load(); loadPending(); };
+
+// ngôn ngữ theo browser của IT — dashboard cty, không theo config học viên
+if (navigator.language && navigator.language.startsWith('en'))
+  S = I18N.en;
+chrome();
+if (!KEY) { $('#err').hidden = false; $('#err').textContent = t('noKey'); }
+load(); loadPending();
+setInterval(() => { load(); loadPending(); }, 30000);
+</script>
+</body>
+</html>

@@ -78,6 +78,11 @@ if defined PY (
   echo      Cai bang: winget install --id Python.Python.3.12 -e
 )
 
+rem --- Beacon (chi khi may thuoc fleet cty): day snapshot len collector ---
+if exist .devin\fleet.json (
+  start "Tro ly AI beacon - dung dong cua so nay" /min powershell -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0tools\beacon.ps1"
+)
+
 rem --- Mo trang web khoa hoc (cong 8080) ---
 start "Khoa hoc - dung dong cua so nay" /min powershell -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0tools\serve.ps1"
 

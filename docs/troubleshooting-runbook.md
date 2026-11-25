@@ -151,3 +151,19 @@ Log: `.logs/{portal,chat-bridge,ext-bridge,ttyd}.log` dưới root.
 | Pill vàng "Extension bản cũ" | `extVersion` extension ≠ manifest trong payload | Cập nhật app trước → `brave://extensions` (hoặc `chrome://extensions`) → gỡ "Trợ Lý AI" → Load unpacked lại folder `extension/`; mã kết nối tự ghép lại khi mở portal |
 | Banner không hiện dù có release | portal offline / GitHub API timeout 5s | Bình thường — kiểm lại khi có mạng; không ảnh hưởng việc học |
 | 401 toàn bộ sau khi đổi máy/xoá token | `bridge.token` mới, phiên cũ hết hạn | Extension tự ghép lại khi portal mở bằng file `start`; khẩn cấp: ⚙ Cài đặt → "Mã kết nối" → dán vào options extension |
+
+## 9. Triển khai cty — lỗi hay gặp khi cài hàng loạt
+
+| Triệu chứng | Nguyên nhân | Cách xử |
+|---|---|---|
+| Extension không tự cài | Policy `ExtensionInstallForcelist` chưa áp / sai OU | `chrome://policy` kiểm; gpupdate /force; check registry HKLM |
+| Extension cài nhưng chấm đỏ | Chưa nhận mã kết nối | Mở portal một lần — set-token tự đẩy qua externally_connectable |
+| Máy không hiện dashboard | Beacon chưa được approve / sai fleet.json | Vào dashboard collector → tab Pending → duyệt; check `.devin/fleet.json` URL + secret |
+| `pair` báo 401 | `beacon_secret` sai org | Cấp lại fleet.json đúng secret của org đó |
+| Beacon 403 revoked | Máy bị revoke trên dashboard | Xoá `.devin/machine.key` → pair lại → duyệt lại |
+| winget không có (máy cũ) | Windows build cũ / LTSC | Cài ttyd tay từ github.com/tsl0922/ttyd/releases vào PATH |
+| `ExecutionPolicy` chặn script | Policy mặc định của domain | Chạy `powershell -ExecutionPolicy Bypass -File install.ps1` |
+| Proxy cty chặn beacon | Beacon đi HTTP thẳng | Whitelist domain collector trong proxy; tier c dùng HTTPS qua 443 |
+| Update không về | Collector chưa mirror / URL upstream sai | Check `collector.json` mục `"upstream"` trên máy collector; xem `mirror` log |
+| Pack không áp | pack-version cũ hơn hiện tại | Version pack phải tăng dần — bump rồi đẩy lại |
+| Portal trắng trang | serve.py chết / port 8080 bị chiếm | Xem `.devin/*.log`; đổi port trong start script |

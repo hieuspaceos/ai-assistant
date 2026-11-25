@@ -24,8 +24,12 @@ Event (JSON trong mảng events):
   {"t":"done"}                       - agent nói xong một lượt
   {"t":"err","msg":"..."}
 """
-import hmac, json, os, re, runpy, secrets, shutil, subprocess, sys, tempfile, threading, time, unicodedata, urllib.parse, urllib.request
+import hmac, json, os, platform, re, runpy, secrets, shutil, subprocess, sys, tempfile, threading, time, unicodedata, urllib.parse, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from content_guard import (scrub_env, load_env_extra, load_allowlist,
+                           exec_allowed)   # noqa: E402
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 7682
 CWD = sys.argv[2] if len(sys.argv) > 2 else "."
@@ -359,6 +363,34 @@ def _asq(s):
     script. Kẹp độ dài vì dialog nhỏ."""
     return '"' + str(s)[:400].replace('\\', '\\\\').replace('"', '\\"') + '"'
 
+def _allow_match(tc, title):
+    """Exec allowlist: trích candidates từ toolCall (title + các field
+    text thường mang lệnh trong rawInput) rồi glob-match với patterns
+    trong .devin/exec-allowlist.json. Trả pattern khớp hoặc None.
+    Đọc file mỗi lần — pack/admin đổi list có tác dụng ngay, không cần
+    restart bridge."""
+    pats = load_allowlist(os.path.join(os.path.abspath(CWD), ".devin"))
+    if not pats:
+        return None
+    # Candidates: field LỆNH thật (cmd/command trong rawInput) được ưu
+    # tiên — text/input có thể chứa đoạn văn bất kỳ, não đặt chuỗi hiền
+    # ("ls *") vào đó mà toolCall thật làm việc khác thì auto-duyệt bừa.
+    # Không có field lệnh mới dùng title (vẫn do não tự mô tả — tin bằng
+    # "lời khai" của não, không tin hơn được).
+    raw = tc.get("rawInput")
+    cands = []
+    if isinstance(raw, dict):
+        for k in ("cmd", "command"):
+            if isinstance(raw.get(k), str) and raw[k].strip():
+                cands.append(raw[k])
+    if not cands:
+        cands = [title]
+    for c in cands:
+        m = exec_allowed(c, pats)
+        if m is not None:
+            return m
+    return None
+
 def gate_local(title, apply_fn):
     """Tạo card xác nhận → trả pending id cho caller trả 202. Khi học viên
     bấm Đồng ý ở /api/respond → apply_fn() mới chạy (one-shot + TTL y
@@ -575,8 +607,12 @@ def _turn_watchdog(gen):
         except Exception:
             pass
 
+run_id = [0]             # id lượt prompt hiện tại — bump ở /api/prompt;
+                         # beacon đếm theo LƯỢT thật, dashboard group được
+
 def broadcast(ev):
     global event_base
+    ev.setdefault("run_id", run_id[0])
     with store_lock:
         event_store.append(ev)
         if ev.get("t") in ("ready", "done", "err"):
@@ -629,11 +665,23 @@ class Acp:
         self.proc = None
         self.brain_id = brain.get("id", brain["cmd"])
         try:
+            # env scrub (content-guard ph-3.5): não + mọi process con của
+            # nó trong sandbox thừa hưởng env user — `printenv` trong
+            # sandbox đọc được OPENAI_API_KEY/AWS đang set trong shell.
+            # Spawn bằng allowlist (content_guard.scrub_env); cty cần
+            # truyền thêm biến khai trong .devin/env-allowlist.json.
+            benv, dropped = scrub_env(
+                windows=(platform.system() == "Windows"),
+                extra=load_env_extra(
+                    os.path.join(os.path.abspath(CWD), ".devin")))
+            if dropped:
+                broadcast({"t": "env_scrub", "dropped": dropped})
             self.proc = subprocess.Popen(
                 _sandbox_wrap([brain["cmd"]] +
                               [str(a) for a in brain.get("args") or []]),
                 cwd=CWD, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL, text=True, bufsize=1)
+                stderr=subprocess.DEVNULL, text=True, bufsize=1,
+                env=benv)
         except OSError:
             # binary não chưa cài → báo UI, bridge vẫn sống để học viên đổi não
             self.dead = True
@@ -723,6 +771,35 @@ class Acp:
             # kẹp độ dài — title do não gửi, phình thì lọt thẳng vào
             # event_store + chat-history.jsonl
             title = str(tc.get("title") or "Trợ lý muốn làm một việc")[:200]
+            # exec allowlist (content-guard ph-3): lệnh khớp glob trong
+            # .devin/exec-allowlist.json → auto-duyệt, KHÔNG hiện card.
+            # Đây là ask=on-miss của GoClaw: giảm consent fatigue khi
+            # deploy cty — gate vẫn chặn mọi lệnh NGOÀI list như cũ.
+            # Candidates: title + text trong rawInput (cmd/command/input)
+            matched = _allow_match(tc, title)
+            if matched is not None:
+                allow = next((o for o in opts
+                              if str(o.get("kind", "")).lower()
+                              .startswith("allow")), None)
+                pick = (allow or (opts or [{}])[0]).get("optionId")
+                broadcast({"t": "perm:auto", "title": title,
+                           "pattern": matched})
+                try:
+                    if pick is not None:
+                        self.send({"jsonrpc": "2.0", "id": m["id"],
+                                   "result": {"outcome": {
+                                       "outcome": "selected",
+                                       "optionId": pick}}})
+                    else:
+                        # không có option allow nào (request lạ) — báo
+                        # lỗi thay vì bỏ treo agent
+                        self.send({"jsonrpc": "2.0", "id": m["id"],
+                                   "error": {"code": -32602,
+                                             "message": "không có "
+                                             "option duyệt"}})
+                except Exception:
+                    pass
+                return
             with store_lock:
                 if len(perm_pending) >= PERM_MAX:
                     perm_pending.clear()
@@ -1340,6 +1417,25 @@ class Handler(BaseHTTPRequestHandler):
             # dò-tồn-tại-file cho bất kỳ ai cầm token
             self._json({"ok": True, "isdir":
                         os.path.isdir(p) if p and not path_sensitive(p) else False})
+        elif path == "/api/count-glob":
+            # verify engine của workflow hỏi "folder này có bao nhiêu file
+            # khớp pattern" — trả SỐ, không trả tên (danh sách file = lộ
+            # nội dung máy). Cùng chống-oracle của check-path.
+            import glob as _glob
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            d = os.path.normpath(os.path.expanduser(
+                (q.get("path") or [""])[0].strip()))
+            pat = (q.get("pattern") or ["*"])[0].strip()[:100]
+            # pattern không được leo lên trên (../) — chỉ glob trong dir
+            if ".." in pat or "/" in pat or "\\" in pat:
+                pat = "*"
+            if d and os.path.isdir(d) and not path_sensitive(d):
+                n = sum(1 for _ in _glob.iglob(
+                    os.path.join(d, pat), recursive=False))
+                self._json({"ok": True, "count": min(n, 2000),
+                            "capped": n > 2000})
+            else:
+                self._json({"ok": True, "count": 0})
         elif path == "/api/bots":
             b = load_json(BOTS_FP, {"active": None, "bots": []})
             self._json({"active": b.get("active"),
@@ -1389,6 +1485,8 @@ class Handler(BaseHTTPRequestHandler):
                 if locked:
                     turn_gen[0] += 1   # đánh dấu lượt mới — timer lượt cũ
                                        # thấy gen lệch → không giết nhầm
+                    run_id[0] += 1     # lượt mới — event con cháu kèm
+                                       # run_id này (beacon đếm theo lượt)
             if not locked:
                 self._json({"err": "trợ lý đang xử lý câu trước"}, 409); return
             try:
@@ -1985,6 +2083,22 @@ class Handler(BaseHTTPRequestHandler):
                 f"Cài trợ lý \"{bname}\" từ file chia sẻ?", _apply)
             self._json({"pending": rid,
                         "msg": "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để cài"}, 202)
+        elif path == "/api/emit-event":
+            # Đồng nghiệp bridge nội bộ (ext-bridge → inj_suspect, launcher
+            # → env_scrub…) append event thống kê vào store để beacon đếm.
+            # Whitelist type — giới hạn thiệt hại khi agent tự gọi (chỉ
+            # inflate được đếm trên dashboard, không đổi state).
+            t = str(data.get("t") or "")
+            if t not in ("inj_suspect", "perm:auto", "env_scrub",
+                         "pack_applied", "update_applied"):
+                self._json({"err": "event type không được phép"}, 400)
+                return
+            ev = {k: data[k] for k in ("t", "action", "patterns",
+                                       "dropped", "title", "pattern",
+                                       "msg")
+                  if k in data}
+            broadcast(ev)
+            self._json({"ok": True})
         else:
             self._json({"err": "not found"}, 404)
 

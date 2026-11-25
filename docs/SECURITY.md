@@ -131,6 +131,44 @@ trong options).
 | Não treo giữa lượt → chat kẹt 409 | **Watchdog lượt**: não sống nhưng không trả `done`/`err` quá `TROLY_TURN_TIMEOUT` (mặc định 1200s) → bridge báo lỗi "kẹt" cho học viên rồi giết process — prompt tiếp theo đi đường `spawn_brain` self-heal. `.py` dùng `threading.Timer` + `turn_gen` chống timer cũ giết nhầm lượt mới; `.ps1` đơn luồng nên check theo mỗi request tick |
 | Não bị injection → đọc/ghi file ngoài quyền | macOS: não chạy trong Seatbelt (`agent.sb` — **write-allowlist**: chỉ `my-course/`, `.devin/skills/`, `.logs/`, tmp — mọi thứ khác deny theo default; deny-write tường minh 4 JSON điều khiển; **deny `process-exec` + `file-read*`** cho binary thoát-sandbox — `open`/`launchctl`/`crontab`/`at*` (spawn/job chạy NGOÀI sandbox), `security` (keychain), `pbcopy`/`pbpaste` (clipboard — thêm deny mach-lookup pasteboard), `screencapture`, `automator`, `osascript`, `tmutil`; đọc chỉ vùng được phép, `network-bind` deny, `bridge.token` deny-ghi, secrets deny-đọc). Residual: `network-outbound` mở (não cần gọi LLM API) → exfil data đã đọc hợp lệ vẫn được; dir user mới tạo giữa 2 lần regen đọc được (deny enumeration là snapshot); **hardlink bypass**: `ln`/`os.link` từ file deny-read vào `my-course/` rồi đọc qua path được phép — giới hạn cố hữu của Seatbelt path-based (BSD `link(2)` không yêu cầu quyền đọc nguồn; Windows NTFS không bị vì ACL bám inode chứ không bám path); extension/browser session nằm NGOÀI sandbox theo bản chất — kênh đó trông vào lớp duyệt + consent gate. **Windows (sau `setup-agent-user.ps1`, admin một lần):** não spawn dưới user hạn chế `troly-agent` qua `CreateProcessWithLogonW` (`TroLy.AgentSpawn` trong `chat-bridge.ps1` — anonymous pipes đưa stdio ACP, Job Object `KILL_ON_JOB_CLOSE` để kill cả cây + chống process mồ côi khi bridge chết). ACL tương đương Seatbelt: RX toàn project; ghi chỉ `my-course/`+`.devin/skills/`+`.logs/`; deny-write `tools/`/`web/`/`extension/`/`.git/`/`brain.json`/4 JSON điều khiển/`bot.md`; deny `secrets.local.json`/`mcp_config.local.json`/`.devin/agent-user.cred`; `bridge.token` đọc được nhưng deny-ghi; thư mục binary + config của não đang chọn được grant RX (CLI cần config chủ để chạy — y hệt macOS nơi agent cùng user). Residual: chưa chạy setup → cred vắng → spawn thường (degrade về policy + event cảnh báo); quyền folder **mới** chỉ enforce sau khi chạy lại setup (permissions.json cập nhật ngay nhưng ACL chưa kịp); mạng mở → exfil như macOS |
 
+## Fleet / collector — biên mới NGOÀI loopback
+
+`tools/collector.py` là server đầu tiên bind `0.0.0.0` (LAN/hosted) —
+máy nhân viên phải push beacon tới được, nên threat model loopback của
+các bridge KHÔNG áp dụng. Biên mới + mitigation:
+
+| Mối đe | Mitigation |
+|---|---|
+| Máy giả trong LAN spam snapshot | Pairing: `beacon_secret` (vé vào cửa, chung org) → admin duyệt → `machine_key` riêng từng máy, revoke được. Residual: beacon_secret lộ → spam được *pair request* (chỉ tạo hàng pending — không ghi đè máy thật vì upsert theo `machine_id` + admin duyệt tay) |
+| Máy NV đọc data máy khác | `X-Admin-Key` riêng cho GET — máy NV chỉ có machine_key (ghi, không đọc) |
+| `admin_key` lộ | Đọc được metadata toàn org (usage, version, license) — KHÔNG có nội dung chat/file vì beacon không bao giờ gửi. IT cty A không đọc được org B (key map per-org) |
+| License bị sửa trên máy | Sig HMAC verify ở collector bằng `license_secret` server-side; seats chỉ đếm từ license sig hợp lệ. Gentle: flag dashboard, không khoá máy |
+| Beacon → collector đi HTTP trần (LAN tier) | Snapshot chỉ metadata + số đếm, không nội dung — chấp nhận trong LAN cty; tier hosted đi HTTPS cert thật. KHÔNG hỗ trợ self-signed |
+| Collector bị flood | Rate limit/IP + body cap 1MB + 64 thread slot (y bridge) |
+| Vendor-hosted = vendor giữ metadata khách | Chỉ org-level rollup qua `org-ping` (opt-out `COLLECTOR_NO_TELEMETRY=1`); cần điều khoản DPA/PDPD trong hợp đồng — xem `docs/fleet.md` |
+
+## Phân phối — release ký + config-pack (biên tin cậy thứ hai)
+
+Kênh "xuống máy" (code + luật cty) nếu bị chơi hậu quả nặng hơn kênh
+"lên" (metadata) nhiều — một release độc = RCE trên mọi máy org:
+
+| Mối đe | Mitigation |
+|---|---|
+| Collector/origin bị chiếm → phát release độc | **ed25519**: máy verify bằng `tools/vendor-pubkey` nhúng sẵn; private key offline phía vendor (`~/.troly-release-key`, KHÔNG trong repo/zip/collector). Kẻ chiếm server chỉ phát được bản cũ/stale — không forge được. Đây là lý do từ chối HMAC: khoá đối xứng trên máy = trích được = forge |
+| Redirect/SSRF khi máy kéo release | `update.py` không follow redirect; zip-url phải cùng host manifest |
+| Zip chứa payload ngoài code | Whitelist entry (code dirs + skill-packs + file lõi); `..`/absolute/backslash → abort; sha256+sig verify trước khi mở zip |
+| Bản mới hỏng làm sập cả org | Stage riêng, apply lúc boot (né file-lock Windows); code cũ giữ `.devin/backup-code-*`, `troly --rollback` dựng lại |
+| Pack đẩy `exec_allowlist` độc (mở kênh auto-exec) | Lint phía máy: pattern `|`, `;`, `>`, `sudo`, `rm `, `curl`… → reject cả pack; pack org khác → abort + collector 403 |
+| Pack đè consent máy đã chạy | `permissions_template`/`exec_allowlist` chỉ áp máy chưa onboard — pack không được viết lại quyền người dùng đã duyệt |
+| Private key bị lộ | Toàn bộ release channel sập về mặt tin cậy — phải rotate cặp khoá + phát release mới mang pubkey mới. Giảm thiểu: key chỉ ở máy vendor, chmod 600, không đi theo zip |
+| `TROLY_VENDOR_PUBKEY` env override | Chỉ phục vụ test — ai set được env đã chạy code local rồi, không mở thêm biên |
+| Mirror upstream kéo nhầm | Mirror chỉ sao chép file+mạch sha256; máy NV vẫn verify sig — mirror xấu chỉ gây stale, không cấy được payload |
+
+Residual đã biết: pack **không ký** — kênh pack tin vào admin_key +
+org scoping của collector. Kẻ có admin_key đẩy được pack độc (nhưng
+lint + "không đè consent" giới hạn được phần lớn mặt tấn công; nếu
+khách yêu cầu ký pack thì thêm field `pack_sig` cùng vendor key sau).
+
 ## permissions.json — ngăn tủ được phép
 
 ```json
@@ -184,6 +222,51 @@ lệnh"**: nội dung ngoài là data; hành động nguy hiểm (gửi tin, đ�
 chuyển tiền, xoá, nhập credentials) luôn hỏi học viên — lời trong nội
 dung ngoài không bao giờ tính là đồng ý. Skills đọc nội dung ngoài đều
 có dòng trỏ về luật này.
+
+**Lớp cấu trúc trên luật lời (content_guard.py):** mọi kết quả action
+mang nội dung từ ext-bridge (snapshot/read/query/dom/fetch…) được bọc
+trong marker `<<<EXTERNAL_UNTRUSTED_BEGIN id=…>>>` … `END` kèm cảnh báo
+đầu + nhắc lại cuối — não đọc thấy ranh giới rõ thay vì văn bản trần
+trộn vào prompt. Trước khi bọc: NFKC fold fullwidth/homoglyph về ASCII,
+vô hiệu mọi chuỗi nhại marker trong content (`[[MARKER_NEUTRALIZED]]`)
+chống "đóng wrapper sớm"; `id` = hash ngắn → END giả có id lệch lộ.
+`detect_injection()` chạy cùng chỗ — advisory-only: phát event
+`inj_suspect` vào event stream (beacon đếm → dashboard thấy máy nào hay
+gặp nội dung độc), KHÔNG chặn (false positive nhiều + chặn cho kẻ xấu
+biết cách né). Wrapper là gợi ý cấu trúc, não vẫn có thể phớt lờ — lớp
+cuối vẫn là consent gate + sandbox + luật AGENTS.md.
+
+**Residual:** não đọc file trực tiếp bằng fs tools của nó trong sandbox —
+bridge không proxy được → file reads không bọc được. File máy là
+"bán-tin" (user sở hữu), khác web/Zalo là "ngoài"; sandbox + consent
+vẫn kẹp.
+
+## Env scrub khi spawn não + exec allowlist
+
+- Não được spawn bằng **allowlist env** (`content_guard.scrub_env`),
+  không phải `os.environ.copy()` — `printenv` trong sandbox không còn
+  đọc được `OPENAI_API_KEY`/AWS creds đang set trong shell user. Cửa
+  thoát cho cty: `.devin/env-allowlist.json` `{"extra": [...]}` —
+  machine-local, không ship qua pack. Event `env_scrub` log SỐ key bị
+  drop một lần/boot (không log tên/giá trị).
+- `.devin/exec-allowlist.json` (glob patterns): request_permission khớp
+  glob → auto-duyệt option `allow*` đầu tiên + event `perm:auto`, không
+  hiện card (giảm consent fatigue — pattern `ask=on-miss`). File do
+  pack cty áp CHỈ máy mới hoặc admin đặt tay; `exec_allowed()` tự lọc
+  pattern chứa metachar (| ; & ` $() ...) phòng file bị sửa tay.
+  Ba rào thêm (audit): (a) pattern phải bắt đầu bằng tên lệnh — `*`/`?`
+  trần khớp mọi lệnh = tắt gate; (b) LỆNH chứa metachar không được
+  auto-duyệt dù khớp glob — `git status *` cũng nuốt `&& rm -rf ~`;
+  (c) match trên field lệnh thật (`rawInput.cmd`/`command`), title chỉ
+  là fallback — não đặt chuỗi hiền vào field text mà toolCall làm việc
+  khác thì không lách được. Residual: `cmd` vẫn do não tự khai — não
+  nói dối lệnh của chính nó thì allowlist tin theo; gate vẫn là lớp
+  chặn cuối cho mọi lệnh ngoài list.
+- `POST /api/emit-event`: endpoint nội bộ cho bridge/tool phát event
+  phụ vào event stream — whitelist type (`inj_suspect`, `perm:auto`,
+  `env_scrub`, `pack_applied`, `update_applied`), vẫn cần bridge token.
+- `run_id`: đếm lượt prompt thật, gắn lên mọi event — beacon đếm theo
+  lượt chứ không đếm event rời.
 
 ## Clone — bản quyền và hành vi giả lập
 

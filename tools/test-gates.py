@@ -42,6 +42,7 @@ OPEN_OK = {
     "/api/save-page":        "ghi .html dưới my-course/; CSP sandbox đè lên",
     "/api/check-connection": "chỉ ghi status probe vào connections.json",
     "/api/bot-import":       "stage zip vào temp + trả preview; ghi thật ở -confirm",
+    "/api/emit-event":       "append-only, whitelist event type — chỉ inflate được đếm dashboard",
 }
 
 fail = False

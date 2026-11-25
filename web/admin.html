@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trợ lý AI — Bảng điều hành</title>
+<link rel="stylesheet" href="vendor/fonts.css">
+<link rel="icon" type="image/svg+xml" href="logo.svg">
+<link rel="stylesheet" href="styles.css?v=16">
+<style>
+  /* Trang admin cho IT/quản trị — read-only trên các GET sẵn có.
+     styles.css đặt body thành app-shell 100vh — trang này là tài liệu
+     cuộn được nên trả layout về bình thường. */
+  body { height: auto; display: block; overflow: auto; background: var(--bg); }
+  .adm-head {
+    display: flex; align-items: center; gap: var(--space-sm);
+    padding: var(--space-md) var(--space-lg);
+    border-bottom: var(--rule-hair) solid var(--border);
+    position: sticky; top: 0; background: var(--bg); z-index: 2;
+  }
+  .adm-head .brand-name { font-family: var(--font-display); font-size: var(--text-lg); }
+  .adm-head .brand-sub { color: var(--muted); font-size: var(--text-sm); }
+  .adm-head .sp { flex: 1; }
+  .adm-btn {
+    font: inherit; font-size: var(--text-sm); cursor: pointer;
+    border: var(--rule-hair) solid var(--border); border-radius: 999px;
+    background: var(--well); color: var(--ink); padding: var(--space-xs) var(--space-md);
+  }
+  .adm-btn:hover { background: var(--accent-soft); }
+  .adm-off {
+    margin: var(--space-md) var(--space-lg); padding: var(--space-md);
+    border-radius: var(--radius); background: #fdf1f0; color: #9a2b20;
+    font-size: var(--text-sm);
+  }
+  .adm-grid {
+    display: grid; gap: var(--space-md); padding: var(--space-lg);
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    max-width: 1100px;
+  }
+  .adm-card {
+    border: var(--rule-hair) solid var(--border); border-radius: var(--radius);
+    background: var(--well); padding: var(--space-md);
+  }
+  .adm-card h3 {
+    margin: 0 0 var(--space-sm); font-family: var(--font-display);
+    font-size: var(--text-md); font-weight: 500;
+  }
+  .adm-row { display: flex; gap: var(--space-sm); font-size: var(--text-sm); padding: var(--space-3xs) 0; }
+  .adm-row .k { color: var(--muted); min-width: 96px; flex-shrink: 0; }
+  .adm-row .v { word-break: break-all; font-family: var(--mono); font-size: var(--text-sm); }
+  .adm-list { margin: 0; padding: 0; list-style: none; font-size: var(--text-sm); }
+  .adm-list li { padding: var(--space-3xs) 0; display: flex; gap: var(--space-sm); align-items: baseline; }
+  .adm-list .mono { font-family: var(--mono); word-break: break-all; }
+  .adm-tag {
+    flex-shrink: 0; font-size: var(--text-xs); border-radius: 999px;
+    padding: 1px var(--space-xs); background: var(--accent-soft); color: var(--accent-deep);
+  }
+  .adm-tag.gray { background: var(--color-paper-3, #eee); color: var(--muted); }
+  .adm-ev { font-family: var(--mono); font-size: var(--text-xs); color: var(--muted); }
+  .adm-ev b { color: var(--ink); font-weight: 500; }
+  .adm-empty { color: var(--muted); font-size: var(--text-sm); }
+</style>
+</head>
+<body>
+<div class="adm-head">
+  <svg class="logo" viewBox="0 0 38 38" width="30" height="30" aria-hidden="true">
+    <rect width="38" height="38" rx="11" fill="var(--color-accent)"/>
+    <path d="M19 9.5 31.5 15.5 19 21.5 6.5 15.5Z" fill="#fff"/>
+    <path d="M14.5 19.1v5.2c0 1.8 2 2.9 4.5 2.9s4.5-1.1 4.5-2.9v-5.2l-4.5 2.1z" fill="#fff"/>
+    <path d="M30.7 15.5v5.4" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+    <circle cx="30.7" cy="23.4" r="1.7" fill="#fff"/>
+  </svg>
+  <div>
+    <div class="brand-name" id="adm-title">Bảng điều hành</div>
+    <div class="brand-sub" id="adm-sub">trạng thái trợ lý trên máy này — chỉ xem</div>
+  </div>
+  <div class="sp"></div>
+  <button class="adm-btn" id="adm-refresh" type="button">Làm mới</button>
+  <button class="adm-btn" id="adm-export" type="button">Tải báo cáo</button>
+</div>
+<div class="adm-off" id="adm-offline" hidden></div>
+<div class="adm-grid" id="adm-grid" hidden>
+  <div class="adm-card"><h3 id="t-sys">Hệ thống</h3><div id="adm-sys"></div></div>
+  <div class="adm-card"><h3 id="t-bot">Trợ lý</h3><div id="adm-bots"></div></div>
+  <div class="adm-card"><h3 id="t-perm">Folder được phép</h3><div id="adm-perms"></div></div>
+  <div class="adm-card"><h3 id="t-conn">Kết nối ứng dụng</h3><div id="adm-conns"></div></div>
+  <div class="adm-card"><h3 id="t-ev">Hoạt động gần đây</h3><div id="adm-evs"></div></div>
+</div>
+<script src="bridge-token.js"></script>
+<script src="adm-render.js"></script>
+<script>
+/* Bảng điều hành cho IT/quản trị — gom mọi GET read-only của bridge vào
+   một màn hình để xem nhanh trạng thái máy học viên + xuất báo cáo JSON
+   khi cần gửi về đội support. Không gọi POST nào — quyền xem = quyền
+   đọc file state, vốn ai cầm token cũng có sẵn.
+   Phần render 5 card nằm trong adm-render.js — dùng chung với trang chi
+   tiết máy của fleet dashboard (collector-web/). */
+const B = 'http://localhost:7682';
+const $ = s => document.querySelector(s);
+
+// Chuỗi riêng của trang này; nhãn 5 card lấy từ AdmRender.I18N
+const CHROME = {
+  vi: {
+    title: 'Bảng điều hành', sub: 'trạng thái trợ lý trên máy này — chỉ xem',
+    refresh: 'Làm mới', exportBtn: 'Tải báo cáo',
+    offline: 'Không kết nối được bridge :7682 — trợ lý chưa chạy trên máy này (mở lại bằng file start của bộ cài).',
+    reportName: 'troly-report',
+  },
+  en: {
+    title: 'Admin console', sub: 'assistant status on this machine — read-only',
+    refresh: 'Refresh', exportBtn: 'Export report',
+    offline: 'Cannot reach bridge :7682 — the assistant is not running on this machine (relaunch the start file).',
+    reportName: 'troly-report',
+  },
+};
+let LANG = 'vi';
+let S = Object.assign({}, AdmRender.I18N.vi, CHROME.vi);
+const t = k => S[k] || CHROME.vi[k] || AdmRender.I18N.vi[k] || k;
+const esc = AdmRender.esc;
+const get = p => bfetch(B + p).then(r => { if (!r.ok) throw r.status; return r.json(); });
+
+function applyChrome() {
+  document.documentElement.lang = LANG;
+  $('#adm-title').textContent = t('title');
+  $('#adm-sub').textContent = t('sub');
+  $('#adm-refresh').textContent = t('refresh');
+  $('#adm-export').textContent = t('exportBtn');
+  $('#adm-offline').textContent = t('offline');
+  $('#t-sys').textContent = t('sys');
+  $('#t-bot').textContent = t('bot');
+  $('#t-perm').textContent = t('perm');
+  $('#t-conn').textContent = t('conn');
+  $('#t-ev').textContent = t('ev');
+}
+
+function render(d) {
+  AdmRender.renderInto({
+    sys: $('#adm-sys'), bots: $('#adm-bots'), perms: $('#adm-perms'),
+    conns: $('#adm-conns'), evs: $('#adm-evs'),
+  }, d, S);
+}
+
+let lastData = null;
+function load() {
+  Promise.all([
+    get('/api/health'), get('/api/brain'), get('/api/config'),
+    get('/api/bots'), get('/api/permissions'), get('/api/connections'),
+    get('/api/poll?since=0'),
+  ]).then(([health, brain, config, bots, perms, conns, poll]) => {
+    LANG = config.language === 'en' ? 'en' : 'vi';
+    S = Object.assign({}, AdmRender.I18N[LANG], CHROME[LANG]);
+    applyChrome();
+    lastData = { health, brain, config, bots, perms, conns, poll };
+    $('#adm-offline').hidden = true;
+    $('#adm-grid').hidden = false;
+    render(lastData);
+  }).catch(() => {
+    $('#adm-offline').hidden = false;
+    $('#adm-grid').hidden = true;
+  });
+}
+
+$('#adm-refresh').onclick = load;
+$('#adm-export').onclick = () => {
+  if (!lastData) return;
+  const blob = new Blob([JSON.stringify(lastData, null, 2)],
+                        { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = t('reportName') + '-' +
+               new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+applyChrome();
+load();
+setInterval(load, 15000);
+</script>
+</body>
+</html>

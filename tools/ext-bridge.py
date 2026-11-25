@@ -41,6 +41,9 @@ Các action v1:
 """
 import base64, hashlib, hmac, json, os, re, secrets, socket, struct, sys, threading, time
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from content_guard import wrap_obj, detect_injection  # noqa: E402
+
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 7684
 CWD = sys.argv[2] if len(sys.argv) > 2 else "."
 # Fail-closed: chỉ bind loopback trừ khi khai TROLY_ALLOW_REMOTE=1
@@ -90,7 +93,7 @@ BRIDGE_TOKEN = load_token()
 # Chỉ trang local (host loopback, mọi port) được gọi HTTP API từ browser;
 # extension (WS) xài origin chrome-extension://… Request không có Origin
 # (curl từ agent) vẫn cho qua — NHƯNG phải kèm mã kết nối (xem serve_conn).
-import urllib.parse
+import urllib.parse, urllib.request
 def is_local_origin(origin):
     try:
         h = urllib.parse.urlsplit(origin).hostname or ""
@@ -100,6 +103,27 @@ def is_local_origin(origin):
 
 EXT_ORIGIN_PREFIXES = ("chrome-extension://", "moz-extension://",
                        "safari-web-extension://", "edge-extension://")
+
+# Action trả nội dung lấy TỪ TRANG (text/html/style/title…) — kết quả
+# phải bọc UNTRUSTED. Action điều khiển (click/type/key/scroll/wait/
+# tclick/tright/tinsert/paste/open/activate/close/reload/screenshot)
+# chỉ trả trạng thái → không bọc.
+CONTENT_ACTIONS = {"tabs", "snapshot", "query", "read", "fetch", "dom",
+                   "styles", "assets", "css", "scrollables", "execjs"}
+
+def emit_event(ev):
+    """Gửi event thống kê sang chat-bridge (đồng nghiệp nội bộ, cùng
+    token) — beacon đếm theo /api/poll. Best-effort: chat-bridge chết
+    thì bỏ qua, ext-bridge không được chết theo."""
+    try:
+        urllib.request.urlopen(urllib.request.Request(
+            "http://127.0.0.1:7682/api/emit-event",
+            data=json.dumps(ev).encode(),
+            headers={"Content-Type": "application/json",
+                     "X-Bridge-Token": BRIDGE_TOKEN},
+            method="POST"), timeout=2).read()
+    except Exception:
+        pass
 
 ext_lock = threading.Lock()
 ext_send_lock = threading.Lock()
@@ -320,6 +344,18 @@ def handle_api(method, path, body):
                     os.remove(old)
             except OSError:
                 pass
+        # content-guard: action mang nội dung TRANG về → bọc UNTRUSTED
+        # trước khi não đọc. Action thao tác (click/type/scroll) không
+        # chứa text ngoài → không bọc. detect_injection chỉ báo
+        # (inj_suspect), không chặn — false positive nhiều.
+        if action in CONTENT_ACTIONS and res.get("ok"):
+            hits = detect_injection(json.dumps(res, ensure_ascii=False))
+            if hits:
+                emit_event({"t": "inj_suspect", "action": action,
+                            "patterns": hits[:3]})
+            src = "trình duyệt" + (
+                ": " + str(res["url"])[:120] if res.get("url") else "")
+            res = wrap_obj(res, src)
         return res
     return {"err": "not found"}, 404
 

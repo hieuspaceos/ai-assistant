@@ -1,0 +1,14 @@
+{
+  "id": "gom-downloads",
+  "title": {"vi": "Dọn folder Downloads", "en": "Tidy the Downloads folder"},
+  "desc": {"vi": "Gom file lộn xộn trong Downloads vào các ngăn theo loại — ảnh, tài liệu, file nén…", "en": "Sort messy Downloads files into folders by type — images, docs, archives…"},
+  "icon": "🗂️",
+  "dept": "van-phong",
+  "prompt": "Dùng công thức /gom-file: gom toàn bộ file trong folder ~/Downloads vào các folder con theo loại (hinh-anh, tai-lieu, file-nen, video, khac). KHÔNG xoá file nào — chỉ di chuyển. File đã nằm trong folder con thì bỏ qua. Xong thì liệt kê từng mục trong CHECKLIST sau và nói rõ đúng hay sai:\n1. Downloads có các folder con theo loại file\n2. Không file nào bị xoá — chỉ di chuyển\n3. Báo cáo số file mỗi loại",
+  "requires": {"permissions": ["~/Downloads"]},
+  "checklist": [
+    "Mở Downloads thấy các folder con: hinh-anh, tai-lieu, file-nen…",
+    "File chỉ được chuyển chỗ — không file nào mất",
+    "Số file mỗi loại khớp với báo cáo của trợ lý"
+  ]
+}

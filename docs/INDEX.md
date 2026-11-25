@@ -36,6 +36,8 @@ Entry gốc: [`README.md`](../README.md) · Quy tắc session: [`AGENTS.md`](../
 | `project-roadmap.md` | Hướng phát triển (stateful) |
 | `troubleshooting-runbook.md` | Sự cố đã gặp + cách xử lý (stateful) |
 | `extension-store-listing.md` | Hồ sơ submit Chrome Web Store cho extension |
+| `fleet.md` | Beacon + collector: pairing, license, 3 tier deploy, privacy |
+| `distribution.md` | Release ký ed25519 + update/rollback + config-pack per-cty |
 
 ---
 

@@ -1,0 +1,18 @@
+{
+  "id": "nen-anh-web",
+  "title": {"vi": "Nén ảnh đăng web", "en": "Compress images for web"},
+  "desc": {"vi": "Nén + đổi tên hàng loạt ảnh export từ Canva thành bản sẵn sàng đăng web", "en": "Batch compress + rename Canva exports into web-ready images"},
+  "icon": "🖼️",
+  "dept": "marketing",
+  "inputs": [
+    {"key": "folder", "label": {"vi": "Folder chứa ảnh", "en": "Folder with images"}, "placeholder": "~/Downloads/canva-export"}
+  ],
+  "prompt": "Dùng công thức /nen-anh: nén và đổi tên toàn bộ ảnh trong folder {{folder}} thành bản sẵn sàng đăng web — ảnh gốc giữ nguyên, kết quả vào folder mới 'anh-web-ready' cùng cấp. Tên file output dạng web-an-toàn (không dấu, không khoảng trắng). Xong thì liệt kê từng mục trong CHECKLIST sau và nói rõ đúng hay sai:\n1. Folder anh-web-ready có đủ ảnh\n2. Ảnh gốc trong {{folder}} còn nguyên\n3. Tên file output không dấu, không khoảng trắng",
+  "requires": {},
+  "checklist": [
+    "Folder 'anh-web-ready' có đủ số ảnh như folder gốc",
+    "Ảnh gốc trong folder nguồn còn nguyên",
+    "Mở thử 2 ảnh — vẫn nét, dung lượng nhỏ hơn nhiều"
+  ],
+  "verify": {"dir": "{{folder}}/../anh-web-ready", "glob": "*", "min_count": 1}
+}

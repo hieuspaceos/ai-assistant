@@ -1,0 +1,18 @@
+{
+  "id": "tom-tat-tuan",
+  "title": {"vi": "Tóm tắt báo cáo tuần", "en": "Summarize weekly report"},
+  "desc": {"vi": "Đọc file báo cáo (Excel/CSV/TXT) và tóm tắt bằng lời thường — có gì, bao nhiêu dòng, điểm đáng chú ý", "en": "Read a report file (Excel/CSV/TXT) and summarize in plain words"},
+  "icon": "📄",
+  "dept": "van-phong",
+  "inputs": [
+    {"key": "file", "label": {"vi": "Đường dẫn file báo cáo", "en": "Report file path"}, "placeholder": "~/Downloads/bao-cao-tuan.xlsx"}
+  ],
+  "prompt": "Dùng công thức /tom-tat-file: đọc file {{file}} và tóm tắt bằng lời thường — có gì trong file, bao nhiêu dòng, 3 điểm đáng chú ý nhất. Viết kết quả vào file 'tom-tat-bao-cao.md' cùng folder với file gốc. Xong thì liệt kê từng mục trong CHECKLIST sau và nói rõ đúng hay sai:\n1. File tom-tat-bao-cao.md đã tạo\n2. Tóm tắt đúng nội dung file gốc\n3. Có đủ 3 điểm đáng chú ý",
+  "requires": {},
+  "checklist": [
+    "File 'tom-tat-bao-cao.md' nằm cùng folder file gốc",
+    "Đọc thử — nội dung khớp với file gốc",
+    "Có đủ 3 điểm đáng chú ý"
+  ],
+  "verify": {"dir": "{{file}}", "glob": "tom-tat-bao-cao.md", "min_count": 1}
+}

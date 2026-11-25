@@ -132,6 +132,56 @@ if os.path.isdir(ROLES):
             check(n in conn_ids,
                   f"roles/{f}: need '{n}' không khớp id nào trong connections.json")
 
+# 7. my-course/workflows/ — schema workflow: id khớp tên file, prompt
+#    không rỗng, checklist ≥1 mục, requires.connections trỏ id app thật,
+#    inputs key dùng trong prompt ({{key}} phải khai báo input)
+WF_DIR = os.path.join(ROOT, "my-course", "workflows")
+if os.path.isdir(WF_DIR):
+    try:
+        idx = json.load(open(os.path.join(WF_DIR, "index.json"),
+                             encoding="utf-8"))
+        ids = idx.get("workflows") or []
+    except Exception as e:
+        ids = []
+        fails.append(f"workflows/index.json không đọc được: {e}")
+    for wid in ids:
+        fp = os.path.join(WF_DIR, wid + ".json")
+        if not os.path.exists(fp):
+            fails.append(f"workflows/index.json trỏ '{wid}' — file thiếu")
+            continue
+        try:
+            w = json.load(open(fp, encoding="utf-8"))
+        except Exception as e:
+            fails.append(f"workflows/{wid}.json không đọc được: {e}")
+            continue
+        check(w.get("id") == wid,
+              f"workflows/{wid}.json: id '{w.get('id')}' ≠ tên file")
+        check(bool(str(w.get("prompt") or "").strip()),
+              f"workflows/{wid}.json: prompt rỗng")
+        check(len(w.get("checklist") or []) >= 1,
+              f"workflows/{wid}.json: checklist < 1 mục")
+        for cid in (w.get("requires") or {}).get("connections") or []:
+            check(cid in conn_ids,
+                  f"workflows/{wid}.json: requires.connections '{cid}' "
+                  f"không khớp id trong connections.json")
+        # mọi {{key}} trong prompt phải có input tương ứng
+        declared = {i.get("key") for i in w.get("inputs") or []}
+        for k in re.findall(r"\{\{(\w+)\}\}", str(w.get("prompt"))):
+            check(k in declared,
+                  f"workflows/{wid}.json: prompt dùng {{{{{k}}}}} "
+                  f"nhưng không khai trong inputs")
+        # title phải có ít nhất bản vi
+        ti = w.get("title")
+        check(isinstance(ti, dict) and bool(ti.get("vi")),
+              f"workflows/{wid}.json: title thiếu bản vi")
+        # verify: dir + glob hợp lệ nếu khai
+        v = w.get("verify")
+        if v:
+            check(bool(v.get("dir")),
+                  f"workflows/{wid}.json: verify thiếu dir")
+            check(".." not in str(v.get("glob") or ""),
+                  f"workflows/{wid}.json: verify.glob chứa ..")
+
 if fails:
     print(f"FAIL — {len(fails)} lỗi:")
     for f in fails:
