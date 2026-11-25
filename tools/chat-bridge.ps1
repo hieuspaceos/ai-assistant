@@ -912,72 +912,108 @@ try {
                     Send-Json $ctx @{ err = "open_url chỉ nhận link http(s)" } 400
                 } else {
                     $k = Load-Json $ConnFp @{ apps = @() }
-                    # thay tại chỗ để giữ thứ tự hiển thị trong panel Cài đặt
-                    $idx = -1
-                    for ($i = 0; $i -lt @($k.apps).Count; $i++) {
-                        if ($k.apps[$i].id -eq $body.app.id) { $idx = $i; break }
+                    $ou = [string]$body.app.open_url
+                    $oldOu = ""
+                    foreach ($a in @($k.apps)) {
+                        if ($a.id -eq $body.app.id) { $oldOu = [string]$a.open_url; break }
                     }
-                    if ($idx -ge 0) { $k.apps[$idx] = $body.app }
-                    else { $k.apps = @($k.apps) + $body.app }
-                    Save-Json $ConnFp $k
-                    Send-Json $ctx @{ ok = $true }
+                    if ($ou -and $ou -ne $oldOu) {
+                        # open_url MỚI/ĐỔI → nút "Mở trang" quen-thuộc trỏ
+                        # site lạ → card cho học viên thấy đích (audit v6,
+                        # parity py). Upsert status/name chạy thẳng.
+                        $appObj = $body.app
+                        $rid = New-Gate "Đặt link `"Mở trang`" của $($appObj.id) → $ou`?" ({
+                            $kk = Load-Json $ConnFp @{ apps = @() }
+                            $idx = -1
+                            for ($i = 0; $i -lt @($kk.apps).Count; $i++) {
+                                if ($kk.apps[$i].id -eq $appObj.id) { $idx = $i; break }
+                            }
+                            if ($idx -ge 0) { $kk.apps[$idx] = $appObj }
+                            else { $kk.apps = @($kk.apps) + $appObj }
+                            Save-Json $ConnFp $kk
+                        }.GetNewClosure())
+                        Send-Json $ctx @{ pending = $rid; msg = "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để đặt link" } 202
+                    } else {
+                        # thay tại chỗ để giữ thứ tự hiển thị trong panel Cài đặt
+                        $idx = -1
+                        for ($i = 0; $i -lt @($k.apps).Count; $i++) {
+                            if ($k.apps[$i].id -eq $body.app.id) { $idx = $i; break }
+                        }
+                        if ($idx -ge 0) { $k.apps[$idx] = $body.app }
+                        else { $k.apps = @($k.apps) + $body.app }
+                        Save-Json $ConnFp $k
+                        Send-Json $ctx @{ ok = $true }
+                    }
                 }
             }
             elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/remove-connection") {
+                # Agent tự gỡ kết nối = mất nút âm thầm → gate (audit v6,
+                # parity py). Không UI nào gọi nên card không thêm ma sát.
                 $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
                 $body = $reader.ReadToEnd() | ConvertFrom-Json
-                $k = Load-Json $ConnFp @{ apps = @() }
-                $k.apps = @($k.apps | Where-Object { $_.id -ne $body.id })
-                Save-Json $ConnFp $k
-                Send-Json $ctx @{ ok = $true }
+                $aid = [string]$body.id
+                $rid = New-Gate "Gỡ kết nối $aid`?" ({
+                    $k = Load-Json $ConnFp @{ apps = @() }
+                    $k.apps = @($k.apps | Where-Object { $_.id -ne $aid })
+                    Save-Json $ConnFp $k
+                }.GetNewClosure())
+                Send-Json $ctx @{ pending = $rid; msg = "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để gỡ" } 202
             }
             elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/secrets") {
                 # Form "Cài" trong panel Cài đặt: học viên dán app password WP /
                 # mã OA… → ghi vào .devin\secrets.local.json (đã gitignore).
                 # Chỉ GHI — không endpoint nào đọc secret ra ngoài.
+                # Ghi credential là đặc quyền → consent gate (audit v6):
+                # agent tự gọi url mới = xoá creds thật / exfil host lạ.
                 $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
                 $body = $reader.ReadToEnd() | ConvertFrom-Json
                 $appId = [string]$body.app
-                if ($appId -notmatch '^[a-z0-9-]+$' -or -not $body.fields) {
+                if ($appId -notmatch '^[a-z0-9-]+$' -or -not $body.fields -or $body.fields -isnot [PSCustomObject]) {
                     Send-Json $ctx @{ err = "thiếu app hoặc fields" } 400
                 } else {
-                    $fp = Join-Path $WorkDir ".devin\secrets.local.json"
-                    $creds = Load-Json $fp @{}
-                    $oldUrl = if ($creds.$appId) { [string]$creds.$appId.url } else { $null }
-                    $note = $null
-                    $entry = @{}
-                    if ($creds.$appId) {
-                        $creds.$appId.PSObject.Properties | ForEach-Object { $entry[$_.Name] = $_.Value }
-                    }
+                    $cleanFields = @{}
                     $n = 0
                     foreach ($p in $body.fields.PSObject.Properties) {
                         if ($n -ge 10) { break }
                         $v = ([string]$p.Value).Trim()
-                        if ($v) { $entry[[string]$p.Name] = $v.Substring(0, [Math]::Min(500, $v.Length)); $n++ }
+                        if ($v) { $cleanFields[[string]$p.Name] = $v.Substring(0, [Math]::Min(500, $v.Length)); $n++ }
                     }
-                    # Đổi url → xoá toàn bộ creds còn lại: giữ user/app_password
-                    # qua URL mới là kênh gửi credential thật tới host attacker
-                    if ($entry.ContainsKey("url") -and $entry.url -ne $oldUrl) {
-                        $note = "url đổi — thông tin đăng nhập cũ đã xoá, nhập lại nhé"
-                        $entry = @{ url = $entry.url }
-                    }
-                    if (-not $entry.Count) {
+                    if (-not $cleanFields.Count) {
                         Send-Json $ctx @{ err = "chưa nhập gì" } 400
                     } else {
-                        # Load-Json trả hashtable (file mới) hoặc PSCustomObject
-                        # (file đã có) — ghi đúng cách cho từng kiểu
-                        if ($creds -is [hashtable]) {
-                            $creds[$appId] = $entry
-                        } elseif ($creds.PSObject.Properties[$appId]) {
-                            $creds.$appId = $entry
-                        } else {
-                            $creds | Add-Member -NotePropertyName $appId -NotePropertyValue $entry -Force
-                        }
-                        New-Item -ItemType Directory -Force -Path (Split-Path $fp) | Out-Null
-                        Save-Json $fp $creds
-                        $resp = @{ ok = $true }
-                        if ($note) { $resp.note = $note }
-                        Send-Json $ctx $resp
+                        $fp = Join-Path $WorkDir ".devin\secrets.local.json"
+                        # Card báo trước wipe — đổi url là xoá hết thông tin cũ.
+                        $creds0 = Load-Json $fp @{}
+                        $oldUrl0 = if ($creds0.$appId) { [string]$creds0.$appId.url } else { $null }
+                        $wipe = ($cleanFields.ContainsKey("url") -and $cleanFields.url -ne $oldUrl0)
+                        $gateTitle = "Lưu thông tin đăng nhập cho $appId`?"
+                        if ($wipe) { $gateTitle = "Lưu thông tin đăng nhập cho $appId — đổi địa chỉ site sẽ XOÁ thông tin cũ`?" }
+                        $rid = New-Gate $gateTitle ({
+                            $creds = Load-Json $fp @{}
+                            $oldUrl = if ($creds.$appId) { [string]$creds.$appId.url } else { $null }
+                            $entry = @{}
+                            if ($creds.$appId) {
+                                $creds.$appId.PSObject.Properties | ForEach-Object { $entry[$_.Name] = $_.Value }
+                            }
+                            foreach ($kn in @($cleanFields.Keys)) { $entry[$kn] = $cleanFields[$kn] }
+                            # Đổi url → xoá toàn bộ creds còn lại: giữ user/app_password
+                            # qua URL mới là kênh gửi credential thật tới host attacker
+                            if ($cleanFields.ContainsKey("url") -and $cleanFields.url -ne $oldUrl) {
+                                $entry = @{ url = $cleanFields.url }
+                            }
+                            # Load-Json trả hashtable (file mới) hoặc PSCustomObject
+                            # (file đã có) — ghi đúng cách cho từng kiểu
+                            if ($creds -is [hashtable]) {
+                                $creds[$appId] = $entry
+                            } elseif ($creds.PSObject.Properties[$appId]) {
+                                $creds.$appId = $entry
+                            } else {
+                                $creds | Add-Member -NotePropertyName $appId -NotePropertyValue $entry -Force
+                            }
+                            New-Item -ItemType Directory -Force -Path (Split-Path $fp) | Out-Null
+                            Save-Json $fp $creds
+                        }.GetNewClosure())
+                        Send-Json $ctx @{ pending = $rid; msg = "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để lưu" } 202
                     }
                 }
             }

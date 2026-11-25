@@ -215,29 +215,41 @@ def main():
         check("15d. connections probe loopback → 200", s == 200, str(s))
 
         # ---- audit S3a: đổi url secrets → xoá creds cũ (chống exfil) ----
+        # audit v6: /api/secrets giờ qua consent gate → mỗi POST phải
+        # approve card bằng Origin loopback thì mới ghi
+        def _approve(br, rid):
+            return http("POST", br + f"/api/respond?token={TOKEN}",
+                        {"id": rid, "optionId": "ok"},
+                        headers={"Origin": "http://localhost:8080"})[0]
         s, b, _ = http("POST", base + f"/api/secrets?token={TOKEN}",
                        {"app": "wordpress", "fields":
                         {"url": "https://site-that.com",
                          "user": "u1", "app_password": "p1"}})
+        rid_e = b.get("pending")
+        sa = _approve(base, rid_e)
         s2, b2x, _ = http("POST", base + f"/api/secrets?token={TOKEN}",
                           {"app": "wordpress",
                            "fields": {"url": "http://evil.example"}})
+        rid_e2 = b2x.get("pending")
+        sa2 = _approve(base, rid_e2)
         creds = json.load(open(os.path.join(wd, ".devin",
                                             "secrets.local.json")))
         wp = creds.get("wordpress") or {}
-        check("15e. secrets đổi url → xoá creds cũ",
-              s == 200 and s2 == 200
+        check("15e. secrets đổi url → xoá creds cũ (qua gate)",
+              s == 202 and sa == 200 and s2 == 202 and sa2 == 200
               and wp.get("url") == "http://evil.example"
-              and "user" not in wp and "app_password" not in wp
-              and bool(b2x.get("note")), str(wp)[:80])
+              and "user" not in wp and "app_password" not in wp,
+              str(wp)[:80])
         s, b, _ = http("POST", base + f"/api/secrets?token={TOKEN}",
                        {"app": "wordpress",
                         "fields": {"user": "u2", "app_password": "p2"}})
+        sa3 = _approve(base, b.get("pending"))
         creds = json.load(open(os.path.join(wd, ".devin",
                                             "secrets.local.json")))
         wp = creds.get("wordpress") or {}
         check("15f. secrets cùng url → merge giữ",
-              s == 200 and wp.get("user") == "u2", str(wp)[:80])
+              s == 202 and sa3 == 200 and wp.get("user") == "u2",
+              str(wp)[:80])
 
         s, b, _ = http("POST", base + f"/api/setup?token={TOKEN}",
                        {"language": "vi", "learner_name": "Test"})
@@ -777,13 +789,15 @@ def main():
               f"{b} {b2}")
 
         # 42: open_url javascript:/data: bị từ chối ở /api/connections
-        # (nút "Mở trang" chạy script trong origin portal — audit S5)
+        # (nút "Mở trang" chạy script trong origin portal — audit S5);
+        # open_url https MỚI → 202 consent gate (audit v6 — test 52)
         s, _, _ = http("POST", b3 + f"/api/connections?token={TOKEN}",
                        {"app": {"id": "evil", "open_url": "javascript:alert(1)"}})
-        s2, _, _ = http("POST", b3 + f"/api/connections?token={TOKEN}",
-                        {"app": {"id": "okapp", "open_url": "https://x.com"}})
-        check("42. open_url javascript: → 400, https: → 200",
-              s == 400 and s2 == 200, f"{s}/{s2}")
+        s2, b42, _ = http("POST", b3 + f"/api/connections?token={TOKEN}",
+                          {"app": {"id": "okapp", "open_url": "https://x.com"}})
+        check("42. open_url javascript: → 400, https mới → 202 gate",
+              s == 400 and s2 == 202 and bool(b42.get("pending")),
+              f"{s}/{s2}")
 
         # 43: /api/setup gọi lại khi config đã có language → 202 card
         # (re-setup đè skill pack = đáng ngờ — audit S5). First-run chạy luôn.
@@ -900,6 +914,96 @@ def main():
         check("50. profile deny-write tools/ + brain.json dù RW grant cha",
               f'(deny file-write* (subpath "{os.path.join(wd, "tools")}")' in prof50
               and f'(deny file-write* (literal "{os.path.join(wd, "brain.json")}")' in prof50)
+
+        # 51: /api/secrets qua consent gate — POST → 202, file CHƯA ghi;
+        # approve đúng Origin → mới ghi (audit v6: agent tự gọi url mới =
+        # xoá creds thật theo cơ chế wipe-khi-đổi-url)
+        sfp = os.path.join(wd, ".devin", "secrets.local.json")
+        s, b, _ = http("POST", b3 + f"/api/secrets?token={TOKEN}",
+                       {"app": "wordpress",
+                        "fields": {"url": "https://site.test", "pw": "x"}})
+        rid51 = b.get("pending")
+        # file đã tồn tại từ test 15e/15f (cùng wd) → "chưa ghi" kiểm bằng
+        # giá trị: url mới chưa được vào file trước khi approve
+        creds_pre = {}
+        try:
+            creds_pre = json.load(open(sfp))
+        except OSError:
+            pass
+        s51, _, _ = http("POST", b3 + f"/api/respond?token={TOKEN}",
+                         {"id": rid51, "optionId": "ok"},
+                         headers={"Origin": "http://localhost:8080"})
+        creds51 = json.load(open(sfp))
+        check("51. secrets → 202 (chưa ghi) → approve → ghi",
+              s == 202 and bool(rid51) and s51 == 200
+              and creds_pre.get("wordpress", {}).get("url")
+              != "https://site.test"
+              and creds51.get("wordpress", {}).get("url")
+              == "https://site.test",
+              f"{s}/{s51} {b}")
+
+        # 51b: đổi url trên creds đã có → sau approve chỉ còn field mới
+        s, b, _ = http("POST", b3 + f"/api/secrets?token={TOKEN}",
+                       {"app": "wordpress",
+                        "fields": {"url": "https://khac.test"}})
+        rid51b = b.get("pending")
+        s51b, _, _ = http("POST", b3 + f"/api/respond?token={TOKEN}",
+                          {"id": rid51b, "optionId": "ok"},
+                          headers={"Origin": "http://localhost:8080"})
+        creds51b = json.load(open(sfp))
+        check("51b. secrets đổi url → wipe sau approve",
+              s == 202 and s51b == 200
+              and creds51b.get("wordpress") == {"url": "https://khac.test"},
+              f"{s}/{s51b} {creds51b.get('wordpress')}")
+
+        # 51c: secrets thiếu fields → 400 ngay, không tạo card
+        s, b, _ = http("POST", b3 + f"/api/secrets?token={TOKEN}",
+                       {"app": "wordpress"})
+        check("51c. secrets thiếu fields → 400", s == 400, str(s))
+
+        # 52: /api/connections — upsert status thường → 200 thẳng; đặt/đổi
+        # open_url → 202 card (audit v6: nút "Mở trang" quen-thuộc trỏ
+        # site lạ = phishing — học viên phải thấy đích trước khi tin)
+        connfp = os.path.join(wd, "my-course", "connections.json")
+        s52a, _, _ = http("POST", b3 + f"/api/connections?token={TOKEN}",
+                          {"app": {"id": "t52", "name": "T52",
+                                   "status": "ok"}})
+        s52b, b52, _ = http("POST", b3 + f"/api/connections?token={TOKEN}",
+                            {"app": {"id": "t52", "name": "T52",
+                                     "status": "ok",
+                                     "open_url": "https://ok.test"}})
+        rid52 = b52.get("pending")
+        s52c, _, _ = http("POST", b3 + f"/api/respond?token={TOKEN}",
+                          {"id": rid52, "optionId": "ok"},
+                          headers={"Origin": "http://localhost:8080"})
+        apps52 = {a.get("id"): a for a in
+                  json.load(open(connfp)).get("apps", [])}
+        # upsert lại CÙNG open_url → không card (portal cập nhật thường)
+        s52d, _, _ = http("POST", b3 + f"/api/connections?token={TOKEN}",
+                          {"app": {"id": "t52", "name": "T52",
+                                   "status": "ok2",
+                                   "open_url": "https://ok.test"}})
+        apps52b = {a.get("id"): a for a in
+                   json.load(open(connfp)).get("apps", [])}
+        check("52. connections: status→200; open_url mới→202→apply; giữ→200",
+              s52a == 200 and s52b == 202 and bool(rid52) and s52c == 200
+              and apps52.get("t52", {}).get("open_url") == "https://ok.test"
+              and s52d == 200
+              and apps52b.get("t52", {}).get("status") == "ok2",
+              f"{s52a}/{s52b}/{s52c}/{s52d}")
+
+        # 53: /api/remove-connection → 202 card; approve → app biến mất
+        s, b, _ = http("POST", b3 + f"/api/remove-connection?token={TOKEN}",
+                       {"id": "t52"})
+        rid53 = b.get("pending")
+        s53, _, _ = http("POST", b3 + f"/api/respond?token={TOKEN}",
+                         {"id": rid53, "optionId": "ok"},
+                         headers={"Origin": "http://localhost:8080"})
+        gone53 = all(a.get("id") != "t52"
+                     for a in json.load(open(connfp)).get("apps", []))
+        check("53. remove-connection → 202 → approve → gỡ",
+              s == 202 and bool(rid53) and s53 == 200 and gone53,
+              f"{s}/{s53}")
     finally:
         for p in procs:
             try:

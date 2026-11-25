@@ -705,6 +705,13 @@ async function renderApps() {
             method: 'POST', body: JSON.stringify({ app: a.id, fields })
           })).json();
           if (res.err) { btn.textContent = res.err; return; }
+          // ghi credential qua consent gate — thông tin chỉ lưu sau khi
+          // bấm Đồng ý trong chat; giữ form mở để họ thấy chưa xong
+          if (res.pending) {
+            btn.textContent = t('saveCheck');
+            await uiAlert(t('gateTitle'), res.msg || t('gateMsg'));
+            return;
+          }
           await bfetch(BRIDGE_URL + '/api/check-connection', {
             method: 'POST', body: JSON.stringify({ id: a.id })
           });

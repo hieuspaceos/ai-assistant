@@ -1317,6 +1317,30 @@ class Handler(BaseHTTPRequestHandler):
             if ou and not re.match(r"^https?://", ou, re.I):
                 self._json({"err": "open_url chỉ nhận link http(s)"}, 400); return
             k = load_json(CONN_FP, {"apps": []})
+            old_ou = next((str(a.get("open_url") or "")
+                           for a in (k.get("apps") or [])
+                           if a.get("id") == app["id"]), "")
+            if ou and ou != old_ou:
+                # open_url MỚI hoặc ĐỔI → nút "Mở trang" quen-thuộc trỏ
+                # site lạ (phishing) → card cho học viên thấy đích đến
+                # trước khi tin (audit v6). Upsert status/name hay giữ
+                # nguyên open_url thì chạy thẳng — portal cập nhật thường
+                # xuyên, không thể card mỗi lần.
+                def _apply(app=app):
+                    kk = load_json(CONN_FP, {"apps": []})
+                    kk["apps"] = kk.get("apps") or []
+                    for i, a in enumerate(kk["apps"]):
+                        if a.get("id") == app["id"]:
+                            kk["apps"][i] = app
+                            break
+                    else:
+                        kk["apps"].append(app)
+                    save_json(CONN_FP, kk)
+                rid = gate_local(
+                    f"Đặt link \"Mở trang\" của {app['id']} → {ou}?", _apply)
+                self._json({"pending": rid,
+                            "msg": "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để đặt link"}, 202)
+                return
             k["apps"] = k.get("apps") or []
             for i, a in enumerate(k["apps"]):
                 if a.get("id") == app["id"]:
@@ -1327,16 +1351,25 @@ class Handler(BaseHTTPRequestHandler):
             save_json(CONN_FP, k)
             self._json({"ok": True})
         elif path == "/api/remove-connection":
+            # Gỡ app khỏi registry — agent tự gọi là mất nút kết nối âm
+            # thầm → gate (audit v6). Không UI nào gọi endpoint này nên
+            # card không thêm ma sát.
             aid = str(data.get("id", ""))
-            k = load_json(CONN_FP, {"apps": []})
-            k["apps"] = [a for a in (k.get("apps") or [])
-                         if a.get("id") != aid]
-            save_json(CONN_FP, k)
-            self._json({"ok": True})
+            def _apply(aid=aid):
+                k = load_json(CONN_FP, {"apps": []})
+                k["apps"] = [a for a in (k.get("apps") or [])
+                             if a.get("id") != aid]
+                save_json(CONN_FP, k)
+            rid = gate_local(f"Gỡ kết nối {aid}?", _apply)
+            self._json({"pending": rid,
+                        "msg": "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để gỡ"}, 202)
         elif path == "/api/secrets":
             # Form "Cài" trong panel Cài đặt: học viên dán app password WP /
             # mã OA… → ghi vào .devin/secrets.local.json (đã gitignore).
             # Chỉ GHI — không endpoint nào đọc secret ra ngoài.
+            # Ghi credential là đặc quyền → consent gate (audit v6): agent
+            # tự gọi với url mới = xoá creds thật (wipe-khi-đổi-url), còn
+            # url + pass đến host lạ = kênh exfil.
             app = str(data.get("app", ""))
             fields = data.get("fields")
             if not re.match(r"^[a-z0-9-]+$", app) or not isinstance(fields, dict):
@@ -1347,30 +1380,36 @@ class Handler(BaseHTTPRequestHandler):
             if not clean:
                 self._json({"err": "chưa nhập gì"}, 400); return
             fp = os.path.join(os.path.abspath(CWD), ".devin", "secrets.local.json")
-            creds = load_json(fp, {})
-            old = creds.get(app) or {}
-            # Đổi endpoint (url/host/endpoint) thì phải nhập lại TOÀN BỘ
-            # thông tin — nếu không, đổi url giữ nguyên user+password cũ
-            # = probe sau đó gửi creds thật tới host mới (exfil).
-            note = None
-            for k in ("url", "host", "endpoint"):
-                if k in clean and clean[k] != old.get(k):
-                    creds[app] = clean
-                    note = "đổi địa chỉ site — các thông tin đăng nhập cũ đã xoá, nhập lại giúp"
-                    break
-            else:
-                creds[app] = {**old, **clean}
-            os.makedirs(os.path.dirname(fp), exist_ok=True)
-            save_json(fp, creds)
-            try:
-                # credential của học viên — quyền như bridge.token
-                os.chmod(fp, 0o600)
-            except OSError:
-                pass                     # Windows không có chmod — bỏ qua
-            out = {"ok": True}
-            if note:
-                out["note"] = note
-            self._json(out)
+            # Card báo trước cả wipe (đọc creds cũ chỉ để so) — học viên
+            # thấy "sẽ xoá thông tin cũ" TRƯỚC khi bấm Đồng ý.
+            old0 = load_json(fp, {}).get(app) or {}
+            wipe = any(k in clean and clean[k] != old0.get(k)
+                       for k in ("url", "host", "endpoint"))
+            def _apply(app=app, clean=clean):
+                creds = load_json(fp, {})
+                old = creds.get(app) or {}
+                # Đổi endpoint (url/host/endpoint) thì phải nhập lại TOÀN
+                # BỘ thông tin — giữ user+password cũ qua host mới = probe
+                # sau đó gửi creds thật tới host attacker (exfil).
+                for k in ("url", "host", "endpoint"):
+                    if k in clean and clean[k] != old.get(k):
+                        creds[app] = clean
+                        break
+                else:
+                    creds[app] = {**old, **clean}
+                os.makedirs(os.path.dirname(fp), exist_ok=True)
+                save_json(fp, creds)
+                try:
+                    # credential của học viên — quyền như bridge.token
+                    os.chmod(fp, 0o600)
+                except OSError:
+                    pass                 # Windows không có chmod — bỏ qua
+            title = (f"Lưu thông tin đăng nhập cho {app} — đổi địa chỉ "
+                     f"site sẽ XOÁ thông tin cũ?" if wipe
+                     else f"Lưu thông tin đăng nhập cho {app}?")
+            rid = gate_local(title, _apply)
+            self._json({"pending": rid,
+                        "msg": "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để lưu"}, 202)
         elif path == "/api/setup":
             # Onboarding lần đầu: ngôn ngữ + tên → config.json + skill pack đúng ngôn ngữ
             lang = str(data.get("language", ""))

@@ -35,6 +35,19 @@ không phân biệt hoa-thường — `which("Python3")` resolve ra python3 th�
 match. Audit lại đợt vá phát hiện — đây là lý do phải so cùng dạng
 canonical ở mọi điểm kiểm.
 
+**Ghi credential + đổi link nút "Mở trang" qua consent gate.** Vì:
+agent tự gọi `POST /api/secrets` với `url` mới = xoá sạch creds thật
+(cơ chế wipe-khi-đổi-url vốn chống exfil lại thành vũ khí DoS), còn
+url+pass tới host lạ = kênh exfil; `open_url` trong `/api/connections`
+đổi link nút "Mở trang" quen-thuộc thành site phishing học viên sẽ
+bấm tự nhiên. `/api/secrets` + `/api/remove-connection` gate toàn bộ;
+`/api/connections` chỉ gate khi `open_url` MỚI hoặc KHÁC giá trị cũ —
+upsert status/name của portal chạy thẳng, không thể card mỗi lần cập
+nhật. Card `open_url` hiện đích link trong title. Parity cả .ps1.
+Frontend form "Cài" hiện `pending` + giữ form mở. Không gate
+`/api/bot*`: onboarding tạo+activate bot dây chuyền response→response,
+gate vào là gãy flow — việc riêng.
+
 ## 2026 — Lock-down 6 phase (audit `plans/261120-1811-lock-down/`)
 
 **Gate token trong shell thay vì flag ttyd.** Vì: test handshake thật
