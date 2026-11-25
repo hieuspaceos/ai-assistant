@@ -258,7 +258,7 @@ $script:AcpIn = $null      # FileStream ghi vào stdin não (chỉ sandbox)
 $script:AcpOut = $null     # stdout reader của não (chỉ sandbox)
 $script:AcpHandle = [IntPtr]::Zero   # process handle (creator = full access)
 $script:AcpJob = [IntPtr]::Zero      # Job Object → kill tree
-$script:AcpReader = $null  # thread đọc stdout (chỉ sandbox)
+$script:AcpTask = $null    # ReadLineAsync đang chờ (chỉ sandbox)
 
 $AgentCredFp = Join-Path $WorkDir ".devin\agent-user.cred"
 
@@ -543,18 +543,10 @@ function Start-BrainSandboxed($brain, $cred) {
     $script:AcpOut = [IO.StreamReader]::new(
         [IO.FileStream]::new($res.StdoutRead, [IO.FileAccess]::Read),
         [Text.Encoding]::UTF8)
-    $script:AcpReader = [Threading.Thread]::new(
-        [Threading.ParameterizedThreadStart]{
-            param($o)
-            $rr = $o[0]; $qq = $o[1]
-            try {
-                while (($l = $rr.ReadLine()) -ne $null) {
-                    if ($l.Trim()) { $qq.Enqueue($l.Trim()) }
-                }
-            } catch {}
-        })
-    $script:AcpReader.IsBackground = $true
-    $script:AcpReader.Start(@($script:AcpOut, $lineQueue))
+    # Đọc stdout bằng ReadLineAsync — KHÔNG dùng thread: scriptblock PS
+    # trên raw Thread không có runspace → crash. Task hoàn thành được
+    # drain trong Drain-Queue (vốn đã chạy mỗi request, đơn luồng).
+    $script:AcpTask = $script:AcpOut.ReadLineAsync()
     $script:AcpDead = $false
     Call-Acp "initialize" @{
         protocolVersion = 1
@@ -579,7 +571,7 @@ function Start-Brain {
     foreach ($s in @($script:AcpIn, $script:AcpOut)) {
         try { if ($s) { $s.Dispose() } } catch {}
     }
-    $script:AcpIn = $null; $script:AcpOut = $null; $script:AcpReader = $null
+    $script:AcpIn = $null; $script:AcpOut = $null; $script:AcpTask = $null
     $script:AcpProc = $null
     $script:SessionId = $null
     # Có cred user hạn chế → spawn trong sandbox (S4); lỗi → về đường
@@ -623,6 +615,16 @@ function Start-Brain {
 }
 
 function Drain-Queue {
+    # Đường sandbox: đã có task ReadLineAsync xong chưa → đổ vào queue.
+    # EOF (Result=null) hoặc pipe gãy → không đặt task mới; IsAlive trong
+    # Test-BrainAlive lo phần phát hiện não chết.
+    if ($script:AcpTask -and $script:AcpTask.IsCompleted) {
+        try { $l = $script:AcpTask.Result } catch { $l = $null }
+        if ($null -ne $l -and $l.Trim()) { $lineQueue.Enqueue($l.Trim()) }
+        $script:AcpTask = if ($null -ne $l) {
+            $script:AcpOut.ReadLineAsync()
+        } else { $null }
+    }
     $line = $null
     while ($lineQueue.TryDequeue([ref]$line)) {
         try { $m = $line | ConvertFrom-Json } catch { continue }
