@@ -172,6 +172,13 @@ BRAIN_CMD_DENY = {
     # DB client — lệnh "não" không bao giờ là shell database
     "sqlite3", "mysql", "psql", "redis-cli", "mongosh", "mongo",
     "qlmanage", "spctl", "codesign",
+    # code-exec qua args/config: git -c core.pager=sh, awk 'BEGIN{system()}',
+    # tar --checkpoint-action, editor/pager shell-escape (vim :!, less !cmd),
+    # wrapper bọc lệnh tuỳ ý, container mount host
+    "git", "awk", "gawk", "nawk", "mawk", "tar", "vim", "vi", "nvim",
+    "nano", "emacs", "less", "more", "most", "man", "nohup", "setsid",
+    "timeout", "flock", "watch", "parallel", "shortcuts", "xcrun",
+    "docker", "podman", "su", "doas",
 }
 
 def load_brain():
@@ -193,9 +200,14 @@ def load_brain():
         out = {**next(p for p in BRAIN_PRESETS if p["id"] == "devin"),
                "cmd": DEVIN}
     out.setdefault("args", [])
+    # terminal cũng qua deny-list (check trên b thô của FILE): brain.json
+    # sửa tay terminal:"sh" → term-gate exec shell trần trong ttyd cho ai
+    # có mã kết nối. Terminal preset (devin/gemini/…) không nằm trong list.
     term = str(out.get("terminal") or "")
-    out["terminal"] = term if re.fullmatch(r"[A-Za-z0-9_.-]+", term) \
-        else out["cmd"]
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", term) or \
+            str(b.get("terminal") or "").lower() in BRAIN_CMD_DENY:
+        term = ""
+    out["terminal"] = term or base.get("terminal") or out["cmd"]
     return out
 
 event_store = []          # các event còn giữ (đầu store có thể đã bị cắt)
@@ -560,6 +572,18 @@ _SENSITIVE_DIRS = [os.path.expanduser(p) for p in (
     "~/Library/Application Support/Google/Chrome",
     "~/Library/Application Support/Chromium",
     "~/Library/Application Support/Microsoft Edge",
+    "~/Library/Application Support/Firefox",
+    # cookie/session store WebKit + container app sandbox (Zalo, Outlook
+    # bản app) + account/plist có thể giữ token
+    "~/Library/HTTPStorages", "~/Library/WebKit", "~/Library/Containers",
+    "~/Library/Group Containers", "~/Library/Accounts",
+    "~/Library/Preferences", "~/Library/IdentityServices",
+    # persistence + binary chạy NGOÀI sandbox — ghi vào đây = code tự
+    # chạy thoát Seatbelt lúc login/boot hoặc lúc user mở app
+    "~/Library/LaunchAgents", "~/Library/LaunchDaemons",
+    "~/.config/autostart", "~/Applications",
+    "/Library/LaunchAgents", "/Library/LaunchDaemons",
+    "/Library/StartupItems", "/Applications",
 )]
 _SENSITIVE_ROOTS = {
     os.path.realpath(p) for p in
@@ -577,8 +601,28 @@ def path_sensitive(p):
     rpl = rp.lower()
     if rpl in _SENSITIVE_ROOTS_L:
         return True
+    # So HAI chiều: path NẰM TRONG folder nhạy cảm, hoặc path CHỨA một
+    # folder nhạy cảm — chỉ so một chiều thì grant "~/Library" (hay
+    # "~/.config") đọc được hết Keychains/Cookies/profile trình duyệt/
+    # credential CLI, vô hiệu toàn bộ deny-list con.
     return any(rpl == s or rpl.startswith(s + os.sep)
+               or s.startswith(rpl + os.sep)
                for s in _SENSITIVE_DIRS_L)
+
+def rw_grant_ok(p):
+    """read-write chỉ hợp lệ NGOÀI vùng mã nguồn: grant RW trên folder chứa
+    project (~/Desktop…) hay folder code bên trong (tools/, web/…) = ghi
+    được tools/*.py, brain.json, .git/hooks → spawn/exec kế chạy code
+    NGOÀI Seatbelt. Path nằm trong vùng đã writable sẵn (my-course/,
+    .devin/skills/, .logs/) thì cho qua — grant thừa nhưng vô hại."""
+    rpl = os.path.realpath(os.path.expanduser(p)).lower()
+    cwdl = os.path.realpath(os.path.abspath(CWD)).lower()
+    if not (rpl == cwdl or rpl.startswith(cwdl + os.sep)
+            or cwdl.startswith(rpl + os.sep)):
+        return True                       # ngoài project — bình thường
+    wdirs = [os.path.realpath(os.path.join(cwdl, *d.split("/")))
+             for d in ("my-course", ".devin/skills", ".logs")]
+    return any(rpl == w or rpl.startswith(w + os.sep) for w in wdirs)
 
 def validate_probe(probe):
     """probe trong connections.json phải khớp schema cố định — client ghi
@@ -1010,6 +1054,7 @@ class Handler(BaseHTTPRequestHandler):
             cl = int(self.headers.get("Content-Length") or 0)
         except ValueError:
             cl = 0
+        cl = max(0, cl)     # số âm → read(-n) đọc tới timeout, giữ slot
         # save-page + bot-import cần limit lớn hơn — file clone/base64 zip
         cap = 8_000_000 if path in ("/api/save-page", "/api/bot-import") else 1_000_000
         if cl > cap:
@@ -1116,11 +1161,17 @@ class Handler(BaseHTTPRequestHandler):
                 cmd = str(data.get("cmd", "")).strip()
                 if not re.fullmatch(r"[A-Za-z0-9_.-]+", cmd or ""):
                     self._json({"err": "lệnh não không hợp lệ — chỉ nhận tên lệnh"}, 400); return
-                if cmd in BRAIN_CMD_DENY:
+                if cmd.lower() in BRAIN_CMD_DENY:
+                    # .lower() bắt buộc: APFS/NTFS không phân biệt hoa-thường
+                    # nên "Python3" which-resolve vẫn ra python3 — deny mà
+                    # so nguyên xi là lọt (ps1 đã ToLower, load_brain cũng vậy)
                     self._json({"err": "lệnh này chạy code tuỳ ý — không dùng làm não được"}, 400); return
                 term = str(data.get("terminal", cmd))
                 if not re.fullmatch(r"[A-Za-z0-9_.-]+", term):
                     self._json({"err": "lệnh terminal không hợp lệ"}, 400); return
+                if term.lower() in BRAIN_CMD_DENY:
+                    self._json({"err": "lệnh terminal này chạy code tuỳ ý — "
+                                       "không dùng được"}, 400); return
                 args = data.get("args")
                 args = [str(a)[:200] for a in args[:20]] if isinstance(args, list) else []
                 b = {"id": bid or "custom",
@@ -1214,6 +1265,10 @@ class Handler(BaseHTTPRequestHandler):
                 if path_sensitive(p):
                     self._json({"err": "folder chứa dữ liệu nhạy cảm — "
                                        "không cấp quyền được: " + p}, 400); return
+                if access == "read-write" and not rw_grant_ok(p):
+                    self._json({"err": "không cấp ghi trong folder mã nguồn "
+                                       "của trợ lý — ghi được là code chạy "
+                                       "ngoài sandbox: " + p}, 400); return
                 paths.append(p)
             if not paths:
                 self._json({"err": "không thấy folder này trên máy"}, 404); return
@@ -1486,6 +1541,9 @@ def spawn_brain():
         if old and old.proc:
             try:
                 old.proc.terminate()
+                # wait ngắn để stdout đóng hẳn — não cũ đang sống lèo
+                # broadcast vài event lẫn vào stream của não mới
+                old.proc.wait(timeout=2)
             except Exception:
                 pass
         if not acp.dead:
@@ -1535,6 +1593,16 @@ if __name__ == "__main__":
                 pass
     except OSError:
         pass
+    # .logs/*.log chỉ quay vòng khi có history-write hoặc boot — máy ít
+    # chat thì log phình theo tháng. Thread daemon quay theo GIỜ.
+    def _log_rotator():
+        while True:
+            time.sleep(3600)
+            try:
+                rotate_logs()
+            except Exception:
+                pass
+    threading.Thread(target=_log_rotator, daemon=True).start()
     spawn_brain()
     print(f"chat-bridge: http://localhost:{PORT}  (cwd={CWD})")
     BoundedServer((BIND, PORT), Handler).serve_forever()

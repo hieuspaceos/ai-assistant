@@ -76,6 +76,7 @@ $handler = {
       # vendor khong doi theo request -> cache 1h; cho khac giu no-store
       $cc = if ($path.StartsWith('/web/vendor/')) { 'max-age=3600' } else { 'no-store' }
       $res.Headers.Add('Cache-Control', $cc)
+      $res.Headers.Add('X-Content-Type-Options', 'nosniff')
       # ToLower BAT BUOC: FS Windows/macOS khong phan biet hoa-thuong nen
       # /MY-COURSE/x.html resolve ra cung file — so case-sensitive se lam
       # content doc thoat CSP qua alias viet hoa.

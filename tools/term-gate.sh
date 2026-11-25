@@ -20,8 +20,27 @@ while [ "$t" != "$BRIDGE_TOKEN" ]; do
 done
 
 # Não terminal-mode: sandbox-exec chỉ có trên macOS; Windows đi nhánh .cmd
-# của ttyd; Linux chạy thẳng. BRAIN_TERM được validate tên-trần lúc load
-# brain.json — exec trực tiếp, KHÔNG qua `sh -c` để không có eval path.
+# của ttyd; Linux chạy thẳng. BRAIN_TERM exec TRỰC TIẾP, KHÔNG qua `sh -c`
+# để không có eval path — và phải kiểm lại ở đây: start.sh đọc brain.json
+# thô, nên file sửa tay (terminal:"sh") mở shell trần cho ai có mã kết
+# nối. Giữ đồng bộ với BRAIN_CMD_DENY trong chat-bridge.py.
+# Hạ chữ thường trước khi so: FS macOS/Windows không phân biệt hoa-thường
+# → "Python3" exec vẫn ra python3 dù pattern "python3" không khớp.
+_bt="$(printf '%s' "$BRAIN_TERM" | tr '[:upper:]' '[:lower:]')"
+case "$_bt" in
+  ""|*[!a-z0-9_.-]*|\
+  py|python|python3|sh|bash|zsh|fish|dash|env|nice|xargs|find|make|rake|\
+  osascript|node|deno|bun|ruby|perl|php|pwsh|powershell|cmd|\
+  git|awk|gawk|nawk|mawk|tar|vim|vi|nvim|nano|emacs|less|more|most|man|\
+  nohup|setsid|timeout|flock|watch|parallel|shortcuts|xcrun|docker|podman|su|doas|\
+  npm|npx|yarn|pnpm|gem|pip|pip3|curl|wget|nc|ncat|socat|busybox|open|\
+  rundll32|regsvr32|mshta|wscript|cscript|wmic|certutil|bitsadmin|eval|exec|\
+  launchctl|security|pbcopy|pbpaste|screencapture|\
+  ssh|scp|sftp|rsync|ftp|telnet|rlogin|rsh|tmux|screen|script|expect|\
+  lldb|gdb|dtrace|automator|swift|sudo|crontab|at|atq|atrm|sandbox-exec|\
+  sqlite3|mysql|psql|redis-cli|mongosh|mongo|qlmanage|spctl|codesign)
+    echo "Lenh terminal khong hop le - chay devin."; BRAIN_TERM=devin ;;
+esac
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SB="$ROOT/.devin/agent.sb"
 if [ "$(uname -s)" = "Darwin" ] && [ -f "$SB" ] \

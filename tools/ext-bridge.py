@@ -165,8 +165,10 @@ def ws_recv(sock):
             continue
         if op in (0, 1, 2):
             msg += payload
-        if fin:
-            return msg.decode("utf-8", "replace")
+            if fin:
+                return msg.decode("utf-8", "replace")
+        # fin trên frame ĐIỀU KHIỂN (pong, opcode lạ) không kết thúc
+        # message — check fin bên ngoài sẽ trả msg dở khi pong xen giữa
 
 def ws_handshake(sock, headers):
     # Chỉ nhận WS từ extension (origin chrome-extension://...) hoặc không có

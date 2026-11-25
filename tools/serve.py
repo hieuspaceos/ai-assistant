@@ -68,6 +68,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         # Tính giá trị TRƯỚC — gửi MỘT header duy nhất.
         cc = "max-age=3600" if self.path.startswith("/web/vendor/") else "no-store"
         self.send_header("Cache-Control", cc)
+        self.send_header("X-Content-Type-Options", "nosniff")
         super().end_headers()
 
     def translate_path(self, path):

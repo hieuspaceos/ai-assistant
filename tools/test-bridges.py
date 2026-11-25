@@ -4,6 +4,7 @@
 Spawn mỗi bridge THẬT trên port động với CWD tạm (não giả → dead ngay
 nhưng bridge vẫn sống — đúng thiết kế). Không cần dep ngoài, không cần
 não thật. Chạy: python3 tools/test-bridges.py"""
+import importlib.util
 import json, os, secrets, shutil, socket, subprocess, sys, tempfile, threading, time
 import urllib.error, urllib.request, urllib.parse
 
@@ -823,6 +824,82 @@ def main():
                   encoding="utf-8").read()
         check("45. bfetch chỉ gắn token cho 7682/7684",
               "BRIDGE_PORTS" in bt and "7682" in bt and "7684" in bt)
+
+        # ---- audit v6 ----
+        # 46: grant trên folder CHỨA folder nhạy cảm (~/Library chứa
+        # Keychains/Cookies/profile trình duyệt) — chỉ so một chiều thì
+        # deny-list con bị vô hiệu hết
+        anc = os.path.expanduser("~/Library")
+        if os.path.isdir(anc):
+            s, b, _ = http("POST", b3 + f"/api/permissions?token={TOKEN}",
+                           {"path": anc})
+            check("46. permissions ~/Library (chứa Keychains) → 400",
+                  s == 400, f"{s} {str(b)[:60]}")
+            la = os.path.join(anc, "LaunchAgents")
+            if os.path.isdir(la):   # folder persistence — có thể chưa tồn tại
+                s, b, _ = http("POST",
+                               b3 + f"/api/permissions?token={TOKEN}",
+                               {"path": la, "access": "read-write"})
+                check("46b. permissions LaunchAgents → 400", s == 400, str(s))
+        else:
+            src = open(os.path.join(TOOLS, "chat-bridge.py"),
+                       encoding="utf-8").read()
+            check("46. path_sensitive so 2 chiều (ancestor)",
+                  "s.startswith(rpl + os.sep)" in src)
+
+        # 47: read-write trên folder chứa/trong mã nguồn → 400 (ghi được
+        # tools/*.py = code chạy NGOÀI sandbox ở spawn kế); bên trong
+        # my-course (writable sẵn) → 202 qua card như thường
+        os.makedirs(os.path.join(wd, "tools"), exist_ok=True)
+        r47 = True
+        for p47, want in ((os.path.dirname(wd), 400), (wd, 400),
+                          (os.path.join(wd, "tools"), 400),
+                          (os.path.join(wd, "my-course"), 202)):
+            s, b, _ = http("POST", b3 + f"/api/permissions?token={TOKEN}",
+                           {"path": p47, "access": "read-write"})
+            if s != want:
+                r47 = False
+                print(f"    ✗ RW {p47} → {s} (muốn {want}) {str(b)[:60]}")
+        check("47. RW grant trên/trong mã nguồn → 400, my-course → 202", r47)
+
+        # 48: deny-list mở rộng (exec-qua-args) + terminal cũng qua deny
+        r48 = True
+        for cmd48 in ("git", "awk", "vim"):
+            s, b, _ = http("POST", b3 + f"/api/brain?token={TOKEN}",
+                           {"cmd": cmd48})
+            if s != 400:
+                r48 = False
+                print(f"    ✗ brain cmd {cmd48} → {s}")
+        s, b, _ = http("POST", b3 + f"/api/brain?token={TOKEN}",
+                       {"cmd": "somecli", "terminal": "sh"})
+        check("48. brain cmd git/awk/vim → 400; terminal=sh → 400",
+              r48 and s == 400, str(s))
+
+        # 49: brain.json sửa tay terminal:"sh" → load_brain rơi về an toàn
+        bf = os.path.join(wd, "brain.json")
+        orig49 = open(bf).read()
+        json.dump({"cmd": "__no_such_brain__", "terminal": "sh"},
+                  open(bf, "w"))
+        s, b, _ = http("GET", b3 + f"/api/brain?token={TOKEN}")
+        check("49. terminal sh trong file → load_brain không dùng",
+              s == 200 and b.get("current", {}).get("terminal") != "sh",
+              str(b.get("current", {})))
+        open(bf, "w").write(orig49)
+
+        # 50: profile Seatbelt deny-write vùng mã nguồn kể cả khi
+        # permissions.json (sửa tay) grant RW trên folder cha
+        spec = importlib.util.spec_from_file_location(
+            "gen_sandbox", os.path.join(TOOLS, "gen-sandbox.py"))
+        gs = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(gs)
+        json.dump({"folders": [{"path": os.path.dirname(wd),
+                                "access": "read-write"}]},
+                  open(os.path.join(wd, "my-course",
+                                    "permissions.json"), "w"))
+        prof50 = gs.build_profile(wd)
+        check("50. profile deny-write tools/ + brain.json dù RW grant cha",
+              f'(deny file-write* (subpath "{os.path.join(wd, "tools")}")' in prof50
+              and f'(deny file-write* (literal "{os.path.join(wd, "brain.json")}")' in prof50)
     finally:
         for p in procs:
             try:

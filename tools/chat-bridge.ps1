@@ -120,7 +120,11 @@ $BrainCmdDeny = @("python3","python","py","sh","bash","zsh","fish","dash",
     "automator","swift","sudo","crontab","at","atq","atrm",
     "sandbox-exec","sqlite3","mysql","psql","redis-cli","mongosh",
     "mongo","qlmanage","spctl","codesign",
-    "security","pbcopy","pbpaste","screencapture")
+    "security","pbcopy","pbpaste","screencapture",
+    "git","awk","gawk","nawk","mawk","tar","vim","vi","nvim",
+    "nano","emacs","less","more","most","man","nohup","setsid",
+    "timeout","flock","watch","parallel","shortcuts","xcrun",
+    "docker","podman","su","doas")
 
 function Get-Brain {
     # brain.json → não đang dùng; id khớp preset thì lấy preset làm nền;
@@ -138,8 +142,11 @@ function Get-Brain {
     if ($b -and $b.cmd -and ([string]$b.cmd -match '^[A-Za-z0-9_.-]+$') -and
         ($fromPreset -or -not ($BrainCmdDeny -contains ([string]$b.cmd).ToLower()))) {
         if (-not $b.PSObject.Properties["args"]) { $b | Add-Member -NotePropertyName args -NotePropertyValue @() }
+        # terminal cũng qua deny-list: file sửa tay terminal:"powershell"
+        # → term-gate.cmd exec shell trần trong ttyd (parity load_brain py).
         if (-not $b.PSObject.Properties["terminal"] -or -not $b.terminal -or
-            ([string]$b.terminal -notmatch '^[A-Za-z0-9_.-]+$')) {
+            ([string]$b.terminal -notmatch '^[A-Za-z0-9_.-]+$') -or
+            ($BrainCmdDeny -contains ([string]$b.terminal).ToLower())) {
             $b | Add-Member -NotePropertyName terminal -NotePropertyValue $b.cmd -Force
         }
         return $b
@@ -188,20 +195,45 @@ function New-Gate($title, [scriptblock]$applyFn) {
 # Folder NHẠY CẢM không được cấp quyền dù request hợp lệ — card xác nhận
 # không bảo vệ được người bấm đại "Đồng ý" (parity path_sensitive() py).
 function Test-SensitivePath($p) {
-    $rp = [IO.Path]::GetFullPath([string]$p).TrimEnd('\', '/')
+    $rpl = [IO.Path]::GetFullPath([string]$p).TrimEnd('\', '/').ToLower()
     $home = [IO.Path]::GetFullPath($env:USERPROFILE).TrimEnd('\', '/')
-    if ($rp -match '^[A-Za-z]:$' -or $rp -ieq $home) { return $true }
+    if ($rpl -match '^[a-z]:$' -or $rpl -eq $home.ToLower()) { return $true }
     $sens = @("$home\.ssh", "$home\.gnupg", "$home\.aws", "$home\.kube",
         "$home\.config\gh", "$home\.claude", "$home\.codex", "$home\.gemini",
         "$home\.opencode", "$home\.config\opencode", "$home\.config\devin",
         "$home\AppData\Local\devin",
         "$env:LOCALAPPDATA\Google\Chrome\User Data",
         "$env:LOCALAPPDATA\Microsoft\Edge\User Data",
+        "$env:APPDATA\Mozilla\Firefox",
         "$env:APPDATA\Microsoft\Credentials",
-        "$env:WINDIR", "$env:ProgramFiles", "${env:ProgramFiles(x86)}")
+        "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup",
+        "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp",
+        # binary chạy ngoài mọi hàng rào — ghi được = code thoát sandbox
+        "$env:WINDIR", "$env:ProgramFiles", "${env:ProgramFiles(x86)}",
+        "$env:LOCALAPPDATA\Programs")
     foreach ($s in $sens) {
         if (-not $s) { continue }
-        if ($rp -ieq $s -or $rp.ToLower().StartsWith(($s + '\').ToLower())) { return $true }
+        $sl = $s.TrimEnd('\', '/').ToLower()
+        # Hai chiều: path NẰM TRONG folder nhạy cảm hoặc CHỨA folder nhạy
+        # cảm — grant "AppData\Local" mà chỉ so một chiều sẽ đọc hết Chrome
+        # User Data (vô hiệu toàn bộ deny-list con).
+        if ($rpl -eq $sl -or $rpl.StartsWith($sl + '\') -or
+            $sl.StartsWith($rpl + '\')) { return $true }
+    }
+    return $false
+}
+
+# read-write trong/trùm folder mã nguồn = ghi được tools\*.ps1 → code chạy
+# ngoài mọi hàng rào (parity rw_grant_ok trong chat-bridge.py). Path nằm
+# trong vùng writable sẵn (my-course…) thì cho qua — thừa nhưng vô hại.
+function Test-RwGrantOk($p) {
+    $rpl = [IO.Path]::GetFullPath([string]$p).TrimEnd('\', '/').ToLower()
+    $cwdl = [IO.Path]::GetFullPath($WorkDir).TrimEnd('\', '/').ToLower()
+    if ($rpl -ne $cwdl -and -not $rpl.StartsWith($cwdl + '\') -and
+        -not $cwdl.StartsWith($rpl + '\')) { return $true }
+    foreach ($d in @("my-course", ".devin\skills", ".logs")) {
+        $w = [IO.Path]::GetFullPath((Join-Path $WorkDir $d)).TrimEnd('\', '/').ToLower()
+        if ($rpl -eq $w -or $rpl.StartsWith($w + '\')) { return $true }
     }
     return $false
 }
@@ -459,10 +491,15 @@ function Run-Probe($probe) {
             if (-not $wp -or -not $wp.url -or -not $wp.user -or -not $wp.app_password) {
                 return @{ ok = $false; msg = "chưa có thông tin đăng nhập — nhờ trợ lý cài giúp" }
             }
+            $wpu = ([string]$wp.url).TrimEnd('/')
+            if (-not $wpu.StartsWith('https://')) {
+                # Basic auth qua http = gửi mật khẩu plaintext — parity chat-bridge.py
+                return @{ ok = $false; msg = "địa chỉ site phải bắt đầu bằng https:// — nhờ trợ lý sửa giúp" }
+            }
             $pw = ([string]$wp.app_password) -replace ' ', ''
             $auth = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("$($wp.user):$pw"))
             try {
-                Invoke-RestMethod -Uri ($wp.url.TrimEnd('/') + "/wp-json/wp/v2/users/me") -Headers @{ Authorization = "Basic $auth" } -TimeoutSec 8 | Out-Null
+                Invoke-RestMethod -Uri ($wpu + "/wp-json/wp/v2/users/me") -Headers @{ Authorization = "Basic $auth" } -TimeoutSec 8 | Out-Null
                 return @{ ok = $true; msg = "đang kết nối" }
             } catch {
                 return @{ ok = $false; msg = "sai thông tin đăng nhập, hoặc không vào được site" }
@@ -663,6 +700,10 @@ try {
                     $term = if ($body.terminal) { [string]$body.terminal } else { $cmd }
                     if ($term.Length -gt 60) { $term = $term.Substring(0, 60) }
                     if ($term -notmatch '^[A-Za-z0-9_.-]+$') { $term = $cmd }
+                    if ($BrainCmdDeny -contains $term.ToLower()) {
+                        Send-Json $ctx @{ err = "lệnh terminal này chạy code tuỳ ý — không dùng được" } 400
+                        continue
+                    }
                     $b = [ordered]@{ id = $(if ($bid) { $bid } else { "custom" }); label = $label; cmd = $cmd; args = $bArgs; terminal = $term }
                     $requires = @($cmd)
                 }
@@ -807,19 +848,22 @@ try {
                     Send-Json $ctx @{ err = "quá nhiều folder một lần" } 400
                     continue
                 }
-                $paths = @(); $bad = @(); $sensitive = $null
+                $paths = @(); $bad = @(); $sensitive = $null; $rwbad = $null
                 foreach ($r0 in $raw) {
                     $p0 = Expand-Path ([string]$r0).Trim()
                     if (-not $p0 -or -not (Test-Path $p0 -PathType Container)) {
                         $bad += [string]$r0; continue
                     }
                     if (Test-SensitivePath $p0) { $sensitive = $p0; break }
+                    if ($lv -eq "read-write" -and -not (Test-RwGrantOk $p0)) { $rwbad = $p0; break }
                     $paths += $p0
                 }
                 if ($lv -ne "read" -and $lv -ne "read-write") {
                     Send-Json $ctx @{ err = "access phải là read hoặc read-write" } 400
                 } elseif ($sensitive) {
                     Send-Json $ctx @{ err = "folder chứa dữ liệu nhạy cảm — không cấp quyền được: $sensitive" } 400
+                } elseif ($rwbad) {
+                    Send-Json $ctx @{ err = "không cấp ghi trong folder mã nguồn của trợ lý — ghi được là code chạy ngoài mọi hàng rào: $rwbad" } 400
                 } elseif (-not $paths.Count) {
                     Send-Json $ctx @{ err = "không thấy folder này trên máy" } 404
                 } else {

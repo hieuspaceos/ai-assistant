@@ -24,3 +24,6 @@ dist/
 .hallmark/
 troly-ext.zip
 .devin/agent.sb
+
+# DOM site thật của bên thứ 3 — privacy/IP, không push lên repo public
+my-course/clone-work/

@@ -222,6 +222,24 @@ def build_profile(cwd):
               "config.json"):
         for lit in _emit_paths([os.path.join(mc, f)]):
             L.append(f'(deny file-write* (literal "{_esc(lit)}"))')
+
+    # Vùng mã nguồn + file điều khiển: deny-write LUÔN, kể cả khi
+    # permissions.json (sửa tay, hay grant RW hợp lệ trên folder CHA của
+    # cwd như ~/Desktop) mở đường — ghi được tools/*.py, brain.json hay
+    # .git/hooks là spawn/exec kế chạy code NGOÀI sandbox. Deny thắng
+    # allow; đọc vẫn mở (não cần đọc AGENTS.md, tools/).
+    for d in ("tools", "web", "extension", "templates", "site", "intro",
+              "docs", "plans", "build", "dist",
+              ".git", ".github",
+              os.path.join(".devin", "skill-packs")):
+        for lit in _emit_paths([os.path.join(cwd, d)]):
+            L.append(f'(deny file-write* (subpath "{_esc(lit)}"))')
+    for f in ("brain.json", "index.html", "start.sh", "start.bat",
+              "AGENTS.md", "CLAUDE.md", "README.md", "SETUP.md", "PLAN.md",
+              "requirements.txt", "VERSION", "troly.spec",
+              os.path.join(".devin", "agent.sb")):
+        for lit in _emit_paths([os.path.join(cwd, f)]):
+            L.append(f'(deny file-write* (literal "{_esc(lit)}"))')
     return "\n".join(L) + "\n"
 
 def main():

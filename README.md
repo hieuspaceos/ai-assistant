@@ -117,7 +117,7 @@ ai-assistant/
 │       ├── slide-builder.md   # subagent that builds slides.html from lesson content
 │       └── video-builder.md   # subagent: shooting script (always) + video.mp4 (bonus)
 ├── extension/                 # "Trợ Lý AI" MV3 extension — drives the real browser
-└── my-course/                 # the personalized course + config/permissions/connections + clone-work/<site>/
+└── my-course/                 # the personalized course + config/permissions/connections + clone-work/<site>/ (gitignored — local DOM refs)
 ```
 
 ## Design philosophy
@@ -138,7 +138,11 @@ ai-assistant/
   (`term-gate`), permission cards only accept live pending requests,
   course/clone pages run sandboxed to an opaque origin (can't read the connection code or frame the portal), and on macOS the
   brain runs inside a Seatbelt sandbox generated from
-  `permissions.json` — see `docs/SECURITY.md`.
+  `permissions.json` — write-allowlist (`my-course/` only) plus hard
+  deny-write on the assistant's own code (`tools/`, `brain.json`,
+  `.git/`…), so even a granted or hand-edited `read-write` on a parent
+  folder can't plant code that runs outside the sandbox — see
+  `docs/SECURITY.md`.
 
 ## Onboarding a colleague
 

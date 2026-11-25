@@ -3,6 +3,38 @@
 Các quyết định kiến trúc và **tại sao** — để sau này không gỡ ngược lại
 vì quên lý do. Mới nhất lên đầu.
 
+## 2026 — Audit v6: ba lỗi sót sau 5 vòng lock-down
+
+**`path_sensitive` so HAI chiều, không một.** Vì: deny-list folder nhạy
+cảm chỉ chặn path nằm DƯỚI nó — grant `~/Library` (folder CHA) đọc được
+hết Keychains/Cookies/profile trình duyệt, grant `~/.config` đọc hết
+credential mọi CLI não. Thêm chiều "path chứa folder nhạy cảm" + đưa
+`LaunchAgents`/`Startup`/`autostart` (persistence = code chạy ngoài
+sandbox lúc login) vào list. Parity `Test-SensitivePath` trên ps1.
+
+**`read-write` từ chối trên/trong vùng mã nguồn.** Vì: grant RW trên
+`~/Desktop` hay `tools/` = ghi được `tools/*.py`, `brain.json`,
+`.git/hooks` → spawn/exec kế chạy code NGOÀI Seatbelt — toàn bộ
+write-allowlist vô nghĩa. `rw_grant_ok` chặn ở API; `gen-sandbox.py`
+emit `deny file-write*` cho vùng code làm lớp thứ hai khi
+permissions.json bị sửa tay. Đọc vẫn mở — não cần đọc `AGENTS.md`.
+
+**`terminal` cũng qua BRAIN_CMD_DENY.** Vì: chỉ check `cmd` là sót nửa
+cửa — `brain.json` với `terminal:"sh"` làm term-gate exec shell trần
+trong ttyd cho ai có mã kết nối (start.sh đọc file thô, không qua
+load_brain). Check ở cả `load_brain`/`Get-Brain` (file), `POST
+/api/brain` (request), và lớp cuối trong `term-gate.sh` ngay trước
+`exec`. Cùng đợt: deny-list thêm git/awk/tar/editor/pager/wrapper/
+docker (exec qua args), wp probe ps1 bắt `https://` như bản py.
+
+**Mọi so-sánh deny phải `.lower()`/case-insensitive.** Vì: APFS/NTFS
+không phân biệt hoa-thường — `which("Python3")` resolve ra python3 thật,
+`exec "Python3"` chạy được, nhưng `"Python3" in deny` thì False. `POST
+/api/brain` sót `.lower()` trên `cmd` từ trước (ps1 đã ToLower);
+`term-gate.sh` `case` phân biệt hoa-thường → phải `tr` hạ chữ trước khi
+match. Audit lại đợt vá phát hiện — đây là lý do phải so cùng dạng
+canonical ở mọi điểm kiểm.
+
 ## 2026 — Lock-down 6 phase (audit `plans/261120-1811-lock-down/`)
 
 **Gate token trong shell thay vì flag ttyd.** Vì: test handshake thật
