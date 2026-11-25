@@ -10,6 +10,10 @@
 #   - DENY-W: tools\, web\, extension\, .git\, brain.json, 4 file JSON
 #     dieu khien trong my-course\, bot.md — agent ghi duoc = tu leo
 #     quyen (tools\*.ps1 chay duoi quyen CHU).
+#     LUU Y: deny-write tren file .exe cung chan EXECUTE (quirk Windows,
+#     khac macOS) — day la TINH NANG: agent khong chay duoc PE dat trong
+#     tools\. Script (.ps1/.py) van chay vi interpreter nam o Program
+#     Files chi co RX. Nao that (devin, npx…) ngoai deny-tree nen exec OK.
 #   - DENY het: secrets.local.json, mcp_config.local.json,
 #     agent-user.cred (DPAPI scope chu nhung chan doc van sach hon).
 #   - bridge.token: doc duoc (can goi bridge), deny-W.

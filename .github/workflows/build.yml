@@ -40,10 +40,14 @@ jobs:
       - name: setup restricted user + ACL
         run: tools/setup-agent-user.ps1
       - name: build fake ACP brain
+        # Build ra C:\Windows\Temp — KHÔNG trong tools\ vì deny-W trên
+        # tools\ chặn cả EXECUTE của .exe (quirk Windows: deny-write trên
+        # PE = không chạy được). Grant RX cho troly-agent.
         run: |
-          dotnet new console -o tools/fakebrain -n fakebrain -f net8.0 --force | Out-Null
-          Copy-Item tools/test-fakebrain.cs tools/fakebrain/Program.cs -Force
-          dotnet build tools/fakebrain -c Release | Out-Null
+          dotnet new console -o "$env:TEMP\fbproj" -n fakebrain -f net8.0 --force | Out-Null
+          Copy-Item tools/test-fakebrain.cs "$env:TEMP\fbproj\Program.cs" -Force
+          dotnet build "$env:TEMP\fbproj" -c Release -o C:\Windows\Temp\fakebrain-bin | Out-Null
+          icacls C:\Windows\Temp\fakebrain-bin /grant "troly-agent:(OI)(CI)RX" /Q | Out-Null
       - name: sandbox smoke test
         run: tools/test-agent-spawn.ps1
 

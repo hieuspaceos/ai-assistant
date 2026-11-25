@@ -28,13 +28,11 @@ if (-not (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole(
     Write-Host "can chay voi quyen admin" -ForegroundColor Red; exit 2
 }
 
-# fakebrain.exe (dotnet build o step CI truoc) phai nam tren PATH de
-# CreateProcessWithLogonW resolve duoc — ca trong env test lan env child.
-# Resolve exe dong — TFM phu thuoc SDK runner (net8.0/net9.0/net10.0).
+# fakebrain.exe — build ra ngoai deny-tree (deny-W tren tools\ chan ca
+# EXECUTE cua .exe — quirk Windows). CI build o C:\Windows\Temp\fakebrain-bin.
+$exe = Get-Item "C:\Windows\Temp\fakebrain-bin\fakebrain.exe" `
+       -ErrorAction SilentlyContinue
 $FakeBin = $null
-$exe = Get-ChildItem (Join-Path $Root "tools\fakebrain\bin") -Recurse `
-       -Filter fakebrain.exe -ErrorAction SilentlyContinue |
-       Select-Object -First 1
 if ($exe) { $FakeBin = $exe.DirectoryName; $env:PATH = "$FakeBin;$env:PATH" }
 
 # --- 1. compile C# AgentSpawn nhung trong chat-bridge.ps1 (code that) ---
