@@ -30,8 +30,12 @@ if (-not (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole(
 
 # fakebrain.exe (dotnet build o step CI truoc) phai nam tren PATH de
 # CreateProcessWithLogonW resolve duoc — ca trong env test lan env child.
-$FakeBin = Join-Path $Root "tools\fakebrain\bin\Release\net8.0"
-$env:PATH = "$FakeBin;$env:PATH"
+# Resolve exe dong — TFM phu thuoc SDK runner (net8.0/net9.0/net10.0).
+$FakeBin = $null
+$exe = Get-ChildItem (Join-Path $Root "tools\fakebrain\bin") -Recurse `
+       -Filter fakebrain.exe -ErrorAction SilentlyContinue |
+       Select-Object -First 1
+if ($exe) { $FakeBin = $exe.DirectoryName; $env:PATH = "$FakeBin;$env:PATH" }
 
 # --- 1. compile C# AgentSpawn nhung trong chat-bridge.ps1 (code that) ---
 $src = Get-Content (Join-Path $Root "tools\chat-bridge.ps1") -Raw -Encoding UTF8
@@ -130,7 +134,9 @@ $r2 = Spawn-ReadAll "cmd.exe /c `"dir `"$FakeBin`" 2>&1`""
 Write-Host "  dir bin: $((($r2.out -split "`n") | Select-Object -Last 4) -join ' | ')"
 $r3 = Spawn-ReadAll 'cmd.exe /c "fakebrain <NUL 2>&1"'
 Write-Host "  fakebrain via cmd: $(($r3.out -replace '\s+',' ').Trim())"
-$r = [TroLy.AgentSpawn]::Start($AgentUser, $pw, '"fakebrain"', $work, $envBlock)
+$r = if ($FakeBin) {
+    [TroLy.AgentSpawn]::Start($AgentUser, $pw, '"fakebrain"', $work, $envBlock)
+} else { @{ Error = "fakebrain.exe khong build duoc" } }
 if ($r.Error) { Write-Host "    (err: $($r.Error))" -ForegroundColor Yellow }
 Check "spawn fakebrain" (-not $r.Error)
 if (-not $r.Error) {
