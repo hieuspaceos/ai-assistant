@@ -51,7 +51,11 @@ try {
 } finally {
     $rng.Dispose()
 }
-$pwd = ([BitConverter]::ToString($rb)).Replace('-', '').ToLower()
+# suffix "A9!" đảm bảo đủ 4 nhóm ký tự (hoa+thường+số+ký hiệu) — policy
+# complexity của Windows Server (runner CI, máy cty bật policy) reject
+# password hex-thường-trần dù entropy đủ. Entropy vẫn nằm ở 48 hex ngẫu
+# nhiên; suffix cố định không làm yếu đáng kể cho local account.
+$pwd = ([BitConverter]::ToString($rb)).Replace('-', '').ToLower() + 'A9!'
 $sec = ConvertTo-SecureString $pwd -AsPlainText -Force
 if (-not (Get-LocalUser -Name $AgentUser -ErrorAction SilentlyContinue)) {
     New-LocalUser -Name $AgentUser -Password $sec `
