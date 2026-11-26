@@ -14,7 +14,7 @@
 .masthead__side a:hover { color: var(--color-ink); text-decoration: underline; text-decoration-color: var(--color-accent); }
 .tagline { display: block; text-align: center; font-size: var(--text-sm); color: var(--color-muted); margin-top: var(--space-2xs); }
 .wordmark { display: block; text-align: center; font-size: var(--text-title); font-weight: var(--display-weight); letter-spacing: var(--tracking-display); text-decoration: none; }
-.plugs-sub { text-align: center; font-size: var(--text-lg); font-weight: var(--display-weight); margin: var(--space-xl) 0 var(--space-lg); }
+.cty-tech { margin-top: var(--space-xl); max-width: 44rem; font-size: var(--text-sm); color: var(--color-muted); }
 
 /* ————— hero + the map ————— */
 .hero { padding-block: var(--space-lg) var(--space-2xl); }
