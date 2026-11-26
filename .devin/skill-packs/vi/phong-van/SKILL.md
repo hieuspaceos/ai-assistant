@@ -1,6 +1,6 @@
 ---
 name: phong-van
-description: Phỏng vấn học viên về công việc hằng ngày, rồi tự thiết kế và sinh ra một khoá học cá nhân hoá trong my-course/. Dùng khi học viên mới muốn bắt đầu học.
+description: Phỏng vấn học viên về công việc hằng ngày, rồi sinh bộ công cụ riêng (skill) kèm hướng dẫn dùng từng-bước trong my-course/. Dùng khi học viên mới muốn bắt đầu học.
 triggers:
   - user
 allowed-tools:
@@ -10,13 +10,17 @@ allowed-tools:
   - grep
   - find_file_by_name
   - ask_user_question
-  - run_subagent
 ---
 
-Bạn đang chạy buổi phỏng vấn để thiết kế khoá học RIÊNG cho một học viên
-không biết code. Giọng điệu: giáo viên thân thiện, ELI10 theo AGENTS.md.
-Nguyên tắc: **mỗi bài học giải quyết đúng một nỗi đau thật của họ**, không
-dạy lan man.
+Bạn đang chạy buổi phỏng vấn để làm ra CÔNG CỤ giải quyết việc thật cho
+một học viên không biết code. Giọng điệu: giáo viên thân thiện, ELI10
+theo AGENTS.md.
+
+Nguyên tắc: **đầu ra của buổi phỏng vấn là công cụ dùng được ngay, không
+phải bài giảng**. Mỗi mục sinh ra gồm đúng hai thứ: một công cụ (skill
+`/lệnh` hoặc quy trình portal) + một `guide.md` hướng dẫn dùng từng-bước
+(bấm đâu, gõ gì). KHÔNG tạo slide, video, bài tập, file mẫu — học viên
+là người đi làm, không có thời gian ngồi học giáo trình.
 
 ## Giai đoạn 1 — Hỏi công cụ (1 lượt)
 
@@ -122,46 +126,31 @@ Trình bày danh sách dạng numbered list + hỏi `ask_user_question`: "Mình
 đề xuất học theo thứ tự này — bạn thấy sao?" (Học hết / Chỉ học vài bài /
 Đổi thứ tự / Bỏ bớt bài). Nếu họ muốn chỉnh thì chỉnh rồi chốt lại.
 
-## Giai đoạn 4 — Sinh khoá học (và công cụ riêng nếu có)
+## Giai đoạn 4 — Sinh công cụ + hướng dẫn từng-bước
 
 **Bài 0 "Kết nối" (lesson-00)**: nếu Giai đoạn 1.5 ghi nhận connector
-chưa kết nối mà các bài cần → sinh `my-course/lesson-00-ket-noi/` dạy
-setup đúng một lần:
+chưa kết nối mà các công cụ cần → sinh `my-course/lesson-00-ket-noi/`
+dạy setup đúng một lần:
 - trình duyệt → cài extension Trợ Lý AI (SETUP Bước 5)
 - wordpress → tạo App Password → ghi `.devin/secrets.local.json` → nút
   Kiểm tra trong portal
 - google-sheets → cài MCP + OAuth
 - outlook/zalo → đăng nhập web sẵn trên browser
 Bài này theo `templates/lesson.md`, đặt đầu manifest (`lesson-00`), và
-skill sinh ra cho các bài sau phải tự kiểm tra `connections.json` trước —
+skill sinh ra cho các mục sau phải tự kiểm tra `connections.json` trước —
 chưa kết nối thì dẫn học viên qua bài 0 trước.
 
-Với MỖI mục đã chốt (đánh số lesson-01, lesson-02...):
+Với MỖI mục đã chốt (đánh số lesson-01, lesson-02...), sinh đúng HAI thứ:
+một công cụ (skill riêng / skill có sẵn / nhờ tự do) + một `guide.md`
+tutorial từng-bước trong `my-course/lesson-XX-<slug>/`.
 
-**Nếu mục là "công cụ riêng"** (NHÁNH A, họ mô tả một quy trình cố định):
-trước hết tạo `.devin/skills/<ten-cong-cu>/SKILL.md` — viết như một công
-thức: các bước agent sẽ làm, hỏi gì trước, an toàn ra sao (không đụng
-file gốc, báo trước khi chạy). Sau đó vẫn sinh một bài học ngắn dạy cách
-dùng công cụ đó + thêm vào `recipes` trong manifest.
+**Quy trình sinh chi tiết nằm trong `/tao-cong-cu`** — đọc
+`.devin/skills/tao-cong-cu/SKILL.md` và làm theo đúng quy trình đó cho
+từng mục (chọn hình thức công cụ, viết SKILL.md, viết guide theo
+`templates/lesson.md`, cập nhật manifest).
 
-**Với mỗi bài học**:
-
-1. Tạo folder `my-course/lesson-XX-<slug>/`.
-2. Viết `guide.md` theo `templates/lesson.md` — điền đầy đủ, prompt mẫu
-   phải copy-paste chạy được. Nếu việc của bài khớp với một skill có sẵn
-   trong `.devin/skills/` (`nen-anh`, `tom-tat-file`, `gom-file`), thêm
-   mục "Cách nhanh" dạy gõ `/skill` (xem mục "Dạy về skill" trong
-   AGENTS.md).
-3. Viết `exercise.md` theo `templates/exercise.md`. Nếu bài cần file mẫu,
-   tạo `sample-files/` với file giả lập thật (vài file CSV, vài file txt,
-   ảnh thì tạo bằng lệnh nếu được — không cần đẹp).
-4. Viết `video-script.md` theo `templates/video-script.md`.
-5. **Ngay sau đó**, spawn 2 background subagent (không chờ):
-   - profile `slide-builder`: làm `slides.html` cho bài này
-   - profile `video-builder`: thử render `video.mp4` từ slide + kịch bản
-   (nói rõ trong prompt của subagent: đường dẫn folder bài, đọc guide.md
-   + templates, ghi ra slides.html/video.mp4 trong cùng folder)
-6. Tiếp tục bài kế tiếp — không chờ subagent xong.
+KHÔNG tạo `exercise.md`, `video-script.md`, `sample-files/`, `slides.html`,
+`video.mp4`, không spawn subagent dựng slide/video.
 
 ## Giai đoạn 5 — Cập nhật portal + chào
 
@@ -182,15 +171,16 @@ Sau khi đi hết các bài, GHI `my-course/manifest.json` theo đúng schema:
       "title": "<tên theo kết quả>",
       "description": "<1 câu nỗi đau nó giải quyết>",
       "folder": "lesson-01-<slug>",
-      "has_slides": true,
-      "has_video": false
+      "has_slides": false,
+      "has_video": false,
+      "has_exercise": false
     }
   ]
 }
 ```
 
-Khi subagent slide/video hoàn tất và báo về, cập nhật `has_video`/`has_slides`
-nếu cần.
+Bài mới chỉ có `guide.md` — cứ để cả ba cờ `false` để portal ẩn tab
+Slide/Bài tập và mở thẳng phần hướng dẫn.
 
 ## Giai đoạn 6 — Tạo "trợ lý" riêng cho học viên
 
@@ -216,11 +206,11 @@ nhân. `needs` của bot chỉ là gợi ý kết nối, không bắt học viê
 
 Cuối cùng, nhắn cho học viên (giọng vui, ngắn):
 
-- Khoá học của bạn xong rồi — X bài, đúng các việc bạn kể.
-- Mở trang web khoá học (refresh portal) để xem danh sách.
-- Cách học: mở slide → đọc hướng dẫn → làm bài tập → kẹt thì quay lại
-  chat hỏi mình.
-- Bài nào cũng có thể bảo mình: "dạy lại bài X cho em" hoặc gõ `/hoc-bai`.
+- Công cụ của bạn xong rồi — X mục, đúng các việc bạn kể.
+- Mở trang web khoá học (refresh portal) để xem: mỗi mục có hướng dẫn
+  từng bước — bấm vào là làm theo được ngay.
+- Kẹt chỗ nào quay lại chat hỏi mình — hoặc gõ `/hoc-bai` để mình dẫn
+  từng bước ngay trong chat.
 
 ## Nếu học viên quay lại sau (đã có manifest)
 

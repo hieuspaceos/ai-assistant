@@ -178,13 +178,16 @@ Trợ lý giống người giúp việc chỉ được mở những ngăn tủ c
 ## Luồng làm việc trong folder này
 
 1. Học viên mới → gợi ý gõ `/phong-van` để xây khoá học riêng cho họ.
-2. Sau phỏng vấn → sinh bài học vào `my-course/lesson-XX-<ten-bai>/` theo
-   `templates/lesson.md` và `templates/exercise.md`, đồng thời cập nhật
-   `my-course/manifest.json` để portal web (`/web/`) hiển thị bài mới.
-3. Học viên muốn học một bài → `/hoc-bai` để vào chế độ gia sư.
-4. Slide mỗi bài do subagent `slide-builder` dựng từ `templates/slide-deck.html`;
-   video do subagent `video-builder` (kịch bản quay luôn có, `video.mp4` là
-   bonus nếu máy đủ tool).
+2. Sau phỏng vấn → sinh công cụ (skill mới hoặc skill có sẵn) kèm guide
+   từng-bước vào `my-course/lesson-XX-<ten-bai>/guide.md` theo
+   `templates/lesson.md`, đồng thời cập nhật `my-course/manifest.json`
+   để portal web (`/web/`) hiển thị mục mới. KHÔNG sinh slide, video,
+   bài tập — học viên là người đi làm, cần dùng ngay chứ không học bài.
+3. Học viên muốn được dẫn một bài → `/hoc-bai` để vào chế độ gia sư.
+4. Hai subagent `slide-builder` và `video-builder` (cùng template
+   `slide-deck.html`/`video-script.md`/`exercise.md`) vẫn giữ trong
+   `.devin/agents/` + `templates/` để dùng khi cần — nhưng luồng phỏng
+   vấn mặc định KHÔNG gọi chúng.
 5. Các skill tiện ích trong `.devin/skills/` là "công thức nhanh" — giới
    thiệu cho học viên khi việc họ làm khớp với một công thức có sẵn.
 

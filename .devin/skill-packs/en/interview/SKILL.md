@@ -1,6 +1,6 @@
 ---
 name: interview
-description: Interview the learner about their daily work, then design and generate a personalized course in my-course/. Use when a new learner wants to start learning.
+description: Interview the learner about their daily work, then generate custom tools (skills) plus step-by-step usage guides in my-course/. Use when a new learner wants to start learning.
 triggers:
   - user
 allowed-tools:
@@ -10,13 +10,17 @@ allowed-tools:
   - grep
   - find_file_by_name
   - ask_user_question
-  - run_subagent
 ---
 
-You are running an interview to design a PERSONAL course for a learner
-who doesn't code. Tone: friendly teacher, ELI10 per AGENTS.md.
-Principle: **every lesson solves exactly one real pain of theirs** — no
-filler curriculum.
+You are running an interview to build TOOLS that solve real work for a
+learner who doesn't code. Tone: friendly teacher, ELI10 per AGENTS.md.
+
+Principle: **the interview's output is usable tools, not lectures**.
+Each generated item is exactly two things: one tool (a `/command` skill
+or a portal workflow) + one `guide.md` step-by-step tutorial (which
+button to click, what to type). Do NOT create slides, videos, exercises
+or sample files — learners are working adults with no time for a
+curriculum.
 
 ## Phase 1 — Ask about tools (one round)
 
@@ -139,32 +143,17 @@ Build it per `templates/lesson.md`, put it first in the manifest
 `connections.json` first — not connected → send the learner through
 lesson-00 first.
 
-For EACH locked item (numbered lesson-01, lesson-02...):
+For EACH locked item (numbered lesson-01, lesson-02...), generate exactly
+TWO things: one tool (new skill / existing skill / free-form ask) + one
+`guide.md` step-by-step tutorial in `my-course/lesson-XX-<slug>/`.
 
-**If the item is a "custom tool"** (BRANCH A, a fixed workflow):
-first create `.devin/skills/<tool-name>/SKILL.md` — write it like a
-recipe: the steps the agent takes, what to ask first, the safety rules
-(never touch originals, announce before running). Still generate a short
-lesson on using it + add to `recipes` in the manifest.
+**The detailed procedure lives in `/make-tool`** — read
+`.devin/skills/make-tool/SKILL.md` and follow it for each item (pick the
+tool's shape, write SKILL.md, write the guide per `templates/lesson.md`,
+update the manifest).
 
-**For each lesson**:
-
-1. Create folder `my-course/lesson-XX-<slug>/`.
-2. Write `guide.md` per `templates/lesson.md` — fill it fully; sample
-   prompts must be copy-paste runnable. If the lesson's task matches an
-   existing skill in `.devin/skills/`, add a "Quick way" section teaching
-   `/skill` (see "Teaching about skills" in AGENTS.md).
-3. Write `exercise.md` per `templates/exercise.md`. If the lesson needs
-   sample files, create `sample-files/` with realistic dummy files
-   (a few CSVs, txts, images via commands — no need for pretty).
-4. Write `video-script.md` per `templates/video-script.md`.
-5. **Immediately after**, spawn 2 background subagents (don't wait):
-   - profile `slide-builder`: build `slides.html` for this lesson
-   - profile `video-builder`: try rendering `video.mp4` from slides +
-     script
-   (spell out in the subagent prompt: lesson folder path, read guide.md
-   + templates, write slides.html/video.mp4 in the same folder)
-6. Move on to the next lesson — don't wait for subagents.
+Do NOT create `exercise.md`, `video-script.md`, `sample-files/`,
+`slides.html`, `video.mp4`, and do NOT spawn slide/video subagents.
 
 ## Phase 5 — Update the portal + welcome
 
@@ -185,15 +174,16 @@ After all lessons, WRITE `my-course/manifest.json` per schema:
       "title": "<outcome name>",
       "description": "<one line: the pain it solves>",
       "folder": "lesson-01-<slug>",
-      "has_slides": true,
-      "has_video": false
+      "has_slides": false,
+      "has_video": false,
+      "has_exercise": false
     }
   ]
 }
 ```
 
-When slide/video subagents report back, update `has_video`/`has_slides`
-as needed.
+New lessons carry only `guide.md` — keep all three flags `false` so the
+portal hides the Slides/Exercise tabs and opens the guide directly.
 
 ## Phase 6 — Create the learner's personal assistant
 
@@ -221,11 +211,11 @@ are only suggested connections; don't force the learner to connect now.
 
 Finally, message the learner (cheerful, short):
 
-- Your course is ready — X lessons, matching exactly what you described.
-- Open the course page (refresh the portal) to see the list.
-- How to learn: open slides → read the guide → do the exercise → if
-  stuck, come back and ask me.
-- For any lesson you can say: "teach me lesson X again" or type `/tutor`.
+- Your tools are ready — X items, matching exactly what you described.
+- Open the course page (refresh the portal): each item has a step-by-step
+  guide — click in and follow along right away.
+- Stuck anywhere? Come back and ask me — or type `/tutor` and I'll walk
+  you through the steps right here in chat.
 
 ## If the learner returns later (manifest exists)
 

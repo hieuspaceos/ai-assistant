@@ -61,8 +61,10 @@ const I18N = {
     creating: 'File đang được tạo — quay lại sau nhé.',
     slideCreating: 'Slide đang được tạo — quay lại sau vài phút nhé.',
     noExercise: 'Bài này không có bài tập — chỉ cần mở được trợ lý là đạt.',
+    wzStep: 'Bước', wzBack: 'Quay lại', wzNext: 'Tiếp', wzDone: 'Xong — xem toàn bộ',
+    wzAll: 'Xem hết', wzSteps: 'Xem từng bước', wzIntro: 'Giới thiệu',
     delConfirmTitle: 'Xoá bài "{t}"?',
-    delConfirmMsg: 'Slide, video, hướng dẫn của bài này sẽ mất hết. Công thức nhanh (như /anh-web) vẫn được giữ lại vì bạn đã học xong.',
+    delConfirmMsg: 'Toàn bộ nội dung của bài này (hướng dẫn và file kèm theo) sẽ mất hết. Công thức nhanh (như /anh-web) vẫn được giữ lại vì bạn đã học xong.',
     delOk: 'Xoá bài',
     delFailTitle: 'Chưa xoá được',
     delFailMsg: 'Kiểm tra lại xem chat-bridge có đang chạy không nhé — thử chạy lại file start.',
@@ -155,8 +157,10 @@ const I18N = {
     creating: 'This file is being created — check back soon.',
     slideCreating: 'Slides are being created — check back in a few minutes.',
     noExercise: 'This lesson has no exercise — opening the assistant is enough.',
+    wzStep: 'Step', wzBack: 'Back', wzNext: 'Next', wzDone: 'Done — view all',
+    wzAll: 'View all', wzSteps: 'Step by step', wzIntro: 'Overview',
     delConfirmTitle: 'Delete lesson "{t}"?',
-    delConfirmMsg: 'Its slides, video and guide will be gone for good. Quick recipes (like /web-images) stay because you already learned them.',
+    delConfirmMsg: 'All of this lesson\u2019s content (guide and any bundled files) will be gone for good. Quick recipes (like /web-images) stay because you already learned them.',
     delOk: 'Delete',
     delFailTitle: 'Couldn\'t delete',
     delFailMsg: 'Check whether the chat bridge is running — try running the start file again.',
@@ -354,11 +358,20 @@ function selectLesson(lesson, btn) {
   btn.classList.add('active');
   currentLesson = lesson;
   $('#welcome').hidden = true;
-  document.querySelectorAll('.lesson-tab').forEach(t => t.hidden = false);
   $('#content').hidden = false;
-  if (lesson === null) loadIntro();
+  // Tab hiện theo file bài thật sự có: bài cũ (thiếu flag) giữ nguyên
+  // cả 3 tab; bài mới chỉ có guide → giấu hẳn Slide/Bài tập thay vì
+  // hiện màn "đang tạo". Intro có slide + guide, không có bài tập.
+  const isIntro = lesson === null;
+  const tabs = {
+    slide:    isIntro || lesson.has_slides !== false,
+    guide:    true,
+    exercise: !isIntro && lesson.has_exercise !== false,
+  };
+  document.querySelectorAll('.lesson-tab').forEach(t => { t.hidden = !tabs[t.dataset.tab]; });
+  if (isIntro) loadIntro();
   else loadLesson(lesson);
-  switchTab('slide');
+  switchTab(tabs.slide ? 'slide' : 'guide');
 }
 
 function baseUrl(lesson) { return '/my-course/' + lesson.folder + '/'; }
@@ -376,7 +389,7 @@ function loadLesson(lesson) {
     ? iframe(base + 'slides.html')
     : emptyMsg(t('slideCreating')));
   loadMdInto('guide', base + 'guide.md');
-  loadMdInto('exercise', base + 'exercise.md');
+  if (lesson.has_exercise !== false) loadMdInto('exercise', base + 'exercise.md');
 
   const gv = $('#guide-video');
   if (lesson.has_video) {
@@ -393,21 +406,82 @@ async function loadMdInto(pane, url, fallbackTitle) {
     const res = await bfetch(url + '?_=' + Date.now());
     if (!res.ok) throw 0;
     const md = await res.text();
-    const html = (window.marked && window.DOMPurify)
-      ? DOMPurify.sanitize(marked.parse(md))
-      : escapeHtml(md).replace(/\n/g, '<br>');   // thiếu thư viện → chữ thường
-    setPaneHtml(pane, `<div class="md">${html}</div>`);
-    // phần tử cuộn thật là .md (nó mới có overflow:auto), không phải #guide-md —
-    // gắn sau mỗi lần render vì DOM bị thay
-    if (pane === 'guide') {
-      const md = document.querySelector('#guide-md .md');
-      if (md) md.addEventListener('scroll', () => {
-        $('#guide-video').classList.toggle('mini', md.scrollTop > 80);
-      });
-    }
+    const render = txt => (window.marked && window.DOMPurify)
+      ? DOMPurify.sanitize(marked.parse(txt))
+      : escapeHtml(txt).replace(/\n/g, '<br>');   // thiếu thư viện → chữ thường
+    // guide có các "### Bước/Step" → render thành wizard từng-bước
+    if (pane === 'guide' && /^###\s+/m.test(md)) { buildGuideWizard(md, render); return; }
+    setPaneHtml(pane, `<div class="md">${render(md)}</div>`);
+    if (pane === 'guide') watchGuideScroll($('#guide-md .md'));
   } catch {
     setPaneHtml(pane, emptyMsg(fallbackTitle || t('creating')));
   }
+}
+
+// phần tử cuộn thật là .md / .wz-body (nó mới có overflow:auto), không phải
+// #guide-md — gắn lại sau mỗi lần render vì DOM bị thay
+function watchGuideScroll(el) {
+  if (el) el.addEventListener('scroll', () => {
+    $('#guide-video').classList.toggle('mini', el.scrollTop > 80);
+  });
+}
+
+/* Guide kiểu tutorial từng-bước → wizard giống onboarding: mỗi "### Bước N"
+   một màn, nút Quay lại / Tiếp, "Xem hết" mở lại trang đầy đủ. Các section
+   "## " sau bước cuối (bảng nhớ) thành step phụ lục riêng. */
+function buildGuideWizard(md, render) {
+  const box = $('#guide-md');
+  const steps = [];
+  const chunks = md.split(/^###\s+/m);
+  const intro = chunks.shift().trim();
+  if (intro) steps.push({ title: t('wzIntro'), body: intro });
+  chunks.forEach(c => {
+    const nl = c.indexOf('\n');
+    const title = (nl < 0 ? c : c.slice(0, nl)).trim();
+    const rest = nl < 0 ? '' : c.slice(nl + 1);
+    const sub = rest.split(/^##\s+/m);
+    steps.push({ title, body: sub[0].trim() });
+    sub.slice(1).forEach(s => {
+      const nl2 = s.indexOf('\n');
+      steps.push({ title: (nl2 < 0 ? s : s.slice(0, nl2)).trim(), body: (nl2 < 0 ? '' : s.slice(nl2 + 1)).trim() });
+    });
+  });
+  let cur = 0;
+  function draw() {
+    const last = cur === steps.length - 1;
+    box.innerHTML = `
+      <div class="wz">
+        <div class="wz-top">
+          <span class="wz-prog">${escapeHtml(t('wzStep'))} ${cur + 1}/${steps.length}</span>
+          <button type="button" class="wz-link" data-act="all">${escapeHtml(t('wzAll'))}</button>
+        </div>
+        <div class="wz-body">
+          ${steps[cur].title ? `<h3 class="wz-title">${escapeHtml(steps[cur].title)}</h3>` : ''}
+          <div class="md">${render(steps[cur].body)}</div>
+        </div>
+        <div class="wz-nav">
+          <button type="button" class="wz-btn" data-act="prev" ${cur === 0 ? 'disabled' : ''}>← ${escapeHtml(t('wzBack'))}</button>
+          <button type="button" class="wz-btn wz-primary" data-act="next">${last ? escapeHtml(t('wzDone')) : escapeHtml(t('wzNext')) + ' →'}</button>
+        </div>
+      </div>`;
+    box.querySelector('[data-act=prev]').onclick = () => { cur--; draw(); };
+    box.querySelector('[data-act=next]').onclick = () => { if (last) showDoc(); else { cur++; draw(); } };
+    box.querySelector('[data-act=all]').onclick = showDoc;
+    watchGuideScroll(box.querySelector('.wz-body'));
+  }
+  function showDoc() {
+    box.innerHTML = `
+      <div class="wz">
+        <div class="wz-top">
+          <span class="wz-prog"></span>
+          <button type="button" class="wz-link" data-act="steps">${escapeHtml(t('wzSteps'))}</button>
+        </div>
+        <div class="wz-body"><div class="md">${render(md)}</div></div>
+      </div>`;
+    box.querySelector('[data-act=steps]').onclick = draw;
+    watchGuideScroll(box.querySelector('.wz-body'));
+  }
+  draw();
 }
 
 function setPaneHtml(pane, html) {

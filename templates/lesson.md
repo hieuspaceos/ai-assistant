@@ -1,89 +1,83 @@
 <!--
-TEMPLATE BÀI HỌC — agent điền vào chỗ {{...}} khi sinh bài mới.
+TEMPLATE HƯỚNG DẪN DÙNG CÔNG CỤ — agent điền vào chỗ {{...}} khi sinh bài mới.
 Quy tắc bắt buộc khi điền:
-- Tiếng Việt, giọng ELI10 theo AGENTS.md của folder này.
-- Tên bài đặt theo KẾT QUẢ học viên nhận được, không đặt theo kỹ thuật.
-  VD đúng: "Biến 60 ảnh Canva thành ảnh web-ready". VD sai: "Dùng ImageMagick".
-- Mọi prompt mẫu phải copy-paste chạy được ngay, viết bằng lời thường.
-- Không được có chữ "đơn giản", "chỉ cần", "dễ".
+- Ngôn ngữ theo `my-course/config.json` (vi → tiếng Việt, en → English),
+  giọng ELI10 theo AGENTS.md của folder này. Tên bước dịch theo ngôn ngữ
+  đó nhưng giữ đúng loại trong từ vựng bước bên dưới.
+- Bài này là một TUTORIAL TỪNG-BƯỚC để dùng một công cụ — như màn
+  onboarding: bước nào cũng ghi rõ BẤM VÀO ĐÂU, GÕ CHỮ GÌ, TICK Ô NÀO.
+- Mỗi bước = MỘT hành động. Không gộp hai việc vào một bước.
+- Mọi lệnh/prompt mẫu phải copy-paste chạy được ngay, viết bằng lời thường.
+- Không được có chữ "đơn giản", "chỉ cần", "hiển nhiên", "dễ".
+
+TỪ VỰNG BƯỚC — mọi bước phải thuộc một trong các loại sau (đặt tên bước
+theo loại để học viên quen mặt dù công cụ khác nhau):
+- "Gõ lệnh"      → mở khung chat, gõ /command hoặc dán prompt mẫu, bấm Gửi
+- "Trả lời trợ lý" → trợ lý hỏi gì thì gõ câu trả lời ngắn tương ứng
+- "Duyệt quyền"  → hộp thoại hiện → đọc nó định làm gì → bấm Đồng ý
+- "Chọn file/folder" → duyệt tới đúng chỗ khi hộp chọn file hiện
+- "Bấm nút trên portal" → bấm nút Chạy trên card workflow
+- "Kết nối app"  → đăng nhập sẵn app/web trên trình duyệt
+- "Mở kết quả"   → mở file/folder kết quả để kiểm tra
+- "Nhờ chỉnh lại" → kết quả chưa ý thì gõ tiếp yêu cầu sửa
+Skill tổ hợp (nhiều lệnh nối nhau) = xích các loại bước này lặp lại theo
+đúng thứ tự công cụ chạy.
 -->
 
-# Bài {{lesson_no}}: {{lesson_name_outcome}}
+# {{lesson_name_outcome}}
 
-> Bài này dạy bạn cách {{outcome_one_liner}} — việc mà trước giờ {{pain_one_liner}}.
+> Bài này dạy bạn dùng công cụ {{tool_name}} để {{outcome_one_liner}} —
+> việc mà trước giờ {{pain_one_liner}}.
 
----
+## Công cụ này làm gì
 
-## 1. Tình huống thật
+{{what_tool_does}} — 2-3 câu lời thường, kèm phép so sánh đời thường nếu
+khái niệm mới (VD: "giống người giúp việc biết sẵn công thức nấu của nhà").
 
-{{office_scenario}} — viết một đoạn ngắn nghe như chuyện đời: ai đó trong
-văn phòng gặp việc này, mất bao lâu nếu làm tay, kết cục ra sao.
+**Cách gọi:** {{cach_goi}}
 
-## 2. Bạn sẽ có gì sau bài này
+- Nếu là công cụ riêng: gõ `/{{command}}` vào khung chat.
+- Nếu là quy trình trong portal: bấm nút **Chạy** ở thẻ `{{workflow_name}}`.
+- Nếu là nhờ tự do: gõ VD `{{prompt_mau}}`.
 
-- {{ket_qua_1}}
-- {{ket_qua_2}}
+## Dùng ngay — từng bước
 
-Thời gian: khoảng {{duration}} phút.
+### Bước 1 — {{ten_buoc_1: hành động cụ thể, VD "Mở khung chat"}}
 
-## 3. Chuẩn bị
+{{bấm đâu / gõ gì — viết ra thao tác thật:
+- "Bấm nút **Hỏi trợ lý** góc trên bên phải trang web."
+- "Gõ vào khung chat: `/nen-anh` rồi bấm **Gửi**."
+- "Khi hộp thoại hiện lên hỏi, đọc xem nó định làm gì rồi bấm **Đồng ý**."}}
 
-- {{can_gi_1}} — ví dụ: một folder chứa file thật của bạn, hoặc folder
-  `sample-files/` đi kèm bài này nếu bạn chưa có file thật.
-- Mở terminal tại đúng folder đó (nhắc lại cách nếu học viên mới:
-  {{open_terminal_howto}}).
+✅ Thấy {{dau_hieu_dung_1}} là đúng.
 
-## 4. Nhờ Devin làm — từng bước
+### Bước 2 — {{ten_buoc_2}}
 
-### Bước 1: {{ten_buoc_1}}
+{{thao_tac}}
 
-Gõ vào khung chat của Devin:
-
-```
-{{prompt_mau_1}}
-```
-
-Điều sẽ xảy ra: {{plain_explanation}}.
-
-> **Trước khi nó làm**, Devin sẽ hỏi bạn đồng ý. Đọc xem nó định làm gì —
-> thấy đúng thì chọn đồng ý. Đây là "ký giấy phép", bạn luôn là người quyết
-> cuối cùng.
-
-### Bước 2: {{ten_buoc_2}}
-
-```
-{{prompt_mau_2}}
-```
+✅ Thấy {{dau_hieu_dung_2}} là đúng.
 
 {{extra_steps}}
 
-## 5. Kiểm tra kết quả — thấy gì là đúng
+### Bước cuối — Kiểm tra kết quả
 
-- {{dau_hieu_dung_1}}
-- {{dau_hieu_dung_2}}
+{{cach_mo_file_ket_qua}} — VD: "Mở folder `anh-nho` trong Downloads, bạn
+sẽ thấy {{ket_qua_thay}}."
 
 Nếu kết quả không giống ý, gõ tiếp: *"{{prompt_fixed}}"*
 
-## 6. Kẹt ở đâu thì sao
+## Trợ lý hỏi lại thì trả lời sao
+
+| Trợ lý hỏi | Bạn trả lời kiểu |
+|---|---|
+| {{cau_hoi_1}} | {{cau_tra_loi_mau_1}} |
+| {{cau_hoi_2}} | {{cau_tra_loi_mau_2}} |
+
+## Kẹt chỗ nào thì
 
 | Bạn thấy | Nghĩa là | Làm gì |
 |---|---|---|
 | {{loi_1}} | {{nghia_1}} | {{cach_sua_1}} |
 | {{loi_2}} | {{nghia_2}} | {{cach_sua_2}} |
 
-Còn nữa thì chụp màn hình dán vào chat (Alt+V) và hỏi: *"bị gì vậy bạn?"*
-
-## 7. Bài tập
-
-Mở file `exercise.md` trong folder này — làm xong bạn mới thật sự thuộc bài.
-
-## 8. Từ mới gặp trong bài
-
-| Từ | Nghĩa theo lời thường |
-|---|---|
-| {{tu_1}} | {{nghia_1}} |
-
-## 9. Học xong rồi — biết thêm
-
-{{extensions}} — một hai ý hay ho học viên có thể thử tiếp với cùng
-cách này, để họ thấy bài này không chỉ xài một lần.
+Còn nữa thì chụp màn hình dán vào chat và hỏi: *"bị gì vậy bạn?"*

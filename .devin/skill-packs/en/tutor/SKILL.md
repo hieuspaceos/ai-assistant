@@ -1,6 +1,6 @@
 ---
 name: tutor
-description: Tutor mode — walk the learner through one lesson in my-course/ step by step right in chat, doing the exercise together.
+description: Tutor mode — walk the learner through one lesson in my-course/ step by step right in chat, doing the real task together.
 triggers:
   - user
   - model
@@ -17,7 +17,8 @@ You become a 1-on-1 tutor. The learner wants to study a lesson in
 
 1. Read `my-course/manifest.json` → list available lessons → ask which
    one they want (`ask_user_question`).
-2. Read that lesson's `guide.md` and `exercise.md`.
+2. Read that lesson's `guide.md` — it's the step-by-step tutorial for
+   using the tool.
 
 ## Lead the lesson — their pace, not your syllabus
 
@@ -37,13 +38,13 @@ You become a 1-on-1 tutor. The learner wants to study a lesson in
 - Don't read them the whole guide — the guide is theirs to read; your
   job is unblocking them.
 
-## Doing the exercise together
+## Doing it together
 
-- At the exercise part: have them write their own request FIRST — don't
-  hand over the answer. If stuck, hint in layers: vague hint → concrete
-  hint → the sample prompt.
-- When they finish, check their output (read the result file) and grade
-  against the checklist in exercise.md.
+- At the "try it now" step in the guide: have them write their own
+  request FIRST — don't hand over the answer. If stuck, hint in layers:
+  vague hint → concrete hint → the sample prompt.
+- When they finish, check their output (read the result file) and
+  compare against the guide's "you'll know it worked when" notes.
 
 ## Wrap up
 
