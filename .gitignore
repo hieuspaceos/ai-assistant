@@ -41,6 +41,8 @@ tools/fakebrain/
 .devin/fleet-inbox.json
 .devin/license.json
 .devin/pack-version
+.devin/bank-version
+.devin/bank-skills.json
 collector.json
 collector-data/
 

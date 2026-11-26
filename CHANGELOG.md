@@ -6,6 +6,19 @@ phải có mục riêng — `tools/build-release.sh` fail nếu thiếu.
 ## [Unreleased]
 
 ### Thêm
+- **Kho công thức (skill bank)** — bàn giao skill khi nhân viên nghỉ
+  việc, đúng màn "Người nghỉ việc" trên landing: beacon báo danh mục
+  skill metadata trong snapshot → dashboard hiện cột "Công thức";
+  admin bấm "Gom công thức" trong drawer máy → `POST /api/harvest`
+  → cờ đi qua beacon resp → máy upload `.devin/skills` qua
+  `POST /api/skills` (403 nếu admin chưa xin — giữ cam kết privacy);
+  kho lưu `DATA/skills/<org>/<mid>.json` (worker: R2 + index D1
+  `skill_bank`); beacon resp hint `bank` → máy kéo
+  `GET /packs/<org>/bank.json` về áp theo luật sở hữu (bank-owned ghi
+  đè, không đè pack/user). Card "Kho công thức" ở tab Pack.
+- Rate limit tách counter GET/POST (240/60 mỗi phút/IP) — trước đây
+  chung counter nên GET dashboard đủ nhiều là đói POST (parity
+  collector.py ↔ worker).
 - Quản trị 2 tầng trên collector Workers: tài khoản thật trong D1
   (bảng `admins` + `sessions`, PBKDF2-HMAC-SHA256, Bearer token 7 ngày)
   thay cho một key chung cả org. `master` (vendor) tạo org + cấp license
@@ -30,6 +43,21 @@ phải có mục riêng — `tools/build-release.sh` fail nếu thiếu.
 - Upload release giờ chỉ master (trước đây admin_key org cũng đẩy được).
 
 ### Sửa
+- **Audit skill bank** (sau khi kho công thức lên):
+  - `machine_id` giờ validate `[A-Za-z0-9][A-Za-z0-9._-]*` ngay ở
+    `/api/pair` + chặn lần nữa trước khi ghi `skills/<org>/<mid>.json`
+    — trước đây mid `../../x` ghi trốn ra ngoài DATA (py + worker).
+  - Mid >200 ký tự bị cắt TRƯỚC khi check → DB lưu bản cắt còn máy
+    beacon bản dài → lookup trượt mãi; giờ reject thay vì cắt.
+  - `harvest_skills` skip filename xấu (`\`, `..`, drive, dotfile) —
+    trước đây một tên xấu (POSIX cho phép) làm lint reject cả body →
+    cờ `harvest` kẹt vĩnh viễn, dashboard "đang chờ" vô hạn.
+  - `_bad_rel`/`badRel`/`_bad_relpath` chặn thêm filename `.`/rỗng —
+    qua được lưới `..` nhưng `open(dir/.)` crash, kéo bank chết dở.
+  - Worker parity: `lintSkills` chặn array (`typeof []==="object"`),
+    `n_skills` đếm key khi skills là dict (không rớt field).
+  - `apply_bank` tự guard `files` dict + `content` str (pack có
+    `lint()` bảo vệ, bank trước đây tin collector lint).
 - **Audit đợt 4 — collector.py + extension** (plan
   `plans/261126-1255-audit-4-fix`, 3 vòng audit-lại):
   - Tách vendor key god-mode thành 3 tầng: `telemetry.key` chỉ còn

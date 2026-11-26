@@ -150,6 +150,13 @@ MIGRATIONS = {
         # khi fleet >vài chục máy). Admin-key scoped, beacon không ghi.
         "ALTER TABLE machines ADD COLUMN label TEXT",
     ],
+    4: [
+        # skill bank (bàn giao khi nhân viên nghỉ): harvest=1 = admin
+        # xin máy gửi nội dung .devin/skills về kho org; banked_ts =
+        # lần gom gần nhất đã nhận.
+        "ALTER TABLE machines ADD COLUMN harvest INTEGER DEFAULT 0",
+        "ALTER TABLE machines ADD COLUMN banked_ts INTEGER",
+    ],
 }
 
 def db():
@@ -248,11 +255,13 @@ def rate_ok(ip, post):
     lim = RATE_POST if post else RATE_GET
     now = time.time()
     with _rate_lock:
-        w, n = _rate.get(ip, (now, 0))
+        # đếm riêng GET/POST — ngân sách khác nhau (240/60) nên dùng
+        # chung counter là một trang GET dashboard đủ đói POST approve
+        w, n = _rate.get((ip, post), (now, 0))
         if now - w > 60:
             w, n = now, 0
         n += 1
-        _rate[ip] = (w, n)
+        _rate[(ip, post)] = (w, n)
         # dọn bớt entry cũ mỗi ~1000 request để dict không phình
         if len(_rate) > 10000:
             for k in [k for k, (ww, _) in _rate.items() if now - ww > 300]:
@@ -334,9 +343,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
         b = self._body()
         if b is None:
             return
-        mid = str(b.get("machine_id") or "")[:200]
+        mid = str(b.get("machine_id") or "")
         if not mid:
             return self._json({"err": "thiếu machine_id"}, 400)
+        # mid đi vào path file (skills/<org>/<mid>.json) — charset
+        # không cho slash nên '..' cũng vô hại. Cắt [:200] TRƯỚC khi
+        # check thì mid dài bị cắt âm thầm → DB lưu bản cắt còn máy
+        # beacon bản dài → lookup trượt mãi — reject thay vì cắt.
+        if len(mid) > 200 or \
+                not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", mid):
+            return self._json({"err": "machine_id lạ"}, 400)
         now = int(time.time())
         row = q("SELECT * FROM machines WHERE machine_id=?", (mid,),
                 one=True)
@@ -441,6 +457,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
         pack = _pack_hint(b, row["org"])
         if pack:
             resp["pack"] = pack
+        # skill bank: admin xin gom công thức → máy upload qua
+        # POST /api/skills; org có bank mới hơn máy báo → hint kéo
+        # bank.json về áp (máy mới vào thay nhận đủ công thức)
+        if row["harvest"]:
+            resp["harvest"] = True
+        try:
+            bv = _bank_version(row["org"])
+            if bv > int(b.get("bank_version") or 0):
+                resp["bank"] = {"version": bv,
+                                "url": f"/packs/{row['org']}/bank.json"}
+        except (TypeError, ValueError):
+            pass
         return self._json(resp)
 
     # ----- admin endpoints (X-Admin-Key, scope theo org) -----
@@ -492,6 +520,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._json({"err": "pack org khác"}, 403)
             if ".." in path:
                 return self._json({"err": "not found"}, 404)
+            if os.path.basename(path) == "bank.json":
+                # kho công thức đã gom của org — merge lúc đọc, không
+                # lưu file (bank biến động theo từng lần gom)
+                data = json.dumps(_merged_bank(row["org"]),
+                                  ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
             fp = os.path.join(DATA, path.lstrip("/"))
             if not os.path.isfile(fp):
                 return self._json({"err": "not found"}, 404)
@@ -551,6 +590,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "last_seen": r["last_seen"],
                     "license_status": r["license_status"],
                     "bot": (snap.get("bots") or {}).get("active"),
+                    "n_skills": len(snap.get("skills") or []),
                     "today": json.loads(u[0]) if u else {},
                 })
             return self._json({"machines": out,
@@ -576,6 +616,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "label": r["label"] or "",
                 "approved": bool(r["approved"]),
                 "revoked": bool(r["revoked"]),
+                "harvest": bool(r["harvest"]),
+                "banked_ts": r["banked_ts"],
                 "first_seen": r["first_seen"], "last_seen": r["last_seen"],
                 "license": json.loads(r["license_json"] or "null"),
                 "license_status": r["license_status"],
@@ -636,6 +678,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     except Exception:
                         pass
             return self._json({"latest": latest})
+        if path == "/api/skills-bank":
+            # kho công thức đã gom của org — chứa learner/hostname nên
+            # vendor "*" đã bị chặn ở guard trên (machine-level PII)
+            return self._json({"bank": _bank_entries(org)})
         if path == "/api/seats/export":
             # CSV đếm ghế — chủ cty in báo cáo gia hạn. Vendor "*" đã bị
             # chặn ở guard trên (chứa hostname/label = PII máy).
@@ -681,6 +727,48 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._pair()
         if path == "/api/beacon":
             return self._beacon()
+        if path == "/api/skills":
+            # máy upload nội dung skill về kho org — machine_key y
+            # beacon; chỉ chạy khi admin đã xin (harvest=1) VÀ cơ chế
+            # này là upload có chủ đích, không phải sync nền: skill
+            # là "công thức" của cty, không phải chat/file nhân viên
+            row = self._machine_row()
+            if not row:
+                return self._json({"err": "máy chưa pair"}, 403)
+            if not row["harvest"]:
+                # máy chỉ được gửi nội dung skill khi admin ĐÃ xin —
+                # giữ cam kết privacy "không upload chữ nếu không được
+                # yêu cầu" của fleet
+                return self._json(
+                    {"err": "admin chưa xin gom công thức"}, 403)
+            b = self._body()
+            if b is None:
+                return
+            skills = b.get("skills")
+            if not isinstance(skills, dict):
+                return self._json({"err": "thiếu skills"}, 400)
+            err = _lint_skills(skills)
+            if err:
+                return self._json({"err": err}, 400)
+            now = int(time.time())
+            d = os.path.join(SKILL_DIR, row["org"])
+            # DB cũ có thể đã chứa mid lạ (pair trước khi có validate)
+            # — chặn để file không trượt ra ngoài <org>/
+            if "/" in row["machine_id"] or "\\" in row["machine_id"] \
+                    or ".." in row["machine_id"]:
+                return self._json({"err": "machine_id lạ"}, 400)
+            os.makedirs(d, exist_ok=True)
+            entry = {"ts": now, "machine_id": row["machine_id"],
+                     "hostname": row["hostname"], "os": row["os"],
+                     "learner": row["learner"], "label": row["label"],
+                     "skills": skills}
+            with open(os.path.join(d, row["machine_id"] + ".json"),
+                      "w", encoding="utf-8") as f:
+                json.dump(entry, f, ensure_ascii=False)
+            q("UPDATE machines SET harvest=0, banked_ts=? "
+              "WHERE machine_id=?", (now, row["machine_id"]),
+              write=True)
+            return self._json({"ok": True, "n": len(skills)})
         if path in ("/api/pair-approve", "/api/pair-revoke"):
             org = self._scope()
             if org is None:
@@ -735,6 +823,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
             q("UPDATE machines SET label=? WHERE machine_id=?",
               (label, mid), write=True)
             return self._json({"ok": True, "label": label})
+        if path == "/api/harvest":
+            # admin xin máy gom .devin/skills gửi về kho org — cờ này
+            # đi qua beacon response; máy upload ở POST /api/skills.
+            # off:true huỷ xin (bấm nhầm / máy đã offline)
+            org = self._scope()
+            if org is None:
+                return
+            if org == "*":
+                return self._json(
+                    {"err": "vendor key chỉ đọc, không write"}, 403)
+            b = self._body()
+            if b is None:
+                return
+            mid = str(b.get("machine_id") or "")
+            r = q("SELECT org FROM machines WHERE machine_id=?", (mid,),
+                  one=True)
+            if not r or r["org"] != org:
+                return self._json({"err": "not found"}, 404)
+            q("UPDATE machines SET harvest=? WHERE machine_id=?",
+              (0 if b.get("off") else 1, mid), write=True)
+            return self._json({"ok": True})
         if path == "/api/org-ping":
             # rollup org-level từ collector khác gửi về vendor — chỉ
             # vendor key mới ghi được, và chỉ lưu payload nguyên trạng
@@ -869,7 +978,109 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 REL_DIR = os.path.join(DATA, "releases")
 PACK_DIR = os.path.join(DATA, "packs")
+SKILL_DIR = os.path.join(DATA, "skills")   # kho công thức đã gom
 REL_CAP = 200_000_000            # zip upload tối đa 200MB
+
+# ---------- skill bank (bàn giao công thức) ----------
+#
+# DATA/skills/<org>/<machine_id>.json — một file mỗi máy đã gom:
+#   {ts, machine_id, hostname, learner, label, skills:{id:{file:text}}}
+# bank_version = ts mới nhất trong kho → máy so với .devin/bank-version
+# để biết có gì mới kéo về (kể cả máy chưa onboard — máy mới vào thay
+# nhận đủ công thức của người trước).
+
+def _bad_rel(fn):
+    # '.' trống qua được lưới '..' segment nhưng open(dir/.) vẫn crash
+    return (not fn or fn in (".", "..") or fn.startswith("/")
+            or ".." in fn.split("/") or "\\" in fn
+            or re.match(r"^[A-Za-z]:", fn))
+
+def _lint_skills(skills):
+    """Cùng ranh giới apply-pack.lint cho nhánh skills: id sạch, path
+    tương đối an toàn, nội dung text có giới hạn."""
+    if len(skills) > 60:
+        return "quá 60 skill"
+    for sid, files in skills.items():
+        if "/" in sid or "\\" in sid or sid in (".", "..") or not sid:
+            return f"skill id lạ: {sid}"
+        if not isinstance(files, dict):
+            return f"skill {sid}: files không phải object"
+        if len(files) > 20:
+            return f"skill {sid}: quá 20 file"
+        for fn, content in files.items():
+            if _bad_rel(fn):
+                return f"skill {sid}: path lạ {fn}"
+            if not isinstance(content, str) or len(content) > 200_000:
+                return f"skill {sid}: file {fn} quá lớn/không text"
+    return None
+
+def _bank_entries(org):
+    """List entry của một org (org=None → mọi org — nhưng caller đã
+    scope, '*' chỉ dùng cho trường hợp gọi nội bộ)."""
+    out = []
+    d = os.path.join(SKILL_DIR, org) if org != "*" else SKILL_DIR
+    if not os.path.isdir(d):
+        return out
+    orgs = [org] if org != "*" else \
+        [o for o in os.listdir(d)
+         if os.path.isdir(os.path.join(d, o))]
+    for o in orgs:
+        od = os.path.join(SKILL_DIR, o)
+        for fn in sorted(os.listdir(od)):
+            if not fn.endswith(".json"):
+                continue
+            try:
+                e = json.load(open(os.path.join(od, fn),
+                                   encoding="utf-8"))
+            except Exception:
+                continue
+            out.append({"org": o,
+                        "machine_id": e.get("machine_id") or fn[:-5],
+                        "hostname": e.get("hostname") or "",
+                        "learner": e.get("learner") or "",
+                        "label": e.get("label") or "",
+                        "ts": e.get("ts") or 0,
+                        "n_skills": len(e.get("skills") or {}),
+                        "skills": sorted((e.get("skills") or {}).keys())})
+    out.sort(key=lambda e: e["ts"], reverse=True)
+    return out
+
+def _bank_version(org):
+    """ts mới nhất trong kho — máy so sánh với bank-version local để
+    biết có công thức mới cần kéo. Dùng MTIME file (không đọc nội
+    dung) — beacon gọi mỗi 15', đọc full JSON mỗi máy là phí I/O."""
+    d = os.path.join(SKILL_DIR, org)
+    if not os.path.isdir(d):
+        return 0
+    return int(max(
+        (os.path.getmtime(os.path.join(d, fn))
+         for fn in os.listdir(d) if fn.endswith(".json")),
+        default=0))
+
+def _merged_bank(org):
+    """Gộp mọi entry của org thành bank.json — máy mới vào thay kéo về
+    một lần là đủ công thức của những người trước. Skill id trùng:
+    entry mới hơn thắng. bank_version dùng chung nguồn với
+    _bank_version (mtime) — máy ghi lại số này, lệch nguồn thì hint
+    lặp mãi."""
+    d = os.path.join(SKILL_DIR, org)
+    merged, ver = {}, 0
+    if os.path.isdir(d):
+        entries = []
+        for fn in sorted(os.listdir(d)):
+            if not fn.endswith(".json"):
+                continue
+            fp = os.path.join(d, fn)
+            entries.append((os.path.getmtime(fp), fp))
+        for mt, fp in sorted(entries):
+            try:
+                e = json.load(open(fp, encoding="utf-8"))
+            except Exception:
+                continue
+            for sid, files in (e.get("skills") or {}).items():
+                merged[sid] = files
+            ver = max(ver, int(mt))
+    return {"org": org, "bank_version": ver, "skills": merged}
 
 def _write_rel_manifest(man):
     # tmp + os.replace — máy pull /api/releases/latest giữa chừng ghi

@@ -31,7 +31,7 @@ cửa, không phải chìa khoá):
 
   python3 tools/beacon.py [DATA_DIR]     # thường do launcher/start gọi
 """
-import json, os, platform, secrets, socket, subprocess, sys, time
+import json, os, platform, re, secrets, socket, subprocess, sys, time
 import urllib.request
 
 # Windows console/logfile mặc định cp1252 không encode được tiếng Việt —
@@ -53,6 +53,8 @@ CURSOR_FP = os.path.join(DEVIN, "beacon.cursor")
 INBOX_FP = os.path.join(DEVIN, "fleet-inbox.json")
 LIC_FP = os.path.join(DEVIN, "license.json")
 PACKV_FP = os.path.join(DEVIN, "pack-version")
+BANKV_FP = os.path.join(DEVIN, "bank-version")
+SKILLS_DIR = os.path.join(DEVIN, "skills")
 BRIDGE = "http://127.0.0.1:7682"
 BEACON_VER = 1
 INTERVAL = int(os.environ.get("TROLY_BEACON_INTERVAL") or 900)
@@ -120,13 +122,84 @@ def collector_post(path, key, payload, base):
             return e.code, None
 
 
+def skills_inventory():
+    """Danh mục skill trên máy — CHỈ metadata (id + name + desc 1 dòng
+    đầu trong front-matter SKILL.md), không gửi nội dung. Dashboard
+    hiện 'máy có N công thức' theo đúng cam kết privacy của fleet."""
+    out = []
+    try:
+        ids = sorted(os.listdir(SKILLS_DIR))[:60]
+    except OSError:
+        return out
+    for sid in ids:
+        d = os.path.join(SKILLS_DIR, sid)
+        if not os.path.isdir(d):
+            continue
+        name, desc = "", ""
+        try:
+            head = open(os.path.join(d, "SKILL.md"),
+                        encoding="utf-8", errors="replace").read(4000)
+            m = re.search(r"^name:\s*(.+)$", head, re.M)
+            if m:
+                name = m.group(1).strip()[:80]
+            m = re.search(r"^description:\s*(.+)$", head, re.M)
+            if m:
+                desc = m.group(1).strip()[:200]
+        except OSError:
+            pass
+        out.append({"id": sid[:80], "name": name, "desc": desc})
+    return out
+
+
+def harvest_skills():
+    """Gom NỘI DUNG .devin/skills gửi về kho org — chỉ chạy khi
+    collector trả harvest:true (admin đã xin trên dashboard). Giới
+    hạn giữ body dưới BODY_CAP của collector."""
+    skills, total = {}, 0
+    try:
+        ids = sorted(os.listdir(SKILLS_DIR))[:60]
+    except OSError:
+        ids = []
+    for sid in ids:
+        d = os.path.join(SKILLS_DIR, sid)
+        if not os.path.isdir(d) or "/" in sid or "\\" in sid \
+                or sid in (".", ".."):
+            continue
+        files = {}
+        try:
+            for fn in sorted(os.listdir(d))[:20]:
+                fp = os.path.join(d, fn)
+                # cùng lưới _bad_relpath phía collector: 1 filename xấu
+                # (POSIX cho phép 'a\b', 'C:x') làm lint reject CẢ body
+                # → cờ harvest kẹt mãi — skip file đó, gửi phần còn lại
+                if not os.path.isfile(fp) or fn.startswith(".") \
+                        or "\\" in fn or ".." in fn.split("/") \
+                        or re.match(r"^[A-Za-z]:", fn):
+                    continue
+                if os.path.getsize(fp) > 200_000:
+                    continue                     # file lớn → bỏ
+                with open(fp, encoding="utf-8",
+                          errors="replace") as f:
+                    files[fn] = f.read()
+        except OSError:
+            continue
+        if files:
+            sz = sum(len(c) for c in files.values())
+            if total + sz > 800_000:
+                continue            # skill này hết chỗ — BODY_CAP=1MB
+            total += sz
+            skills[sid] = files
+    return skills
+
+
 def collect_snapshot():
     """Gom trạng thái máy qua các GET read-only của bridge + đếm event
     mới kể từ cursor lần trước. Bridge chết vẫn trả snapshot tối thiểu
     (bridge_up=false) — collector thấy 'máy mở nhưng trợ lý tắt'."""
     token = _read(os.path.join(DEVIN, "bridge.token"))
-    snap = {"bridge_up": False}
-    counts = {}
+    snap = {"bridge_up": False,
+            "skills": skills_inventory()}   # đọc file local — bridge
+    counts = {}                             # chết vẫn báo được số skill
     try:
         health = bridge_get("/api/health", token)
         snap["bridge_up"] = bool(health.get("ok"))
@@ -164,6 +237,7 @@ def build_payload(fleet, mid):
         "os": f"{platform.system()} {platform.release()}",
         "version": _read(os.path.join(ROOT, "VERSION"), "?"),
         "pack_version": _read(PACKV_FP) or None,
+        "bank_version": _read(BANKV_FP) or None,
         "org": fleet.get("org"),
         "ts": int(time.time()),
         "license": _jload(LIC_FP),
@@ -232,8 +306,19 @@ def main():
                     "/api/beacon", _read(MKEY_FP), payload, base)
                 if code == 200:
                     fails = 0
-                    if resp and (resp.get("update") or resp.get("pack")):
-                        # collector báo có release/pack mới → ghi inbox
+                    if resp and resp.get("harvest"):
+                        # admin bấm "Gom công thức" — upload nội dung
+                        # .devin/skills về kho org (chỉ lúc này mới gửi
+                        # chữ; beacon thường chỉ báo danh mục metadata)
+                        try:
+                            collector_post(
+                                "/api/skills", _read(MKEY_FP),
+                                {"skills": harvest_skills()}, base)
+                        except Exception:
+                            pass
+                    if resp and (resp.get("update") or resp.get("pack")
+                                 or resp.get("bank")):
+                        # collector báo có release/pack/kho mới → ghi inbox
                         # rồi đá update/apply-pack chạy nền — beacon giữ
                         # nhịp của mình, kéo về là việc của tiến trình kia
                         inbox = {"ts": int(time.time())}
@@ -241,6 +326,8 @@ def main():
                             inbox["update"] = resp["update"]
                         if resp.get("pack"):
                             inbox["pack"] = resp["pack"]
+                        if resp.get("bank"):
+                            inbox["bank"] = resp["bank"]
                         _write600(INBOX_FP, json.dumps(inbox))
                         for tool in ("update", "apply-pack"):
                             # frozen (troly.exe): vai con `troly <tool>`

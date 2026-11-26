@@ -163,16 +163,20 @@ quản.
 
 ### 5.1. Nhân viên nghỉ việc — thu hồi seat đầy đủ
 
-1. **Revoke máy** trên dashboard (drawer máy → "Thu hồi máy này") —
+1. **Gom công thức trước** (drawer máy → "Gom công thức") — máy
+   upload `.devin/skills` về kho công thức của org ở lần beacon kế;
+   máy mới của người thay việc sẽ tự kéo kho về. Nếu máy đã offline
+   hẳn thì bỏ qua bước này.
+2. **Revoke máy** trên dashboard (drawer máy → "Thu hồi máy này") —
    máy bị đá khỏi fleet ngay, beacon sau đó trả `revoked`, máy tự xoá
    `machine.key` và về pending. Ghế `active30` giảm sau 30 ngày.
-2. **Dữ liệu trên máy**: `my-course/` chứa toàn bộ bài làm của NV —
+3. **Dữ liệu trên máy**: `my-course/` chứa toàn bộ bài làm của NV —
    copy ra nếu cty cần giữ, rồi xoá folder `C:\TroLyAI` / `~/TroLyAI`
    (hoặc re-image máy theo quy trình IT).
-3. **Extension**: gỡ thủ công trong `chrome://extensions`, hoặc nếu
+4. **Extension**: gỡ thủ công trong `chrome://extensions`, hoặc nếu
    cài qua force-install policy thì máy trả về domain chung sẽ tự gỡ
    khi policy không còn áp cho user/máy đó.
-4. **Tài khoản não**: NV đăng nhập Gemini/Devin bằng tài khoản riêng
+5. **Tài khoản não**: NV đăng nhập Gemini/Devin bằng tài khoản riêng
    — không có creds cty nào nằm trên máy để thu hồi. Nếu từng cấp key
    chung (Phase 05-B), rotate key đó ở phía provider.
 

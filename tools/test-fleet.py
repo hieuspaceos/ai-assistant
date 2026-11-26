@@ -34,7 +34,8 @@ def read(fp):
 # ---------- phần 1: static ----------
 
 SNAP_KEYS = ["beacon_ver", "machine_id", "hostname", "os", "version",
-             "pack_version", "org", "ts", "license", "counts", "snapshot"]
+             "pack_version", "bank_version", "org", "ts", "license",
+             "counts", "snapshot"]
 py_beacon = read(os.path.join(TOOLS, "beacon.py"))
 ps_beacon = read(os.path.join(TOOLS, "beacon.ps1"))
 for k in SNAP_KEYS:
@@ -42,7 +43,8 @@ for k in SNAP_KEYS:
     check(k in ps_beacon, f"beacon.ps1 có field snapshot '{k}'")
 
 for fname in ("beacon.cursor", "machine.id", "machine.key",
-              "fleet-inbox.json", "fleet.json", "license.json"):
+              "fleet-inbox.json", "fleet.json", "license.json",
+              "bank-version"):
     check(fname in py_beacon and fname in ps_beacon,
           f"cả hai beacon dùng file '{fname}'")
 
@@ -52,6 +54,13 @@ check('src="adm-render.js"' in admin, "admin.html dùng adm-render.js")
 check('src="adm-render.js"' in dash, "collector-web dùng adm-render.js")
 check(os.path.isfile(os.path.join(ROOT, "web", "adm-render.js")),
       "web/adm-render.js tồn tại")
+check(read(os.path.join(ROOT, "web", "adm-render.js"))
+      == read(os.path.join(ROOT, "collector-web", "adm-render.js")),
+      "hai bản adm-render.js đồng bộ")
+check("api/skills-bank" in dash and "api/harvest" in dash,
+      "dashboard gọi skills-bank + harvest")
+check("bank" in read(os.path.join(TOOLS, "apply-pack.py")),
+      "apply-pack.py xử lý inbox bank")
 
 launcher = read(os.path.join(TOOLS, "launcher.py"))
 check('"beacon"' in launcher and "fleet.json" in launcher,
@@ -236,7 +245,9 @@ try:
             "brain": {"current": {"id": "devin", "label": "Devin"}},
             "config": {"language": "vi", "learner_name": "Test"},
             "bots": {"active": "b1", "bots": [{"id": "b1"}]},
-            "perms": {"folders": []}, "conns": {"apps": []}}
+            "perms": {"folders": []}, "conns": {"apps": []},
+            "skills": [{"id": "s-tuan", "name": "Cong thuc A",
+                        "desc": "mo ta"}]}
     beacon_body = {"beacon_ver": 1, "machine_id": "m-test-1",
                    "hostname": "PC-01", "os": "Windows 11",
                    "version": "1.0.2", "pack_version": "1",
@@ -259,6 +270,8 @@ try:
               "fleet row có learner + version")
         check((m["today"] or {}).get("done") == 4,
               "usage hôm nay gộp counts")
+        check(m.get("n_skills") == 1,
+              "fleet row đếm công thức từ snapshot.skills")
 
     code, r = http("GET", base + "/api/license", {"X-Admin-Key": SEC_A})
     check(r.get("seats") == 3 and r.get("status") == "ok",
@@ -321,6 +334,125 @@ try:
               and "An, marketing" in csv_body
               and "m-test-1" in csv_body,
               "export CSV chứa label + machine_id")
+
+    # ---- skill bank / harvest (bàn giao công thức khi NV nghỉ) ----
+    # máy tự ý upload nội dung skill khi admin CHƯA xin → 403 — cam
+    # kết privacy "không upload chữ nếu không được yêu cầu"
+    code, _ = http("POST", base + "/api/skills",
+                   {"X-Beacon-Key": mkey},
+                   {"skills": {"s-a": {"SKILL.md": "x"}}})
+    check(code == 403,
+          f"skills upload trước khi admin xin → 403 (got {code})")
+
+    # admin bấm "Gom công thức" → cờ đi qua beacon response
+    code, r = http("POST", base + "/api/harvest",
+                   {"X-Admin-Key": SEC_A}, {"machine_id": "m-test-1"})
+    check(code == 200 and r.get("ok"), f"harvest → 200 (got {code})")
+    code, r = http("GET", base + "/api/fleet/m-test-1",
+                   {"X-Admin-Key": SEC_A})
+    check(r.get("harvest") is True, "detail trả harvest=1")
+    code, r = http("POST", base + "/api/beacon",
+                   {"X-Beacon-Key": mkey}, dict(beacon_body, counts={}))
+    check(code == 200 and r.get("harvest") is True,
+          "beacon resp báo harvest khi admin đã xin")
+
+    # máy upload → bank entry; cờ tự tắt + banked_ts
+    code, r = http("POST", base + "/api/skills",
+                   {"X-Beacon-Key": mkey},
+                   {"skills": {"s-tuan": {"SKILL.md": "---\nname: A\n---"}}})
+    check(code == 200 and r.get("n") == 1,
+          f"skills upload sau xin → 200 (got {code})")
+    code, r = http("GET", base + "/api/fleet/m-test-1",
+                   {"X-Admin-Key": SEC_A})
+    check(r.get("harvest") is False and r.get("banked_ts"),
+          "upload xong → cờ tắt + banked_ts")
+
+    # xin lại rồi upload path độc → lint chặn; off → cờ tắt
+    http("POST", base + "/api/harvest", {"X-Admin-Key": SEC_A},
+         {"machine_id": "m-test-1"})
+    code, _ = http("POST", base + "/api/skills",
+                   {"X-Beacon-Key": mkey},
+                   {"skills": {"../x": {"f": "y"}}})
+    check(code == 400, f"skill id '../x' → 400 (got {code})")
+    code, r = http("POST", base + "/api/harvest",
+                   {"X-Admin-Key": SEC_A},
+                   {"machine_id": "m-test-1", "off": True})
+    check(code == 200, "harvest off → 200")
+    code, _ = http("POST", base + "/api/skills",
+                   {"X-Beacon-Key": mkey}, {"skills": {}})
+    check(code == 403, "sau off → upload bị chặn lại")
+
+    # vendor key không được xin gom / xem bank (PII)
+    code, _ = http("POST", base + "/api/harvest",
+                   {"X-Admin-Key": VREAD}, {"machine_id": "m-test-1"})
+    check(code == 403, f"vendor key harvest → 403 (got {code})")
+    code, _ = http("GET", base + "/api/skills-bank",
+                   {"X-Admin-Key": VREAD})
+    check(code == 403, f"vendor key bank → 403 (got {code})")
+    code, _ = http("POST", base + "/api/harvest",
+                   {"X-Admin-Key": SEC_A2}, {"machine_id": "m-test-1"})
+    check(code == 404, f"harvest máy org khác → 404 (got {code})")
+
+    # bank list cho admin org — đủ attribution (label/learner/hostname)
+    code, r = http("GET", base + "/api/skills-bank",
+                   {"X-Admin-Key": SEC_A})
+    ent = r.get("bank") or []
+    check(code == 200 and len(ent) == 1
+          and ent[0]["n_skills"] == 1
+          and ent[0]["label"] == "An, marketing"
+          and ent[0]["skills"] == ["s-tuan"],
+          f"skills-bank: 1 entry đủ attribution (got {len(ent)})")
+
+    # máy kéo bank.json — cùng org được, khác org/key lạ 403
+    code, bank = http("GET", base + "/packs/TST/bank.json",
+                      {"X-Beacon-Key": mkey})
+    bv = bank.get("bank_version")
+    check(code == 200 and bv and "s-tuan" in (bank.get("skills") or {}),
+          f"bank.json merged có công thức (got {code})")
+    code, _ = http("GET", base + "/packs/ORG2/bank.json",
+                   {"X-Beacon-Key": mkey})
+    check(code == 403, f"bank.json org khác → 403 (got {code})")
+    code, _ = http("GET", base + "/packs/TST/bank.json",
+                   {"X-Beacon-Key": "sai-key"})
+    check(code == 403, f"bank.json key lạ → 403 (got {code})")
+
+    # beacon bank_version thấp → hint; đủ mới → hết hint
+    code, r = http("POST", base + "/api/beacon",
+                   {"X-Beacon-Key": mkey},
+                   dict(beacon_body, bank_version=0, counts={}))
+    check(r.get("bank", {}).get("version") == bv
+          and r["bank"]["url"] == "/packs/TST/bank.json",
+          "beacon bank_version thấp → hint kéo bank")
+    code, r = http("POST", base + "/api/beacon",
+                   {"X-Beacon-Key": mkey},
+                   dict(beacon_body, bank_version=bv, counts={}))
+    check("bank" not in r, "bank_version đủ mới → không hint")
+
+    # máy mới vào thay: pair → approve → beacon đầu → hint → kéo bank
+    # đủ công thức của máy cũ (flow "Phương nhận đủ công thức Tuấn")
+    code, r = http("POST", base + "/api/pair",
+                   {"X-Beacon-Key": SEC_B},
+                   dict(pair_body, machine_id="m-test-2",
+                        hostname="PC-02"))
+    check(r.get("status") == "pending", "máy mới pair → pending")
+    code, r = http("POST", base + "/api/pair-approve",
+                   {"X-Admin-Key": SEC_A}, {"machine_id": "m-test-2"})
+    code, r = http("POST", base + "/api/pair",
+                   {"X-Beacon-Key": SEC_B},
+                   dict(pair_body, machine_id="m-test-2",
+                        hostname="PC-02"))
+    mkey2b = r.get("machine_key")
+    check(bool(mkey2b), "máy mới nhận machine_key")
+    code, r = http("POST", base + "/api/beacon",
+                   {"X-Beacon-Key": mkey2b},
+                   dict(beacon_body, machine_id="m-test-2",
+                        hostname="PC-02", counts={}))
+    check(r.get("bank", {}).get("version") == bv,
+          "máy mới beacon đầu → hint bank")
+    code, bank2 = http("GET", base + r["bank"]["url"],
+                       {"X-Beacon-Key": mkey2b})
+    check(code == 200 and "s-tuan" in (bank2.get("skills") or {}),
+          "máy mới kéo bank.json → nhận công thức máy cũ")
 
     # body top-level sai kiểu → 400 có response (trước: handler crash,
     # connection rớt)

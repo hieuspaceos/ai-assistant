@@ -110,6 +110,12 @@ content or file contents.
   flow vendor → collector → machines with stage + rollback; per-org
   **packs** (skills/workflows/rules) push company customization to
   every machine without touching code.
+- **Skill handoff** — the dashboard shows each machine's skill count
+  (beacon reports a metadata-only inventory). Admin clicks "Harvest
+  skills" → the machine uploads `.devin/skills` to the org **skill
+  bank** (only when explicitly requested — content never uploads on
+  its own), and every machine — including the replacement hire's —
+  pulls the merged bank down automatically.
 
 Details: `docs/fleet.md`, `docs/distribution.md`, `docs/SECURITY.md`.
 

@@ -40,6 +40,9 @@ khoá:
    Un-revoke = admin `POST /api/pair-approve` qua API → máy nhận key
    mới ở pair kế.
 4. `machine.id` (hex 32) sinh lần đầu, KHÔNG rotate — định danh đếm ghế.
+   Collector validate charset `[A-Za-z0-9][A-Za-z0-9._-]*` ≤200 ký tự
+   ngay ở pair — mid đi vào path `skills/<org>/<mid>.json`, không cho
+   slash nên `..` cũng vô hại.
 5. **Re-pair máy đã duyệt** (mất `machine.key`): KHÔNG trả lại key chỉ
    vì biết `beacon_secret` — máy về pending với cờ `repair`, admin
    duyệt → cấp key MỚI (key cũ chết sau rotate — tự động rotate khi
@@ -153,16 +156,49 @@ machine-level. Tắt: `COLLECTOR_NO_TELEMETRY=1` hoặc bỏ mục telemetry.
 
 ## Snapshot gửi gì — và KHÔNG gửi gì
 
-**Gửi**: machine.id, hostname, OS, version app + pack, license đầy đủ
+**Gửi**: machine.id, hostname, OS, version app + pack + bank
+(`pack-version`, `bank-version` trong `.devin/`), license đầy đủ
 (collector verify sig), trạng thái bridge/brain/config/bots/
-permissions/connections, và **đếm event theo loại** (`done`, `err`,
-`perm`, `perm:auto`, `tool`, `inj_suspect`…) kể từ cursor lần trước
+permissions/connections, **danh mục skill** trong `.devin/skills/`
+(metadata `id` + `name` + `desc` từ front-matter — KHÔNG phải nội
+dung), và **đếm event theo loại** (`done`, `err`, `perm`,
+`perm:auto`, `tool`, `inj_suspect`…) kể từ cursor lần trước
 (`.devin/beacon.cursor` — `poll?since=<cursor>` chỉ kéo event mới).
 
-**KHÔNG gửi**: nội dung chat, tin nhắn, file, prompt, text sự kiện.
-Dashboard thấy "dùng nhiều không, lỗi gì" — không thấy "nói gì".
-Đây là cam kết privacy của sản phẩm với nhân viên — đừng "tiện tay"
-thêm field text vào snapshot.
+**KHÔNG gửi**: nội dung chat, tin nhắn, file, prompt, text sự kiện,
+**nội dung skill** (skill chỉ đi lên khi admin xin — xem mục Kho công
+thức). Dashboard thấy "dùng nhiều không, lỗi gì" — không thấy "nói
+gì". Đây là cam kết privacy của sản phẩm với nhân viên — đừng "tiện
+tay" thêm field text vào snapshot.
+
+## Kho công thức (skill bank) — bàn giao khi nhân viên nghỉ
+
+Vấn đề: skill nhân viên tự sinh nằm chết trong `.devin/skills/` của
+máy đó — revoke máy là mất luôn. Skill bank giữ công thức ở lại org:
+
+1. Beacon luôn báo **danh mục** skill (metadata) trong snapshot →
+   dashboard hiện cột "Công thức" + list trong drawer máy.
+2. Admin bấm **"Gom công thức"** trong drawer → `POST /api/harvest`
+   → cờ `harvest=1` → beacon resp `{harvest:true}` → máy mới upload
+   **nội dung** `.devin/skills/` qua `POST /api/skills` (endpoint này
+   403 nếu cờ chưa bật — giữ cam kết privacy; `off:true` huỷ xin).
+3. Collector lưu `DATA/skills/<org>/<machine_id>.json` (worker: R2
+   `skills/<org>/<machine_id>.json` + index `skill_bank` trong D1).
+   Dashboard tab Pack → card "Kho công thức" hiện từng entry: ai
+   (label/learner/hostname), bao nhiêu công thức, gom lúc nào.
+4. Máy nào có `bank-version` cũ hơn kho → beacon resp `{bank:
+   {version, url}}` → `apply-pack.py` kéo `GET /packs/<org>/bank.json`
+   (merge mọi entry, ts mới thắng id trùng) → cài theo luật sở hữu:
+   skill chưa có → tạo + đánh dấu **bank-owned**
+   (`.devin/bank-skills.json`); bank-owned → ghi đè; dir của pack/user
+   → bỏ qua (bank không đè pack, pack là sự thật cấp org; khi pack
+   áp một id đang bank-owned thì pack chiếm sở hữu lại).
+   → Máy mới của người thay việc beacon lần đầu là nhận đủ công thức.
+
+Giới hạn upload (lint cả hai phía): ≤60 skill, ≤20 file/skill, file
+text ≤200KB, path tương đối sạch (chặn absolute/`..`/backslash/
+drive/`.`/rỗng). Beacon tự skip filename xấu ngay tại nguồn — một
+tên lạ không làm reject cả batch (cờ `harvest` khỏi kẹt).
 
 ## License — "đếm và báo"
 
@@ -188,7 +224,7 @@ trong `test-fleet.py` khoá set này):
 | Method + path | Khoá | Việc |
 |---|---|---|
 | `POST /api/pair` | beacon_secret | xin vào fleet → pending/approved+key/revoked |
-| `POST /api/beacon` | machine_key | upsert snapshot + counts, trả `{update,pack}` |
+| `POST /api/beacon` | machine_key | upsert snapshot + counts, trả `{update,pack,harvest,bank}` |
 | `POST /api/pair-approve` | admin_key | ghi `pending_key` — máy nhận `machine_key` ở lần pair sau (cấp mới lẫn cấp lại một đường) |
 | `POST /api/pair-revoke` | admin_key | thu hồi máy (giữ key để trả revoked rõ ràng) |
 | `GET /api/pending` | admin_key | máy chờ duyệt + máy `repair=1` chờ cấp lại key |
@@ -203,6 +239,10 @@ trong `test-fleet.py` khoá set này):
 | `GET /api/releases/latest` | machine_key | manifest release mới nhất |
 | `GET /releases/<file>` | machine_key | tải zip release đã ký |
 | `GET /packs/<org>/<ver>.json` | machine_key | tải pack — CHỈ cùng org |
+| `GET /packs/<org>/bank.json` | machine_key | kho công thức merged của org — CHỈ cùng org |
+| `POST /api/skills` | machine_key | upload nội dung `.devin/skills` — CHỈ khi `harvest=1` (admin đã xin) |
+| `POST /api/harvest` | admin_key | bật/tắt cờ xin gom công thức (`off:true` huỷ; worker ghi audit) |
+| `GET /api/skills-bank` | admin_key | list entry kho công thức (label/learner/hostname + N skills; vendor_read_key → 403) |
 | `POST /api/releases/<file>` | release_key (master ở hosted) | upload zip (bước 1) |
 | `POST /api/releases` | release_key (master ở hosted) | upload manifest (bước 2) |
 | `GET /api/packs` | admin_key | pack latest đang phát per org |
@@ -227,7 +267,8 @@ Endpoint **chỉ có trên worker** (tài khoản admin 2 tầng — set
 ## File máy NV liên quan
 
 `.devin/` — `fleet.json` (cấu hình), `machine.id`, `machine.key`,
-`license.json`, `beacon.cursor`, `fleet-inbox.json`, `pack-version`.
+`license.json`, `beacon.cursor`, `fleet-inbox.json`, `pack-version`,
+`bank-version`, `bank-skills.json` (id skill do kho sở hữu).
 Tất cả là machine state → đã gitignore, KHÔNG đi vào release.
 
 ## Test

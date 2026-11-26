@@ -12,6 +12,8 @@ $CURSOR_FP = Join-Path $Devin "beacon.cursor"
 $INBOX_FP  = Join-Path $Devin "fleet-inbox.json"
 $LIC_FP    = Join-Path $Devin "license.json"
 $PACKV_FP  = Join-Path $Devin "pack-version"
+$BANKV_FP  = Join-Path $Devin "bank-version"
+$SKILLS_DIR = Join-Path $Devin "skills"
 $TOKEN_FP  = Join-Path $Devin "bridge.token"
 $BRIDGE    = "http://127.0.0.1:7682"
 $BEACON_VER = 1
@@ -69,10 +71,67 @@ function Machine-Id {
     }
     return $mid
 }
+function Skills-Inventory {
+    # danh mục skill trên máy — CHỈ metadata (id + name + desc từ
+    # front-matter SKILL.md), không gửi nội dung (parity beacon.py)
+    $out = @()
+    if (-not (Test-Path $SKILLS_DIR)) { return $out }
+    foreach ($d in Get-ChildItem $SKILLS_DIR -Directory |
+              Sort-Object Name | Select-Object -First 60) {
+        $name = ""; $desc = ""
+        $f = Join-Path $d.FullName "SKILL.md"
+        if (Test-Path $f) {
+            $head = (Get-Content $f -Raw -Encoding UTF8) `
+                    -replace "(?s).{4000}$", ""
+            if ($head -match "(?m)^name:\s*(.+)$") {
+                $name = $Matches[1].Trim().Substring(
+                    0, [Math]::Min(80, $Matches[1].Trim().Length))
+            }
+            if ($head -match "(?m)^description:\s*(.+)$") {
+                $desc = $Matches[1].Trim().Substring(
+                    0, [Math]::Min(200, $Matches[1].Trim().Length))
+            }
+        }
+        $out += @{ id = $d.Name; name = $name; desc = $desc }
+    }
+    return $out
+}
+function Harvest-Skills {
+    # gom NỘI DUNG .devin/skills gửi về kho org — chỉ khi collector trả
+    # harvest:true (admin đã xin). Giới hạn giữ body < BODY_CAP (1MB)
+    $skills = [ordered]@{}; $total = 0
+    if (-not (Test-Path $SKILLS_DIR)) { return $skills }
+    foreach ($d in Get-ChildItem $SKILLS_DIR -Directory |
+              Sort-Object Name | Select-Object -First 60) {
+        if ($d.Name -match "[/\\]") { continue }
+        $files = [ordered]@{}
+        foreach ($fi in Get-ChildItem $d.FullName -File |
+                 Sort-Object Name | Select-Object -First 20) {
+            # cùng lưới bad-path phía collector (y beacon.py) — 1 tên
+            # xấu làm lint reject cả body, cờ harvest kẹt mãi
+            if ($fi.Name.StartsWith(".") -or $fi.Length -gt 200000 `
+                    -or $fi.Name.Contains("\") `
+                    -or ($fi.Name -split '/') -contains '..' `
+                    -or $fi.Name -match '^[A-Za-z]:') {
+                continue
+            }
+            $files[$fi.Name] = Get-Content $fi.FullName -Raw -Encoding UTF8
+        }
+        if ($files.Count -gt 0) {
+            $sz = 0
+            foreach ($c in $files.Values) { $sz += $c.Length }
+            if ($total + $sz -gt 800000) { continue }  # hết chỗ BODY_CAP
+            $total += $sz
+            $skills[$d.Name] = $files
+        }
+    }
+    return $skills
+}
 function Collect-Snapshot {
     # giống beacon.py: bridge chết vẫn trả snapshot tối thiểu
     $token = Read-File $TOKEN_FP
-    $snap = [ordered]@{ bridge_up = $false }
+    $snap = [ordered]@{ bridge_up = $false
+                        skills = @(Skills-Inventory) }
     $counts = @{}
     try {
         $health = Bridge-Get "/api/health" $token
@@ -136,6 +195,7 @@ while ($true) {
                 hostname = $env:COMPUTERNAME; os = $os
                 version = (Read-File (Join-Path $WorkDir "VERSION"))
                 pack_version = ((Read-File $PACKV_FP) -replace "^$", $null)
+                bank_version = ((Read-File $BANKV_FP) -replace "^$", $null)
                 org = $fleet.org; ts = [int][DateTimeOffset]::Now.ToUnixTimeSeconds()
                 license = (JLoad $LIC_FP); counts = $got.counts
                 snapshot = $got.snap
@@ -143,10 +203,20 @@ while ($true) {
             $r = Collector-Post "/api/beacon" $mkey $payload $base
             if ($r.code -eq 200) {
                 $fails = 0
-                if ($r.obj -and ($r.obj.update -or $r.obj.pack)) {
+                if ($r.obj -and $r.obj.harvest) {
+                    # admin bấm "Gom công thức" — upload nội dung
+                    # .devin/skills về kho org (chỉ lúc này mới gửi chữ)
+                    try {
+                        Collector-Post "/api/skills" $mkey `
+                            @{ skills = (Harvest-Skills) } $base | Out-Null
+                    } catch {}
+                }
+                if ($r.obj -and ($r.obj.update -or $r.obj.pack `
+                        -or $r.obj.bank)) {
                     $inbox = @{ ts = $payload.ts }
                     if ($r.obj.update) { $inbox.update = $r.obj.update }
                     if ($r.obj.pack)   { $inbox.pack   = $r.obj.pack }
+                    if ($r.obj.bank)   { $inbox.bank   = $r.obj.bank }
                     Write-600 $INBOX_FP ($inbox | ConvertTo-Json -Depth 8)
                     # đá update/apply-pack chạy nền — source-mode Windows
                     # chạy .py qua python (có sẵn vì beacon.ps1 chạy cùng

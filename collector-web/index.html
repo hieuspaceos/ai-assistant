@@ -407,6 +407,13 @@
               style="float:right">ghi chú</button></h3>
       <div id="adm-conns" class="compact"></div></div>
     <div class="adm-card"><h3 id="t-ev">Hoạt động gần đây</h3><div id="adm-evs"></div></div>
+    <div class="adm-card"><h3 id="t-skills">Công thức</h3><div id="adm-skills"></div></div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;
+              margin-top:var(--space-md)">
+    <button class="btn" id="btn-harvest" type="button">Gom công thức</button>
+    <span id="harvest-st" class="mono"
+          style="font-size:var(--text-xs);color:var(--color-muted)"></span>
   </div>
   <table class="usage" id="usage" hidden>
     <thead><tr><th>Ngày</th><th>Lượt xong</th><th>Lỗi</th>
@@ -448,7 +455,13 @@ const I18N = {
     revokeOne: 'Thu hồi máy này',
     cols: { machine: 'Máy / nhân viên', org: 'Org', brain: 'Não',
             ver: 'Ver / Ext', seen: 'Báo lúc', today: 'Hôm nay',
-            bot: 'Bot', conns: 'Kết nối', lic: 'License' },
+            bot: 'Bot', conns: 'Kết nối', skills: 'Công thức',
+            lic: 'License' },
+    tSkills: 'Công thức', skEmpty: 'chưa có công thức',
+    harvestBtn: 'Gom công thức', harvestCancel: 'Huỷ gom',
+    harvestWait: 'đang chờ máy gửi…',
+    bankedAt: 'đã gom {t}', bankTitle: 'Kho công thức',
+    bankEmpty: 'chưa gom được công thức nào', bankSkills: 'công thức',
     flt: 'lọc máy…', connsAll: 'Kết nối theo app',
     connMore: 'ghi chú', connLess: 'ẩn ghi chú',
     exportCsv: 'Xuất CSV', labelPh: 'gán tên nhân viên…',
@@ -520,7 +533,13 @@ const I18N = {
     revokeOne: 'Revoke this machine',
     cols: { machine: 'Machine / user', org: 'Org', brain: 'Brain',
             ver: 'Ver / Ext', seen: 'Seen', today: 'Today',
-            bot: 'Bot', conns: 'Apps', lic: 'License' },
+            bot: 'Bot', conns: 'Apps', skills: 'Skills',
+            lic: 'License' },
+    tSkills: 'Skills', skEmpty: 'no skills yet',
+    harvestBtn: 'Harvest skills', harvestCancel: 'Cancel harvest',
+    harvestWait: 'waiting for machine…',
+    bankedAt: 'banked {t}', bankTitle: 'Skill bank',
+    bankEmpty: 'nothing harvested yet', bankSkills: 'skills',
     flt: 'filter…', connsAll: 'Connections by app',
     connMore: 'notes', connLess: 'hide notes',
     exportCsv: 'Export CSV', labelPh: 'assign employee name…',
@@ -625,6 +644,7 @@ function chrome() {
     $('#adm-conns').classList.contains('compact')
       ? t('connMore') : t('connLess');
   $('#t-ev').textContent = AdmRender.I18N[S === I18N.en ? 'en' : 'vi'].ev;
+  $('#t-skills').textContent = t('tSkills');
   if (ME) buildTabs();
 }
 
@@ -811,7 +831,7 @@ async function renderFleet() {
   const wrap = $('#wrap');
   const isMaster = ME.role === 'master';
   const cols = ['machine', ...(isMaster ? ['org'] : []), 'brain',
-                'ver', 'seen', 'today', 'bot', 'conns', 'lic'];
+                'ver', 'seen', 'today', 'bot', 'conns', 'skills', 'lic'];
   wrap.innerHTML = `
     <div class="stats" id="stats"></div>
     <div class="pending" id="pending" hidden>
@@ -926,6 +946,8 @@ async function renderFleet() {
         `</td>` +
         `<td class="mono">${esc(m.bot || '—')}</td>` +
         `<td>${apps.length ? connTag(nc, apps.length) : '—'}</td>` +
+        `<td>${m.n_skills
+              ? `<span class="tag">${esc(m.n_skills)}</span>` : '—'}</td>` +
         `<td>${licTag(m.license_status)}</td></tr>`;
     }).join('') ||
       `<tr><td colspan="${cols.length}" class="empty">${esc(t('emptyMachines'))}</td></tr>`;
@@ -950,6 +972,19 @@ function openDrawer(mid) {
       bots: snap.bots, perms: snap.perms, conns: snap.conns,
       counts: d.ev_stats || {},
     }, S === I18N.en ? AdmRender.I18N.en : AdmRender.I18N.vi);
+    const skl = snap.skills || [];
+    $('#adm-skills').innerHTML = skl.length
+      ? '<ul class="adm-list">' + skl.map(s =>
+          `<li><span class="mono">${esc(s.id)}</span>` +
+          (s.name ? ` <span>${esc(s.name)}</span>` : '') +
+          (s.desc ? `<span class="adm-ev">${esc(s.desc)}</span>` : '') +
+          `</li>`).join('') + '</ul>'
+      : `<p class="adm-empty">${esc(t('skEmpty'))}</p>`;
+    const hb = $('#btn-harvest');
+    hb.dataset.on = d.harvest ? '1' : '';
+    hb.textContent = d.harvest ? t('harvestCancel') : t('harvestBtn');
+    $('#harvest-st').textContent = d.harvest ? t('harvestWait')
+      : d.banked_ts ? t('bankedAt', { t: ago(d.banked_ts) }) : '';
     const u = d.usage || [];
     $('#usage').hidden = !u.length;
     $('#usage-rows').innerHTML = u.map(x => {
@@ -990,6 +1025,14 @@ $('#btn-label').onclick = () => {
     .then(() => { $('#btn-label').textContent = t('labelSaved');
                   setTimeout(() =>
                     $('#btn-label').textContent = t('save'), 1200); })
+    .catch(e => errBox(String(e)));
+};
+$('#btn-harvest').onclick = () => {
+  if (!curMid) return;
+  const off = $('#btn-harvest').dataset.on === '1';
+  api('api/harvest', { method: 'POST',
+    body: JSON.stringify({ machine_id: curMid, off }) })
+    .then(() => openDrawer(curMid))
     .catch(e => errBox(String(e)));
 };
 
@@ -1168,7 +1211,8 @@ async function renderPacks() {
       </div>
       <div id="pk-info" style="font-size:var(--text-sm);margin-top:var(--space-xs)"></div>
     </div>
-    <div class="card"><h3>${esc(t('pkLatest'))}</h3><div id="pk-latest"></div></div>`;
+    <div class="card"><h3>${esc(t('pkLatest'))}</h3><div id="pk-latest"></div></div>
+    <div class="card"><h3>${esc(t('bankTitle'))}</h3><div id="bank-list"></div></div>`;
   try {
     const d = await api('api/packs'); errBox(null);
     const ent = Object.entries(d.latest || {});
@@ -1176,6 +1220,22 @@ async function renderPacks() {
       `<div class="adm-row"><span class="k mono">${esc(o)}</span>` +
       `<span class="v">v${esc(p.version)} · ${esc(String(p.sha256).slice(0, 12))}…</span></div>`
     ).join('') : `<div class="adm-empty">${esc(t('pkEmpty'))}</div>`;
+  } catch (e) { errBox(String(e)); }
+  try {
+    const bk = await api('api/skills-bank');
+    $('#bank-list').innerHTML = (bk.bank || []).map(e =>
+      `<div class="prow">` +
+      `<span class="mono"><b>${esc(e.label || e.learner ||
+                                e.hostname || e.machine_id)}</b></span>` +
+      (e.label && (e.learner || e.hostname)
+        ? `<span class="mono">${esc(e.learner || e.hostname)}</span>` : '') +
+      `<span class="tag ok">${esc(e.n_skills)} ${esc(t('bankSkills'))}</span>` +
+      (ME.role === 'master'
+        ? `<span class="tag">${esc(e.org)}</span>` : '') +
+      `<span class="tag gray">${esc(ago(e.ts))}</span>` +
+      `<span class="adm-ev">${esc((e.skills || []).join(', '))}</span>` +
+      `</div>`).join('') ||
+      `<p class="adm-empty">${esc(t('bankEmpty'))}</p>`;
   } catch (e) { errBox(String(e)); }
   let packObj = null;
   $('#pk-file').onchange = async e => {

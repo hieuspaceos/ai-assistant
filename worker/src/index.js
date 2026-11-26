@@ -55,10 +55,11 @@ const nowSec = () => Math.floor(Date.now() / 1000);
 const _rate = new Map();
 function rateOk(ip, post) {
   const lim = post ? RATE_POST : RATE_GET, now = Date.now() / 1000;
-  let e = _rate.get(ip);
+  const key = ip + (post ? "|p" : "|g");   // đếm riêng như py (240/60)
+  let e = _rate.get(key);
   if (!e || now - e.w > 60) e = { w: now, n: 0 };
   e.n++;
-  _rate.set(ip, e);
+  _rate.set(key, e);
   if (_rate.size > 10000)
     for (const [k, v] of _rate) if (now - v.w > 300) _rate.delete(k);
   return e.n <= lim;
@@ -100,6 +101,20 @@ async function ensureV2(env) {
     // MIGRATIONS[3] của py — admin gán tên nhân viên vào máy
     if (!names.has("label"))
       await run(env, "ALTER TABLE machines ADD COLUMN label TEXT");
+    // MIGRATIONS[4] của py — skill bank: harvest=xin gom, banked_ts=
+    // lần gom gần nhất. Index bank của D1 (nội dung nằm ở R2 —
+    // skills/<org>/<machine_id>.json, cùng layout DATA/skills/ của py)
+    if (!names.has("harvest"))
+      await run(env, "ALTER TABLE machines ADD COLUMN harvest "
+                     + "INTEGER DEFAULT 0");
+    if (!names.has("banked_ts"))
+      await run(env, "ALTER TABLE machines ADD COLUMN banked_ts "
+                     + "INTEGER");
+    await run(env, `CREATE TABLE IF NOT EXISTS skill_bank(
+      org TEXT, machine_id TEXT,
+      learner TEXT, hostname TEXT, label TEXT,
+      n INTEGER, ts INTEGER,
+      PRIMARY KEY(org, machine_id))`);
     _v2done = true;
   } catch {}
 }
@@ -264,14 +279,60 @@ async function packHint(env, b, org, prefix) {
   return null;
 }
 
+// ---------- skill bank (bàn giao công thức — parity collector.py)
+// D1 skill_bank = index (list/version — rẻ, không quét R2); R2
+// skills/<org>/<machine_id>.json = nội dung, cùng layout DATA/skills/
+// của py.
+async function bankVersion(env, org) {
+  try {
+    const r = await one(env,
+      "SELECT MAX(ts) AS v FROM skill_bank WHERE org=?", org);
+    return (r && r.v) || 0;
+  } catch { return 0; }
+}
+// '.' / tên rỗng qua được lưới '..' segment nhưng open(dir/.) vẫn crash
+const badRel = fn => !fn || fn === "." || fn === ".."
+  || fn.startsWith("/") || fn.split("/").includes("..")
+  || fn.includes("\\") || /^[A-Za-z]:/.test(fn);
+function lintSkills(skills) {
+  if (typeof skills !== "object" || skills === null
+      || Array.isArray(skills))
+    return "thiếu skills";
+  const ids = Object.keys(skills);
+  if (ids.length > 60) return "quá 60 skill";
+  for (const sid of ids) {
+    if (!sid || sid.includes("/") || sid.includes("\\")
+        || sid === "." || sid === "..")
+      return `skill id lạ: ${sid}`;
+    const files = skills[sid];
+    if (typeof files !== "object" || files === null
+        || Array.isArray(files))
+      return `skill ${sid}: files không phải object`;
+    const fns = Object.keys(files);
+    if (fns.length > 20) return `skill ${sid}: quá 20 file`;
+    for (const fn of fns) {
+      if (badRel(fn)) return `skill ${sid}: path lạ ${fn}`;
+      const c = files[fn];
+      if (typeof c !== "string" || c.length > 200_000)
+        return `skill ${sid}: file ${fn} quá lớn/không text`;
+    }
+  }
+  return null;
+}
+
 // ---------- machine endpoints ----------
 async function pair(req, env, orgs, pairOrg) {
   const org = orgs[pairOrg];
   if (!org) return j({ err: "org không tồn tại" }, 401);
   const [b, err] = await body(req);
   if (err) return err;
-  const mid = String(b.machine_id || "").slice(0, 200);
+  const mid = String(b.machine_id || "");
   if (!mid) return j({ err: "thiếu machine_id" }, 400);
+  // mid đi vào key R2 skills/<org>/<mid>.json — charset không cho
+  // slash nên '..' cũng vô hại. Cắt trước check thì mid dài bị cắt
+  // âm thầm → máy beacon bản dài trượt lookup mãi (y py — reject).
+  if (mid.length > 200 || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(mid))
+    return j({ err: "machine_id lạ" }, 400);
   const now = nowSec();
   await ensureV2(env);               // repair/pending_key (MIGRATIONS[2])
   const row = await one(env,
@@ -359,6 +420,15 @@ async function beacon(req, env, orgs, prefix) {
   if (rel) resp.update = rel;
   const pack = await packHint(env, b, row.org, prefix);
   if (pack) resp.pack = pack;
+  // skill bank (y py): harvest=xin máy upload .devin/skills; bank=
+  // kho có bản mới hơn máy báo → kéo /packs/<org>/bank.json
+  await ensureV2(env);
+  if (row.harvest) resp.harvest = true;
+  const bv = await bankVersion(env, row.org);
+  const mbv = parseInt(b.bank_version) || 0;
+  if (bv > mbv)
+    resp.bank = { version: bv,
+                  url: `${prefix}/packs/${row.org}/bank.json` };
   return j(resp);
 }
 
@@ -381,6 +451,27 @@ async function doGet(req, env, path, prefix, orgs, url) {
         !path.startsWith(`/packs/${row.org}/`))
       return j({ err: "pack org khác" }, 403);
     if (path.includes("..")) return j({ err: "not found" }, 404);
+    if (basename(path) === "bank.json") {
+      // kho công thức merge lúc đọc (y py) — ts mới hơn thắng khi
+      // id trùng; bank_version từ index D1 = nguồn của bankVersion()
+      await ensureV2(env);
+      const rows = await allq(env,
+        "SELECT machine_id FROM skill_bank WHERE org=? ORDER BY ts",
+        row.org);
+      const merged = {};
+      for (const r2 of rows) {
+        const o = await env.BUCKET.get(
+          `skills/${row.org}/${r2.machine_id}.json`);
+        if (!o) continue;
+        let e;
+        try { e = await o.json(); } catch { continue; }
+        for (const [sid, files] of Object.entries(e.skills || {}))
+          merged[sid] = files;
+      }
+      return j({ org: row.org,
+                 bank_version: await bankVersion(env, row.org),
+                 skills: merged });
+    }
     const obj = await env.BUCKET.get(path.slice(1));
     if (!obj) return j({ err: "not found" }, 404);
     return new Response(obj.body, { headers: {
@@ -468,6 +559,7 @@ async function doGet(req, env, path, prefix, orgs, url) {
         pack_version: r.pack_version, last_seen: r.last_seen,
         license_status: r.license_status,
         bot: (snap.bots || {}).active,
+        n_skills: snap.skills ? Object.keys(snap.skills).length : 0,
         conns: apps.map(a => ({ n: a.name || a.id, s: a.status })),
         today: usage[r.machine_id] || {},
       });
@@ -502,6 +594,7 @@ async function doGet(req, env, path, prefix, orgs, url) {
       machine_id: mid, org: r.org, hostname: r.hostname, os: r.os,
       label: r.label || "",
       approved: !!r.approved, revoked: !!r.revoked,
+      harvest: !!r.harvest, banked_ts: r.banked_ts,
       first_seen: r.first_seen, last_seen: r.last_seen,
       license: JSON.parse(r.license_json || "null"),
       license_status: r.license_status,
@@ -563,6 +656,36 @@ async function doGet(req, env, path, prefix, orgs, url) {
     }
     return j({ latest });
   }
+  if (path === "/api/skills-bank") {
+    // kho công thức đã gom. py collector: vendor "*" bị chặn ngay
+    // guard rollup (PII máy). Worker: "*" là MASTER — vai trò vendor
+    // đã được xem fleet mọi org (/api/fleet cũng vậy) nên liệt kê đủ
+    await ensureV2(env);
+    const rows = org === "*"
+      ? await allq(env,
+          "SELECT org,machine_id,learner,hostname,label,n,ts "
+          + "FROM skill_bank ORDER BY ts DESC")
+      : await allq(env,
+          "SELECT org,machine_id,learner,hostname,label,n,ts "
+          + "FROM skill_bank WHERE org=? ORDER BY ts DESC", org);
+    const out = [];
+    for (const r of rows) {
+      const o = await env.BUCKET.get(
+        `skills/${r.org}/${r.machine_id}.json`);
+      let ids = [];
+      if (o) {
+        try {
+          const e = await o.json();
+          ids = Object.keys(e.skills || {}).sort();
+        } catch {}
+      }
+      out.push({ org: r.org, machine_id: r.machine_id,
+                 hostname: r.hostname || "", learner: r.learner || "",
+                 label: r.label || "", ts: r.ts,
+                 n_skills: r.n, skills: ids });
+    }
+    return j({ bank: out });
+  }
   if (path === "/api/seats/export") {
     // CSV đếm ghế — chủ cty in báo cáo gia hạn (y py collector)
     await ensureV2(env);
@@ -611,6 +734,41 @@ async function doPost(req, env, path, prefix, orgs, ip) {
     return pair(req, env, freshOrgs, pairOrg);
   }
   if (path === "/api/beacon") return beacon(req, env, orgs, prefix);
+  if (path === "/api/skills") {
+    // máy upload nội dung skill về kho org (y py): machine_key +
+    // CHỈ khi admin đã xin (harvest=1) — không bao giờ nhận upload
+    // tự phát, giữ cam kết privacy của fleet
+    await ensureV2(env);
+    const row = await machineRow(env, req);
+    if (!row) return j({ err: "máy chưa pair" }, 403);
+    if (!row.harvest)
+      return j({ err: "admin chưa xin gom công thức" }, 403);
+    const [b, err] = await body(req);
+    if (err) return err;
+    const lerr = lintSkills(b.skills);
+    if (lerr) return j({ err: lerr }, 400);
+    // DB cũ có thể đã chứa mid lạ (y py — chặn trước khi ghi key R2)
+    if (row.machine_id.includes("/") || row.machine_id.includes("\\")
+        || row.machine_id.includes(".."))
+      return j({ err: "machine_id lạ" }, 400);
+    const now = nowSec();
+    await env.BUCKET.put(`skills/${row.org}/${row.machine_id}.json`,
+      JSON.stringify({ ts: now, machine_id: row.machine_id,
+                       hostname: row.hostname, os: row.os,
+                       learner: row.learner, label: row.label || "",
+                       skills: b.skills }));
+    await run(env,
+      `INSERT INTO skill_bank(org,machine_id,learner,hostname,label,
+         n,ts) VALUES(?,?,?,?,?,?,?)
+       ON CONFLICT(org,machine_id) DO UPDATE SET
+         learner=excluded.learner, hostname=excluded.hostname,
+         label=excluded.label, n=excluded.n, ts=excluded.ts`,
+      row.org, row.machine_id, row.learner || "", row.hostname || "",
+      row.label || "", Object.keys(b.skills).length, now);
+    await run(env, "UPDATE machines SET harvest=0, banked_ts=? "
+                   + "WHERE machine_id=?", now, row.machine_id);
+    return j({ ok: true, n: Object.keys(b.skills).length });
+  }
 
   // --- public (chính nó là auth) ---
   if (path === "/api/login") {
@@ -883,6 +1041,23 @@ async function doPost(req, env, path, prefix, orgs, ip) {
               label, mid);
     await audit(env, actor, "machine-label", r.org, mid, label);
     return j({ ok: true, label });
+  }
+  if (path === "/api/harvest") {
+    // admin xin máy gom .devin/skills về kho org (y py) — cờ đi qua
+    // beacon response, máy upload ở POST /api/skills. off:true huỷ
+    const [b, err] = await body(req);
+    if (err) return err;
+    const mid = String(b.machine_id || "");
+    const r = await one(env,
+      "SELECT org FROM machines WHERE machine_id=?", mid);
+    if (!r || (org !== "*" && r.org !== org))
+      return j({ err: "not found" }, 404);
+    await ensureV2(env);
+    await run(env, "UPDATE machines SET harvest=? WHERE machine_id=?",
+              b.off ? 0 : 1, mid);
+    await audit(env, actor, b.off ? "harvest-cancel" : "harvest",
+                r.org, mid, "");
+    return j({ ok: true });
   }
   if (path === "/api/org-ping") {
     // collector cty tự host ping về vendor — chỉ master cấp

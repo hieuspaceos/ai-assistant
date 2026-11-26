@@ -45,6 +45,8 @@ FLEET_FP = os.path.join(DEVIN, "fleet.json")
 MKEY_FP = os.path.join(DEVIN, "machine.key")
 INBOX_FP = os.path.join(DEVIN, "fleet-inbox.json")
 PACKV_FP = os.path.join(DEVIN, "pack-version")
+BANKV_FP = os.path.join(DEVIN, "bank-version")
+BOWN_FP = os.path.join(DEVIN, "bank-skills.json")   # ids do bank sở hữu
 CONFIG_FP = os.path.join(MYC, "config.json")
 PERM_FP = os.path.join(MYC, "permissions.json")
 CONN_FP = os.path.join(MYC, "connections.json")
@@ -73,9 +75,11 @@ _OPENER = urllib.request.build_opener(_NoRedirect)
 def _bad_relpath(fn):
     """Tên file tương đối trong pack — chặn absolute POSIX, `..`,
     backslash, VÀ drive-absolute/drive-relative Windows (`C:/x`,
-    `C:x`) vì os.path.join trên Windows resolve chúng ra khỏi dir đích."""
-    return (fn.startswith("/") or ".." in fn.split("/")
-            or "\\" in fn or re.match(r"^[A-Za-z]:", fn))
+    `C:x`) vì os.path.join trên Windows resolve chúng ra khỏi dir đích.
+    `.`/rỗng cũng chặn — open(dir/.) crash."""
+    return (not fn or fn in (".", "..") or fn.startswith("/")
+            or ".." in fn.split("/") or "\\" in fn
+            or re.match(r"^[A-Za-z]:", fn))
 
 
 def _read(fp, default=""):
@@ -213,9 +217,49 @@ def lint(pack):
             raise ValueError("brain.args không hợp lệ")
 
 
+def apply_bank(bank):
+    """Áp kho công thức của org (gom từ máy nhân viên — bàn giao khi
+    nghỉ việc). Luật sở hữu:
+      - skill chưa có trên máy → tạo + đánh dấu bank-owned
+      - skill bank-owned → ghi đè (kho là nguồn sự thật cho nó)
+      - dir tồn tại mà KHÔNG bank-owned → của pack hoặc của user —
+        bank không đè, bỏ qua (pack vẫn là sự thật cấp org)
+    """
+    owned = set((_jload(BOWN_FP) or {}).get("ids") or [])
+    sroot = os.path.join(DEVIN, "skills")
+    for sid, files in (bank.get("skills") or {}).items():
+        if "/" in sid or "\\" in sid or sid in (".", "..") \
+                or not isinstance(files, dict):
+            continue
+        d = os.path.join(sroot, sid)
+        if os.path.isdir(d) and sid not in owned:
+            continue                          # pack/user sở hữu
+        shutil.rmtree(d, ignore_errors=True)
+        for fn, content in files.items():
+            if _bad_relpath(fn) or not isinstance(content, str):
+                continue
+            fp = os.path.join(d, fn)
+            os.makedirs(os.path.dirname(fp), exist_ok=True)
+            with open(fp, "w", encoding="utf-8") as f:
+                f.write(content)
+        owned.add(sid)
+    _jwrite(BOWN_FP, {"ids": sorted(owned)})
+    with open(BANKV_FP, "w") as f:
+        f.write(str(bank["bank_version"]))
+
+
 def apply(pack):
     new_machine = not ((_jload(CONFIG_FP) or {}).get("learner_name"))
-    # skills — ghi đè dir của từng skill trong pack (pack là sự thật)
+    # skills — ghi đè dir của từng skill trong pack (pack là sự thật);
+    # id nào đang bank-owned thì pack chiếm sở hữu — gỡ dấu để lần kéo
+    # bank sau không đè lại bản pack
+    if pack.get("skills"):
+        bj = _jload(BOWN_FP) or {}
+        ids = set(bj.get("ids") or [])
+        drop = ids & set(pack["skills"])
+        if drop:
+            bj["ids"] = sorted(ids - drop)
+            _jwrite(BOWN_FP, bj)
     for sid, files in (pack.get("skills") or {}).items():
         d = os.path.join(DEVIN, "skills", sid)
         shutil.rmtree(d, ignore_errors=True)
@@ -301,24 +345,24 @@ def apply(pack):
             "terminal": br.get("terminal") or br["cmd"]})
 
 
-def main():
-    if "--file" in sys.argv:
-        pack = json.load(open(
-            sys.argv[sys.argv.index("--file") + 1], encoding="utf-8"))
-    else:
-        hint = (_jload(INBOX_FP) or {}).get("pack")
-        if not hint or not hint.get("version"):
-            return                                # không có pack mới
-        cur = int(_read(PACKV_FP, "0") or 0)
-        if int(hint["version"]) <= cur:
-            return                                # đã áp rồi
-        fleet = _jload(FLEET_FP) or {}
-        base = (fleet.get("collector") or "").rstrip("/")
-        try:
-            pack = fetch_pack(hint, base, _read(MKEY_FP))
-        except Exception as e:
-            print(f"apply-pack: tải pack lỗi — {e}", flush=True)
-            return
+def _tool_cmd(name, args):
+    # frozen (troly.exe): gọi vai con `troly <tool>` — exe không chạy
+    # được path .py, argv lạ rơi vào `troly run`
+    return [sys.executable, name] + args \
+        if getattr(sys, "frozen", False) else \
+        [sys.executable, os.path.join(TOOLS, name + ".py")] + args
+
+
+def _gen_sandbox():
+    # skills mới → regen sandbox profile (skill dir mới cần đọc được);
+    # lỗi thì thôi — profile cũ vẫn chạy
+    try:
+        subprocess.run(_tool_cmd("gen-sandbox", [ROOT]), timeout=30)
+    except Exception:
+        pass
+
+
+def _apply_pack(pack):
     fleet = _jload(FLEET_FP) or {}
     if pack.get("org") and fleet.get("org") \
             and pack["org"] != fleet["org"]:
@@ -330,28 +374,57 @@ def main():
     except ValueError as e:
         print(f"apply-pack: pack không hợp lệ — {e}", flush=True)
         return
-    # frozen (troly.exe): gọi vai con `troly <tool>` — exe không chạy
-    # được path .py, argv lạ rơi vào `troly run`
-    FROZEN = getattr(sys, "frozen", False)
-    def tool_cmd(name, args):
-        return [sys.executable, name] + args if FROZEN else \
-            [sys.executable, os.path.join(TOOLS, name + ".py")] + args
     try:
-        subprocess.run(tool_cmd("backup", [ROOT, "--why", "pack"]),
+        subprocess.run(_tool_cmd("backup", [ROOT, "--why", "pack"]),
                        timeout=300)
     except Exception:
         pass
     apply(pack)
     with open(PACKV_FP, "w") as f:
         f.write(str(pack["pack_version"]))
-    # skills mới → regen sandbox profile (skill dir mới cần đọc được);
-    # lỗi thì thôi — profile cũ vẫn chạy
-    try:
-        subprocess.run(tool_cmd("gen-sandbox", [ROOT]), timeout=30)
-    except Exception:
-        pass
+    _gen_sandbox()
     print(f"apply-pack: đã áp pack v{pack['pack_version']} "
           f"org={pack.get('org')}", flush=True)
+
+
+def main():
+    if "--file" in sys.argv:
+        pack = json.load(open(
+            sys.argv[sys.argv.index("--file") + 1], encoding="utf-8"))
+        _apply_pack(pack)
+        return
+    inbox = _jload(INBOX_FP) or {}
+    fleet = _jload(FLEET_FP) or {}
+    base = (fleet.get("collector") or "").rstrip("/")
+    mkey = _read(MKEY_FP)
+    hint = inbox.get("pack")
+    if hint and hint.get("version") \
+            and int(hint["version"]) > int(_read(PACKV_FP, "0") or 0):
+        try:
+            _apply_pack(fetch_pack(hint, base, mkey))
+        except Exception as e:
+            print(f"apply-pack: tải pack lỗi — {e}", flush=True)
+    # kho công thức của org — beacon resp báo bank.version mới hơn
+    # .devin/bank-version local (gom xong từ máy người nghỉ → máy mới
+    # vào thay kéo về nhận đủ công thức)
+    bhint = inbox.get("bank")
+    if bhint and bhint.get("version") \
+            and int(bhint["version"]) > int(_read(BANKV_FP, "0") or 0):
+        try:
+            bank = fetch_pack(bhint, base, mkey)
+            if not isinstance(bank.get("skills"), dict) \
+                    or not isinstance(bank.get("bank_version"), int):
+                raise ValueError("bank thiếu skills/bank_version")
+            if bank.get("org") and fleet.get("org") \
+                    and bank["org"] != fleet["org"]:
+                raise ValueError(
+                    f"bank org={bank['org']} khác org máy {fleet['org']}")
+            apply_bank(bank)
+            _gen_sandbox()
+            print(f"apply-pack: đã áp kho công thức "
+                  f"v{bank['bank_version']}", flush=True)
+        except Exception as e:
+            print(f"apply-pack: kéo kho công thức lỗi — {e}", flush=True)
 
 
 if __name__ == "__main__":

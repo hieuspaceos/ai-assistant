@@ -19,7 +19,10 @@ CREATE TABLE IF NOT EXISTS machines(
   license_status TEXT,
   ev_stats     TEXT,
   repair       INTEGER DEFAULT 0,
-  pending_key  TEXT);
+  pending_key  TEXT,
+  label        TEXT,
+  harvest      INTEGER DEFAULT 0,
+  banked_ts    INTEGER);
 CREATE TABLE IF NOT EXISTS usage(
   machine_id TEXT, day TEXT, counts TEXT,
   PRIMARY KEY(machine_id, day));
@@ -63,9 +66,20 @@ CREATE TABLE IF NOT EXISTS audit(
   detail TEXT,
   ts     INTEGER);
 
--- MIGRATION v2 (MIGRATIONS[2] của collector.py — repair flow):
--- DB đã tồn tại trước khi có cột repair/pending_key thì worker tự
+-- skill bank: index cho kho công thức đã gom (bàn giao khi nhân viên
+-- nghỉ) — nội dung skill nằm ở R2: skills/<org>/<machine_id>.json
+CREATE TABLE IF NOT EXISTS skill_bank(
+  org TEXT, machine_id TEXT,
+  learner TEXT, hostname TEXT, label TEXT,
+  n INTEGER, ts INTEGER,
+  PRIMARY KEY(org, machine_id));
+
+-- MIGRATION v2+ (MIGRATIONS[2..4] của collector.py — repair, label,
+-- skill bank): DB đã tồn tại trước khi có các cột này thì worker tự
 -- ALTER lazy lần đầu dùng (ensureV2 trong index.js). Muốn migrate tay:
 --   wrangler d1 execute troly-fleet-db --command \
 --     "ALTER TABLE machines ADD COLUMN repair INTEGER DEFAULT 0;
---      ALTER TABLE machines ADD COLUMN pending_key TEXT"
+--      ALTER TABLE machines ADD COLUMN pending_key TEXT;
+--      ALTER TABLE machines ADD COLUMN label TEXT;
+--      ALTER TABLE machines ADD COLUMN harvest INTEGER DEFAULT 0;
+--      ALTER TABLE machines ADD COLUMN banked_ts INTEGER"
