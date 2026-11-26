@@ -125,6 +125,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 and not h.endswith(".localhost"):
             self.send_error(403, "Host khong duoc phep")   # reason phải latin-1
             return None
+        # `/` và `/web` (không slash cuối) phải 301 sang /web/ — serve thẳng
+        # file index ở URL gốc làm link tương đối (styles.css, app.js) gãy.
+        u = urllib.parse.urlsplit(self.path)
+        if u.path in ("/", "/web"):
+            loc = "/web/" + (("?" + u.query) if u.query else "")
+            self.send_response(301)
+            self.send_header("Location", loc)
+            self.end_headers()
+            return None
         fp = self.translate_path(self.path)
         if fp is None or os.path.isdir(fp):
             self.send_error(404, "Not found")

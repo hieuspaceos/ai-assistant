@@ -80,6 +80,11 @@ function connect() {
 // Trang web khác không gọi được; kẻ lạ trên localhost chỉ ghi đè được
 // token (DoS reconnect), không đánh cắp được gì.
 chrome.runtime.onMessageExternal.addListener((m, sender, reply) => {
+  // matches không ràng được port — kiểm tay: chỉ nhận token từ portal :8080
+  try {
+    const u = new URL(sender.url || sender.origin || '');
+    if (!['localhost', '127.0.0.1'].includes(u.hostname) || u.port !== '8080') return;
+  } catch (e) { return; }
   if (m && m.t === 'set-token' && typeof m.token === 'string' && m.token) {
     extToken = m.token;
     // KHÔNG persist ở đây — chỉ lưu trong ws.onopen sau khi bridge chấp nhận.

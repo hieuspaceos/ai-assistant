@@ -7,7 +7,7 @@
   "permissions": ["tabs", "scripting", "activeTab", "alarms", "debugger", "storage"],
   "host_permissions": ["<all_urls>"],
   "externally_connectable": {
-    "matches": ["*://localhost:8080/*", "*://127.0.0.1:8080/*"]
+    "matches": ["*://localhost/*", "*://127.0.0.1/*"]
   },
   "options_ui": { "page": "options.html", "open_in_tab": false },
   "background": { "service_worker": "background.js" },
