@@ -98,3 +98,55 @@ install, onboarding qua CDP thay orca. Kết quả **PASS toàn tuyến**:
 Finding mới (nhỏ): khi click gallery không trúng card, onboarding tạo
 bot theo tên học viên + role office mặc định ("Lan — văn phòng") — hơi
 lẫn giữa tên người và tên bot.
+
+## Run 5 — walkthrough end-to-end trên công cụ thật (kiến trúc mới)
+
+Full reset (install + Brave profile), binary `dist/troly` rebuild sau
+rename `my-course`→`workspace`. Đây là run đầu test **kiến trúc bộ công
+cụ + walkthrough tương tác** — thay hoàn toàn slide/video/bài tập.
+
+### Flagship — Phase F
+
+`/phong-van` → Lan kể pain "cộng điểm KPI xếp hạng team mỗi tháng" →
+agent đọc file Excel mẫu thật (phát hiện file gửi sai loại, xin file
+đúng) → sinh `tool-03-xep-hang-kpi` gồm skill + `guide.md` +
+`walkthrough.json` 9 bước.
+
+Walkthrough chạy **đủ 9/9 bước trên công cụ thật**:
+
+- `prompt` gửi thẳng `/xep-hang-kpi <path>` vào chat thật — `{{file}}`
+  từ `pick-file` chèn đúng
+- `wait-perm`/`wait-run` tự qua bước khi duyệt/xong (đã fix cursor poll
+  hứng event đến sớm — F-022)
+- `open` bấm "Mở trong Finder" reveal thật folder kết quả
+- `check` 2 nút Đúng/Chưa thấy, `done` chốt "lần sau gõ /xep-hang-kpi"
+- Agent xử lý thật song song: ra `workspace/ket-qua/kpi-xep-hang-thang-10.xlsx`
+- Resume qua localStorage, chạy lại về đầu, xoá công cụ → `.trash`,
+  manifest lệch/JSON hỏng → nút ẩn êm
+
+### Fix phát sinh trong run (đã commit)
+
+- **F-025/F-026 (P0)**: chat-bridge không lên được khi não fail —
+  call_sync chờ hết 30s (waiter không được wake khi não chết) + check
+  `result:{}` falsy bỏ session/new. Cả hai làm mọi prompt "chưa có
+  session" trên máy não lỗi → fix xong, suite xanh.
+- **F-021**: wizard guide chồng walkthrough → guide có walkthrough giờ
+  là tài liệu tra cứu, wizard chỉ cho bài cũ.
+- **F-023**: bot-chip đè tabs.
+- Terminal tắt mặc định (config.terminal + POST /api/config) — nhẹ RAM,
+  bật lại trong Cài đặt. Bỏ header learner-name (trùng lời chào) + bỏ
+  dòng tool-status trong chat.
+- `/hoc-bai`→`/huong-dan` (en `/tutor`→`/guide`) đồng bộ tên tab.
+
+### Suite cuối run — tất cả PASS
+
+test-bridges **151/0**, gates 20 endpoint, packs 21/21/21, parity,
+walkthrough, content-guard, distribution, fleet, worker.
+
+### Nhận xét chung
+
+Kiến trúc "bộ công cụ + walkthrough" hoạt động đúng thiết kế: công cụ
+sinh ra dùng được ngay qua walkthrough tương tác, không cần đọc guide
+trước. Ba điểm giá trị nhất: (1) prompt bước gửi thẳng vào chat —
+walkthrough "làm thật" chứ không chỉ xem; (2) wait-* tự qua bước nhờ
+event stream; (3) file kết quả ra thật, Finder mở được ngay.

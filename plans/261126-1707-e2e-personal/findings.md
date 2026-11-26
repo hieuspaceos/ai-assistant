@@ -42,3 +42,49 @@ Ngày chạy: 2026-11-26. Tester: Devin (đóng vai Lan — dân văn phòng, kh
 | F-018 | C/E | P2 | run_id / history | Sau khi bridge restart (respawn não), `run_id` reset về 0/1/2 — `chat-history.jsonl` là append-only nên run_id của phiên mới TRÙNG với phiên cũ → parse theo run_id trộn lẫn text 2 phiên | (backend — không ảnh hưởng Lan trực tiếp nhưng dashboard/log đếm sai) | Đề xuất: kèm session_id/boot_id trong mỗi event, hoặc persist counter qua restart | open |
 | F-019 | W | P3 | chat tool labels | Label "Làm một việc" vẫn generic trên một số event; "Read ./my-course/config.json, ./my-course/bot.md" lộ path thô có `./` — hơi kỹ thuật nhưng vẫn hiểu được | Lan thấy dòng hoạt động hơi "máy móc" | Đề xuất: map title→nhãn đời thường cho read/write phổ biến | open |
 | F-020 | D | P3 | settings connections | `trinh-duyet` = connected nhưng outlook/canva cùng lúc báo "trình duyệt chưa nối — mở Chrome/Edge lên trước" — probe các app này không nhìn thấy ext đang nối, hint gợi ý hành động sai | Lan đọc sẽ bối rối: trình duyệt mình đã nối rồi mà bảo chưa? | Đề xuất: probe ứng dụng-web nên check `trinh-duyet` trước, nếu nối rồi thì hint "mở trang rồi đăng nhập" | open |
+
+---
+
+# Run 5 — 2026-11-27 (kiến trúc bộ công cụ + walkthrough)
+
+Env: install `~/TroLyAI-e2e` wipe sạch, binary `dist/troly` rebuild sau rename, persona Lan (vi, Marketing "Hằng", não Devin). Lái UI qua CDP :9223. Trọng tâm: Phase F walkthrough trên công cụ THẬT vừa sinh.
+
+## Coverage run 5
+
+| Phase | Kết quả |
+|---|---|
+| A/B install + onboarding | PASS — onboarding 7 bước chạy hết (vi, Lan, Hằng, Devin, Downloads, Zalo+Browser), 2 perm `perm_done`, extension auto-pair `connected:true` |
+| C2 chat đầu | PASS — Hằng trả lời đúng vai marketing |
+| D1 extension | PASS |
+| E `/phong-van` → công cụ mới | PASS — nhận diện 2 tool sẵn, hỏi đúng 1 câu, đọc file mẫu thật, sinh `tool-03-xep-hang-kpi` (skill + guide.md + walkthrough.json 9 bước, `has_walkthrough:true`) |
+| F walkthrough flagship | PASS — 9/9 bước end-to-end: say→pick-file→prompt(prefill `{{file}}` chèn đúng)→wait-perm(auto)→prompt-optional→wait-run→check→open(Finder reveal thật)→done. File kết quả `workspace/ket-qua/kpi-xep-hang-thang-10.xlsx` có thật. Resume localStorage về đúng bước; chạy lại về bước 1; xoá tool→.trash; manifest lệch flag/JSON hỏng → nút ẩn êm |
+| G2 workflow `gom-downloads` | PASS — checklist "kiểm kết quả" hiện đúng; agent xử lý êm folder rỗng ("đã gọn sẵn rồi") |
+| H2/H4 bot chip | PASS — menu đủ mục, đổi 2 chiều qua consent gate, bot.md ghi/gỡ đúng |
+| I6 paste mật khẩu | PASS — từ chối lưu + khuyên đổi mật khẩu + cảnh báo |
+| I7 "xoá hết Downloads" | PASS — hỏi lại đúng 1 câu chọn cách, không tự xoá |
+| I10 admin.html | NOTED — link "Dành cho quản trị viên (IT)" trong Cài đặt; data qua token |
+| W1/W2/W3/W6 | PASS — vi/en parity 145/145 key, 0 jargon trong chuỗi vi, không nút icon-thiếu-tooltip |
+
+## Findings mới (run 5)
+
+| ID | Phase | Mức | Màn hình | Hiện tượng | Fix | Status |
+|----|-------|-----|----------|-----------|-----|--------|
+| F-021 | F | P1 | Portal | Guide có `### Bước` render wizard "Bước N/M" CHỒNG lên walkthrough modal — hai UI từng-bước trên cùng trang | Guide có walkthrough.json thì render tài liệu thường; wizard chỉ còn cho bài không walkthrough | fixed ✓ |
+| F-022 | F | P1 | Walkthrough | `wait-run`/`wait-perm` poll từ lúc VÀO step → event `done`/`perm` đến trong lúc user còn ở step trước (agent chạy xong sớm) bị bỏ lỡ → step chờ vĩnh viễn | Cursor poll ghi lúc `wtPostPrompt` gửi — wait-* hứng được event đến sớm | fixed ✓ |
+| F-023 | F | P1 | Header | `#bot-chip` (📣 Hằng) trong flex `space-between` đè lên `#tabs` (absolute giữa) khi tên bot dài | `margin-left:auto` trên bot-chip | fixed ✓ |
+| F-024 | E | P2 | Install stale | File sinh ra dùng skill cũ `/hoc-bai` — install e2e seed cũ sót `.devin/` + docs (chỉ sync web/tools) | Sync toàn bộ `.devin/`, AGENTS/README/docs; bài học: file seed trong install phải sync nguyên vẹn | fixed ✓ (env) |
+| F-025 | J | **P0** | chat-bridge | Não không lên được (cmd thiếu/sandbox fail): `call_sync("initialize")` chờ 30s vì reader chết không đánh thức waiter → server bind trễ → test-bridges "chat-bridge lên" FAIL + secrets.local.json crash | Reader wake all waiters khi dead + call_sync poll dead 0.2s | fixed ✓ |
+| F-026 | J | **P0** | chat-bridge | `spawn_brain` check `r.get("result")` truthy — não trả `result:{}` rỗng (hợp lệ ACP) → falsy → bỏ `session/new` → prompt nào cũng "chưa có session" | `is not None` | fixed ✓ |
+| F-027 | I10 | P3 | Cài đặt | Link "Dành cho quản trị viên (IT) →" lộ trong settings — Lan bấm vào thấy trang admin (data cần token nên không lộ gì) | Cân nhắc giấu sâu hơn / gate bằng token prompt | open |
+| F-028 | F7 | P3 | Xoá công cụ | Flow xoá qua card chat đúng → `.trash` kèm timestamp; nhưng card chỉ có nút "Không đồng ý" nhìn được — nút đồng ý nằm trong dialog native/OS, Lan mở tab khác là bỏ lỡ | Đã có dlg-overlay nhắc "bấm Đồng ý trong hộp thoại" — theo dõi thêm | noted |
+
+## Suite tự động cuối run
+
+`test-bridges` **151 xanh / 0 đỏ** · `test-content-guard` PASS · `test-distribution` PASS · `test-fleet` PASS · `test-gates` PASS (20 endpoint) · `test-packs` PASS (21/21/21) · `test-parity` PASS (18 + 7 khai .py-only) · `test-walkthrough` PASS · `test-worker` PASS
+
+## Chưa cover (đợt sau)
+
+- Phase C còn lại (C5 reload/2-tab, C8 markdown dài, C11 cửa sổ nhỏ)
+- Phase D app ngoài (D2 Zalo/D3 Sheets/D6 WP — cần credential E1-E3 của owner)
+- G3/G4 workflow chặn-app/fail-giữa-chừng, H1 tạo bot gallery, H3 import zip
+- I1-I5, I8-I9, I11; W4-W5, W7-W8; zoom 125%
