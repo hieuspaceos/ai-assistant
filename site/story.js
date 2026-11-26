@@ -135,9 +135,9 @@ const APP_NAME = {
 // beat budget per scene — ~32s total; bridges are question beats between scenes
 const HOLD = { pile: 5200, bridge: 2200, tasks: 8000, memory: 5800, auto: 6200 };
 const BRIDGES = {
-  tasks: "Nhờ trợ lý được không?",
-  memory: "Lần sau phải nhờ lại từ đầu à?",
-  auto: "Còn hôm quên luôn cả nhờ thì sao?",
+  tasks: "Làm sao hết đống này bây giờ?",
+  memory: "Mai mốt phải nói lại từ đầu à?",
+  auto: "Lỡ mình quên nhờ luôn thì sao?",
 };
 
 const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
