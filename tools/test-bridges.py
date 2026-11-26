@@ -1318,6 +1318,30 @@ def main():
             os.unlink(dsw)
         except OSError:
             pass
+
+        # Regression audit-lại #1: POST path lạ phải trả 404 JSON, không
+        # để getattr(None) nổ TypeError giết handler thread (route-table
+        # refactor từng vỡ chỗ này — connection đứt không response).
+        s, b, _ = http("POST", b3 + f"/api/khong-co-endpoint?token={TOKEN}",
+                       {"x": 1})
+        check("63. POST endpoint lạ → 404 JSON (không crash thread)",
+              s == 404 and b.get("err"), f"{s} {str(b)[:60]}")
+
+        # Regression audit-lại #2: entry Windows "~\AppData\…" trên POSIX
+        # không được lọt vào _SENSITIVE_DIRS — realpath resolve nó thành
+        # <cwd>/~\appdata\… → ancestor của cwd thành sensitive (grant
+        # Desktop bị từ chối oan). Bộ lọc isabs trong path_guard chặn.
+        spec3 = importlib.util.spec_from_file_location(
+            "path_guard_mod", os.path.join(TOOLS, "path_guard.py"))
+        pgm = importlib.util.module_from_spec(spec3)
+        spec3.loader.exec_module(pgm)
+        if os.sep == "/":
+            check("64. POSIX: không entry Windows nào lọt vào list",
+                  not any("\\" in e for e in pgm._SENSITIVE_DIRS_L))
+        check("64b. ancestor cwd bình thường KHÔNG sensitive",
+              not pgm.path_sensitive(os.path.dirname(wd)))
+        check("64c. sensitive thật vẫn bị chặn",
+              pgm.path_sensitive(os.path.expanduser("~/.ssh")))
     finally:
         for p in procs:
             try:

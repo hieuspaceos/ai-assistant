@@ -13,7 +13,15 @@ import os
 # không bảo vệ được người bấm đại "Đồng ý": khoá SSH/cloud, keychain,
 # profile trình duyệt (cookie/phiên), credential của não, hay cả home/ổ
 # gốc (mở toàn máy — tương đương không sandbox).
-_SENSITIVE_DIRS = [os.path.expanduser(p) for p in (
+# Bộ lọc isabs sau expanduser BẮT BUỘC, không phải phòng hờ: entry
+# Windows "~\\AppData\\…" trên POSIX có "\\" không phải sep → expanduser
+# trả nguyên literal tương đối → realpath resolve thành
+# "<cwd-lúc-import>/~\appdata\…" → two-way check biến MỌI ancestor của
+# cwd thành "sensitive" (grant ~/Desktop bị từ chối — regression đã bắt
+# trong audit lại). Ngược chiều: "/Library/…" trên Windows cũng không
+# isabs (thiếu drive) → bị lọc — đúng, đó là path của macOS. Mỗi nền
+# chỉ giữ entry thật sự resolve được trên nền đó.
+_SENSITIVE_DIRS = [p for p in (os.path.expanduser(x) for x in (
     "~/.ssh", "~/.gnupg", "~/.aws", "~/.kube", "~/.config/gh",
     "~/.config/devin", "~/.local/share/devin",
     "~/.gemini", "~/.codex", "~/.claude", "~/.claude.json",
@@ -37,8 +45,8 @@ _SENSITIVE_DIRS = [os.path.expanduser(p) for p in (
     "~/.mozilla", "~/Library/Application Support/1Password",
     "~/.config/1Password",
     # Windows browser profile/credential — trên Windows ntpath.expanduser
-    # nhận cả "~\\" lẫn "~/" nên resolve đúng; trên POSIX "\\" không phải
-    # sep → entry giữ nguyên literal, không match gì, vô hại.
+    # nhận cả "~\\" lẫn "~/" nên resolve đúng; trên POSIX bộ lọc isabs
+    # loại chúng ra (xem comment trên tuple).
     "~\\AppData\\Local\\Google\\Chrome", "~\\AppData\\Local\\Microsoft\\Edge",
     "~\\AppData\\Local\\BraveSoftware", "~\\AppData\\Roaming\\Mozilla",
     "~\\AppData\\Roaming\\1Password",
@@ -48,7 +56,7 @@ _SENSITIVE_DIRS = [os.path.expanduser(p) for p in (
     "~/.config/autostart", "~/Applications",
     "/Library/LaunchAgents", "/Library/LaunchDaemons",
     "/Library/StartupItems", "/Applications",
-)]
+)) if os.path.isabs(p)]
 _SENSITIVE_ROOTS = {
     os.path.realpath(p) for p in
     ("/", "/Users", "/etc", "/var", "/private", "/System", "/usr", "/bin",

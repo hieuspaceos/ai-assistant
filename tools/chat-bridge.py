@@ -1403,7 +1403,10 @@ class Handler(BaseHTTPRequestHandler):
         path = urllib.parse.urlparse(self.path).path
         if path != "/api/health" and not self._authed():
             return self._json({"err": "thiếu hoặc sai mã kết nối"}, 401)
-        h = getattr(self, self.GET_ROUTES.get(path), None)
+        # .get() trả None khi path lạ — getattr(name=None) raise TypeError
+        # (default chỉ tính khi attr name là string) → phải check trước
+        mn = self.GET_ROUTES.get(path)
+        h = getattr(self, mn) if mn else None
         if h is None:
             return self._json({"err": "not found"}, 404)
         h()
@@ -1432,7 +1435,8 @@ class Handler(BaseHTTPRequestHandler):
             # JSON hợp lệ nhưng không phải object ([], "x", 5) — để nguyên
             # thì data.get(...) raise AttributeError → handler thread chết
             data = {}
-        h = getattr(self, self.POST_ROUTES.get(path), None)
+        mn = self.POST_ROUTES.get(path)
+        h = getattr(self, mn) if mn else None
         if h is None:
             return self._json({"err": "not found"}, 404)
         h(data)
