@@ -22,7 +22,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # kiện — vd /api/connections chỉ gate khi open_url mới/đổi; điều kiện ghi
 # trong chú thích để người đọc sau không tưởng là gate mọi request).
 GATED = {
-    "/api/brain":              "cmd tự nhập (preset đổi thẳng)",
+    "/api/brain":              "mọi lần — kể cả preset (agent tự kill session/spawn churn)",
     "/api/delete-lesson":      "mọi lần — xoá vào .trash, khôi phục được",
     "/api/permissions":        "mọi lần — đồ chìa khoá",
     "/api/remove-permission":  "mọi lần — mất grant âm thầm",
@@ -30,7 +30,7 @@ GATED = {
     "/api/remove-connection":  "mọi lần — mất nút âm thầm",
     "/api/secrets":            "mọi lần — credential là payload nhạy nhất",
     "/api/setup":              "chỉ khi config đã tồn tại (re-run cài đè)",
-    "/api/bot":                "activate/delete — ghi bots.json (deny-write) + bot.md",
+    "/api/bot":                "activate/delete — ghi bots.json (deny-write) + bot.md; create/rename mở (không kích hoạt gì; instructions preview ở card activate — audit-3 M2)",
     "/api/bot-import-confirm": "mọi lần — cài skill + instruction từ ngoài",
 }
 

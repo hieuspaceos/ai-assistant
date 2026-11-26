@@ -17,6 +17,13 @@ gói (không có python ngoài). Chỉ có nghĩa trên macOS (Seatbelt); Window
 dùng user-account + NTFS ACL (setup-agent-user.ps1)."""
 import json, os, shutil, sys
 
+# runpy.run_path KHÔNG add script-dir vào sys.path → `troly gen-sandbox`
+# frozen (sys.path=_MEIPASS, không có _MEIPASS/tools) sẽ không resolve
+# được sibling import. BẮT BUỘC bootstrap như chat-bridge.py — thiếu dòng
+# này = import hỏng bị try/except nuốt → spawn não KHÔNG Seatbelt.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from path_guard import path_sensitive, rw_grant_ok   # noqa: E402
+
 def _esc(p):
     return p.replace("\\", "\\\\").replace('"', '\\"')
 
@@ -98,6 +105,33 @@ def _deny_siblings(allowed):
             cover(cur)                   # deny sibling ở mỗi tầng
     return denies
 
+def _grant_ok(p, access, cwd):
+    """Grant chỉ emit khi path còn đúng như lúc học viên duyệt — chặn
+    TOCTOU symlink (audit-3 CAO-2): agent grant my-course/x (hợp lệ) rồi
+    rmdir + ln -s ~/Library/LaunchAgents x trước spawn → request-time
+    check đã qua nhưng realpath ở ĐÂY (enforcement point) bắt được.
+
+    Hai check độc lập, thiếu cái nào cũng còn lỗ:
+    - path_sensitive: realpath đích rơi vào folder nhạy cảm → chặn.
+    - Divergence: realpath khác normpath = có symlink component TRÊN
+      đường đi — kể cả đích KHÔNG nhạy cảm (ln -s ~/Documents x) vẫn
+      chặn, vì card chỉ hiện "my-course/x" chứ sandbox lại được quyền
+      ~/Documents. Cho qua duy nhất canonicalization /private của macOS
+      (/tmp,/var,/etc → /private/*). So .lower(): APFS không phân biệt
+      hoa-thường, grant gõ "~/documents" không bị drop oan.
+    Trade-off đã cân: folder thật nằm sau symlink (Documents → ổ ngoài)
+    sẽ bị drop — hiếm, an toàn hơn, và _apply báo err thấy được."""
+    if path_sensitive(p):          # realpath bên trong — đích symlink
+        return False               # vào sensitive đã bị chặn ở đây luôn
+    np = os.path.normpath(os.path.abspath(os.path.expanduser(p)))
+    rp = os.path.realpath(p)
+    if rp.lower() != np.lower() \
+            and rp.lower() != ("/private" + np).lower():
+        return False
+    if access == "read-write" and not rw_grant_ok(p, cwd):
+        return False
+    return True
+
 def build_profile(cwd):
     """Trả về nội dung profile Seatbelt cho process não chạy tại `cwd`."""
     cwd = os.path.abspath(cwd)
@@ -175,6 +209,12 @@ def build_profile(cwd):
             p = os.path.abspath(os.path.expanduser(str(f.get("path", ""))))
             if len(p) < 2:
                 continue                     # bỏ qua "/" và rác
+            # Re-validate TẠI enforcement point: request-time check trong
+            # chat-bridge không chặn được symlink swap sau approve; file
+            # permissions.json bị sửa tay cũng lọt nếu không kiểm lại ở
+            # đây (grant divergent/sensitive → im lặng bỏ, như file mồ côi).
+            if not _grant_ok(p, str(f.get("access", "")), cwd):
+                continue
             (rw if f.get("access") == "read-write" else ro).add(p)
     except Exception:
         pass

@@ -1169,6 +1169,155 @@ def main():
               and all(b.get("folder") != "lesson-99-rac"
                       for b in m55b.get("lessons", [])),
               f"{s}/{s55}/{trashed}/{str(b)[:60]}/{str(b55)[:60]}")
+
+        # ================= audit-3 (CAO-1/CAO-2/M1/M3/M5) =================
+        # Unit-test internal function qua importlib — file gạch ngang load
+        # được bằng spec_from_file_location, không cần spawn bridge.
+        # chdir(wd) trước khi exec: module-level code (load_token, makedirs
+        # .logs) resolve CWD="." — phải rơi vào dir test, không đụng repo.
+        _save_cwd = os.getcwd()
+        os.chdir(wd)
+        spec = importlib.util.spec_from_file_location(
+            "chat_bridge_mod", os.path.join(TOOLS, "chat-bridge.py"))
+        cbm = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cbm)
+        os.chdir(_save_cwd)
+
+        # M1: _pick_allow ưu tiên allow_once, KHÔNG nhầm reject_once
+        check("56. _pick_allow ưu tiên allow_once",
+              cbm._pick_allow([{"optionId": "a", "kind": "allow_always"},
+                               {"optionId": "b", "kind": "allow_once"}]) == "b")
+        check("56b. _pick_allow không pick nhầm reject_once",
+              cbm._pick_allow([{"optionId": "r", "kind": "reject_once"},
+                               {"optionId": "a", "kind": "allow_always"}]) == "a")
+        check("56c. _pick_allow không có allow → opts[0] (y cũ)",
+              cbm._pick_allow([{"optionId": "r1", "kind": "reject"},
+                               {"optionId": "r2", "kind": "reject"}]) == "r1")
+
+        # M3: deny regex bắt interpreter hậu tố version + binary còn sót
+        for _c in ("python3.12", "ipython", "pypy", "ksh", "csh", "brew",
+                   "gh", "rscript", "luajit", "perl5.40", "pip3.11",
+                   "go", "java", "jshell", "dotnet", "julia", "gjs"):
+            check(f"56d. deny {_c}", cbm._brain_cmd_denied(_c))
+        for _c in ("mycli", "br3w", "restic", "troli", "shelper"):
+            check(f"56e. không deny {_c}", not cbm._brain_cmd_denied(_c))
+
+        # M4: NATIVE_MAX — đạt trần dialog native thì gate_local trả None
+        # (caller trả 409), KHÔNG spawn thêm. Stub _native_confirm kẻo
+        # implementation hỏng làm văng dialog thật lên màn hình máy test.
+        _orig_nc = cbm._native_confirm
+        cbm._native_confirm = lambda rid: None
+        cbm.NATIVE_GATE = True
+        cbm.local_pending.clear(); cbm.perm_pending.clear()
+        cbm.local_pending["n1"] = {"native": True, "proc": None}
+        cbm.perm_pending["n2"] = {"native": True, "proc": None}
+        check("57. NATIVE_MAX đếm qua cả 2 dict → gate_local None",
+              cbm.gate_local("t", lambda: None) is None)
+        cbm.perm_pending.clear()
+        check("57b. dưới trần → tạo card bình thường",
+              cbm.gate_local("t", lambda: None) is not None)
+        cbm.local_pending.clear(); cbm.perm_pending.clear()
+        cbm._native_confirm = _orig_nc
+        cbm.NATIVE_GATE = False
+
+        # CAO-2: _grant_ok trong gen-sandbox (enforcement point)
+        spec2 = importlib.util.spec_from_file_location(
+            "gen_sandbox_mod", os.path.join(TOOLS, "gen-sandbox.py"))
+        gsm = importlib.util.module_from_spec(spec2)
+        spec2.loader.exec_module(gsm)
+        la = os.path.join(wd, "my-course", "la")
+        os.symlink(os.path.expanduser("~/Library/LaunchAgents"), la)
+        check("58. _grant_ok symlink→LaunchAgents → False",
+              not gsm._grant_ok(la, "read-write", wd))
+        doc = os.path.join(wd, "my-course", "doc-link")
+        os.symlink(os.path.expanduser("~/Documents"), doc)
+        check("58b. _grant_ok symlink→non-sensitive → False (divergence)",
+              not gsm._grant_ok(doc, "read", wd))
+        rdir = os.path.join(wd, "my-course", "real-dir")
+        os.makedirs(rdir, exist_ok=True)
+        check("58c. _grant_ok dir thật trong vùng writable → True",
+              gsm._grant_ok(rdir, "read-write", wd))
+        check("58d. _grant_ok sensitive trực tiếp → False",
+              not gsm._grant_ok(os.path.expanduser("~/.ssh"), "read", wd))
+
+        # CAO-2 end-to-end ở profile: permissions.json chứa grant đã swap
+        # symlink → build_profile KHÔNG emit allow cho đích (deny line
+        # của enumeration vẫn có là bình thường — chỉ check dòng allow)
+        perm_fp = os.path.join(wd, "my-course", "permissions.json")
+        json.dump({"folders": [{"path": la, "access": "read-write"}]},
+                  open(perm_fp, "w"))
+        prof = gsm.build_profile(wd)
+        bad = [l for l in prof.splitlines()
+               if "LaunchAgents" in l and "(allow" in l]
+        check("58e. profile không allow đích symlink (kể cả file sửa tay)",
+              not bad, str(bad[:1]))
+        json.dump({"folders": []}, open(perm_fp, "w"))
+
+        # M5 HTTP: preset /api/brain giờ qua card — 202 pending chứ KHÔNG
+        # đổi thẳng; brain.json giữ nguyên sau khi cancel card
+        s, b, _ = http("GET", b3 + "/api/brain", token=TOKEN)
+        inst = next((p["id"] for p in (b or {}).get("presets", [])
+                     if p.get("installed")), None)
+        brain_fp = os.path.join(wd, "brain.json")
+        before = open(brain_fp).read() if os.path.exists(brain_fp) else ""
+        if inst:
+            s, b, _ = http("POST", b3 + f"/api/brain?token={TOKEN}",
+                           {"id": inst})
+            check("59. /api/brain preset → 202 card (không đổi thẳng)",
+                  s == 202 and bool(b.get("pending")), f"{s} {str(b)[:60]}")
+            http("POST", b3 + f"/api/respond?token={TOKEN}",
+                 {"id": b.get("pending"), "optionId": "__cancel__"},
+                 headers={"Origin": "http://localhost:8080"})
+            after = open(brain_fp).read() if os.path.exists(brain_fp) else ""
+            check("59b. brain.json không đổi sau cancel", before == after)
+        else:
+            check("59. /api/brain preset → 202 card (bỏ qua — không preset nào cài)", True)
+
+        # M3 HTTP: interpreter version bị deny TRƯỚC gate (400, không card)
+        s, b, _ = http("POST", b3 + f"/api/brain?token={TOKEN}",
+                       {"cmd": "python3.12"})
+        check("60. brain python3.12 → 400 không tạo card",
+              s == 400 and not b.get("pending"), f"{s} {str(b)[:60]}")
+        s, b, _ = http("POST", b3 + f"/api/brain?token={TOKEN}",
+                       {"cmd": "brew"})
+        check("60b. brain brew → 400", s == 400, str(s))
+
+        # CAO-2 lớp apply: request grant hợp lệ → xoá dir TRƯỚC khi bấm
+        # → _apply từ chối, không ghi grant vào permissions.json
+        dgone = os.path.join(wd, "my-course", "gone-soon")
+        os.makedirs(dgone, exist_ok=True)
+        s, b, _ = http("POST", b3 + f"/api/permissions?token={TOKEN}",
+                       {"paths": [dgone], "access": "read"})
+        rid61 = b.get("pending")
+        os.rmdir(dgone)
+        sa61 = _approve(b3, rid61)
+        perm = json.load(open(perm_fp))
+        check("61. _apply re-validate: folder mất → không ghi grant",
+              s == 202 and sa61 == 200
+              and not any(f.get("path") == dgone
+                          for f in perm.get("folders", [])),
+              f"{s}/{sa61} {str(perm)[:80]}")
+
+        # CAO-2 lớp apply (symlink): swap sang folder nhạy cảm trước khi
+        # bấm → _apply từ chối y vậy
+        dsw = os.path.join(wd, "my-course", "swap-me")
+        os.makedirs(dsw, exist_ok=True)
+        s, b, _ = http("POST", b3 + f"/api/permissions?token={TOKEN}",
+                       {"paths": [dsw], "access": "read"})
+        rid62 = b.get("pending")
+        os.rmdir(dsw)
+        os.symlink(os.path.expanduser("~/.ssh"), dsw)
+        sa62 = _approve(b3, rid62)
+        perm = json.load(open(perm_fp))
+        check("62. _apply: swap symlink→.ssh trước approve → từ chối",
+              s == 202 and sa62 == 200
+              and not any(f.get("path") == dsw
+                          for f in perm.get("folders", [])),
+              f"{s}/{sa62}")
+        try:
+            os.unlink(dsw)
+        except OSError:
+            pass
     finally:
         for p in procs:
             try:

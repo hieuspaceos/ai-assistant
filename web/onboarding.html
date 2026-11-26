@@ -376,6 +376,7 @@ function stepBrain(){
       const r=await bfetch(BRIDGE+'/api/brain',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
       const d=await r.json().catch(()=>({}));
       if(!r.ok){ err.textContent=d.err||t('brainErr'); return; }
+      if(d.pending) needConfirm=true;   // đổi não giờ qua thẻ xác nhận (202)
       go(4);
     }catch(e){ err.textContent=t('errBridge'); }
   };

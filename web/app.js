@@ -37,6 +37,7 @@ const I18N = {
     brainHint: 'Trợ lý nghĩ và làm việc bằng chương trình AI này — chỉ đổi khi máy bạn có sẵn chương trình khác (đổi xong trợ lý khởi động lại trong vài giây).',
     brainCurrent: 'đang dùng', brainSwitching: 'Đang đổi…',
     brainDone: 'Đã đổi xong', brainFail: 'Chưa đổi được',
+    brainPending: 'Đã gửi thẻ xác nhận — vào tab Hỏi trợ lý bấm Đồng ý',
     brainCostFree: 'miễn phí', brainCostByok: 'app miễn phí', brainCostPaid: 'trả phí',
     connCodeTitle: 'Mã kết nối',
     connCodeHint: 'Khi extension Trợ Lý AI hỏi mã, dán mã này vào — giống đưa chìa khoá nhà cho nó, chỉ cần một lần.',
@@ -130,6 +131,7 @@ const I18N = {
     brainHint: 'The assistant thinks and works through this AI program — only change it if another one is already installed (it restarts in a few seconds).',
     brainCurrent: 'in use', brainSwitching: 'Switching…',
     brainDone: 'Switched', brainFail: 'Couldn\'t switch',
+    brainPending: 'Approval card sent — press Đồng ý in the chat tab',
     brainCostFree: 'free', brainCostByok: 'free app', brainCostPaid: 'paid',
     connCodeTitle: 'Connection code',
     connCodeHint: 'If the Trợ Lý AI extension asks for a code, paste this in — like handing it the house key, once is enough.',
@@ -623,8 +625,15 @@ async function renderBrain() {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: sel.value })
         })).json();
-        msg.textContent = r.ok ? t('brainDone') : (r.err || t('brainFail'));
-        if (r.ok && r.brain && r.brain.terminal) brainTerminal = r.brain.terminal;
+        if (r.pending) {
+          // mọi đổi não giờ qua thẻ xác nhận (202) — não chưa đổi, báo
+          // đúng nghĩa chờ duyệt rồi re-sync select về não đang dùng
+          msg.textContent = r.msg || t('brainPending');
+          setTimeout(renderBrain, 2000);
+        } else {
+          msg.textContent = r.ok ? t('brainDone') : (r.err || t('brainFail'));
+          if (r.ok && r.brain && r.brain.terminal) brainTerminal = r.brain.terminal;
+        }
       } catch { msg.textContent = t('brainFail'); }
       sel.disabled = false;
       setTimeout(() => { msg.textContent = ''; }, 5000);
