@@ -15,10 +15,15 @@
 
 /* device frame — "máy của bạn" */
 .story__frame { border: var(--rule-hair) solid var(--color-rule); border-radius: var(--radius-card); background: var(--color-paper); overflow: hidden; }
-.story__chrome { display: flex; align-items: center; gap: var(--space-xs); padding: var(--space-xs) var(--space-md); background: var(--color-paper-3); border-bottom: var(--rule-hair) solid var(--color-rule); }
-.story__chrome i { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--color-rule-2); }
-.story__chrome i:first-child { background: var(--color-accent); }
-.story__chrome span { margin-left: var(--space-xs); font-family: var(--font-outlier); font-size: var(--text-xs); color: var(--color-muted); }
+/* Windows-style title bar: label left, minimize/maximize/close right */
+.story__chrome { display: flex; align-items: center; padding: var(--space-xs) var(--space-md); background: var(--color-paper-3); border-bottom: var(--rule-hair) solid var(--color-rule); }
+.story__chrome span { font-family: var(--font-outlier); font-size: var(--text-xs); color: var(--color-muted); }
+.story__chrome i { position: relative; display: block; width: 0.7rem; height: 0.7rem; margin-left: var(--space-sm); color: var(--color-muted); }
+.story__chrome i.w-min { margin-left: auto; border-bottom: 1.5px solid currentColor; }
+.story__chrome i.w-max { border: 1.5px solid currentColor; }
+.story__chrome i.w-close::before, .story__chrome i.w-close::after { content: ""; position: absolute; left: 0; top: 50%; width: 100%; height: 1.5px; background: currentColor; }
+.story__chrome i.w-close::before { transform: rotate(45deg); }
+.story__chrome i.w-close::after { transform: rotate(-45deg); }
 
 /* 4-beat stepper */
 .story__steps { display: flex; gap: var(--space-md); justify-content: center; padding: var(--space-sm) var(--space-md) 0; }
