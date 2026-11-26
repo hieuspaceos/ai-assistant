@@ -48,6 +48,8 @@ def http(method, url, headers=None, body=None, raw=None):
 
 tmp = tempfile.mkdtemp(prefix="troly-dist-test-")
 SEC_B, SEC_L, SEC_A = "b-sec", "l-sec", "a-key"
+RELKEY = "rel-key"                     # audit-4: upload release cần
+                                       # release_key, không phải admin
 
 # --- key test riêng (không đụng ~/.troly-release-key) ---
 sk = secrets.token_bytes(32)
@@ -86,7 +88,8 @@ cfg_fp = os.path.join(tmp, "collector.json")
 cdata = os.path.join(tmp, "cdata")
 json.dump({"orgs": {"TST": {"beacon_secret": SEC_B,
                             "license_secret": SEC_L,
-                            "admin_key": SEC_A}}},
+                            "admin_key": SEC_A}},
+           "release_key": RELKEY},
           open(cfg_fp, "w"))
 port = free_port()
 base = f"http://127.0.0.1:{port}"
@@ -122,8 +125,15 @@ try:
     check(code == 200 and r.get("status") == "pending", "pair → pending")
     code, r = http("POST", base + "/api/pair-approve",
                    {"X-Admin-Key": SEC_A}, {"machine_id": "m-dist-1"})
+    check(bool(r.get("machine_key")), "approve → machine_key")
+    # approve chỉ xếp key vào pending_key — máy phải PAIR lần nữa mới
+    # nhận key (đúng vòng đời beacon.py: pair tới khi approved)
+    code, r = http("POST", base + "/api/pair", {"X-Beacon-Key": SEC_B},
+                   {"machine_id": "m-dist-1", "hostname": "PC-T",
+                    "os": "test", "license": None})
     mkey = r.get("machine_key")
-    check(bool(mkey), "approve → machine_key")
+    check(r.get("status") == "approved" and mkey,
+          "pair sau duyệt → nhận machine_key")
     open(os.path.join(mdata, ".devin", "machine.key"), "w").write(mkey)
 
     # beacon một vòng — chưa có release nào → không inbox
@@ -149,12 +159,12 @@ try:
 
     # bước 1: upload zip
     code, r = http("POST", base + "/api/releases/troly-1.0.3.zip",
-                   {"X-Admin-Key": SEC_A}, raw=open(zfp, "rb").read())
+                   {"X-Admin-Key": RELKEY}, raw=open(zfp, "rb").read())
     check(code == 200 and r.get("sha256") == man["sha256"],
           f"upload zip → {code}")
     # bước 2: manifest
     code, r = http("POST", base + "/api/releases",
-                   {"X-Admin-Key": SEC_A}, man)
+                   {"X-Admin-Key": RELKEY}, man)
     check(code == 200, "upload manifest → 200")
 
     # manifest phải đòi machine_key
@@ -210,9 +220,9 @@ try:
     man_bad["sig"] = signature(bytes.fromhex(man_bad["sha256"]),
                                sk, pk).hex()
     http("POST", base + "/api/releases/troly-1.0.3.zip",
-         {"X-Admin-Key": SEC_A}, raw=open(zfp, "rb").read())
+         {"X-Admin-Key": RELKEY}, raw=open(zfp, "rb").read())
     http("POST", base + "/api/releases",
-         {"X-Admin-Key": SEC_A}, man_bad)
+         {"X-Admin-Key": RELKEY}, man_bad)
     run_tool("update")
     check(not os.path.exists(pend_fp), "sha256 sai → abort, không stage")
 
@@ -222,7 +232,7 @@ try:
     man_evil["sig"] = signature(bytes.fromhex(man["sha256"]),
                                 sk_evil, publickey(sk_evil)).hex()
     http("POST", base + "/api/releases",
-         {"X-Admin-Key": SEC_A}, man_evil)
+         {"X-Admin-Key": RELKEY}, man_evil)
     run_tool("update")
     check(not os.path.exists(pend_fp), "sig sai → abort, không stage")
 
@@ -231,9 +241,9 @@ try:
     make_zip(zbad, {"../evil.txt": "x", "tools/a.txt": "ok"})
     man_slip = sign_manifest("1.0.5", zbad, "evil.zip")
     http("POST", base + "/api/releases/evil.zip",
-         {"X-Admin-Key": SEC_A}, raw=open(zbad, "rb").read())
+         {"X-Admin-Key": RELKEY}, raw=open(zbad, "rb").read())
     http("POST", base + "/api/releases",
-         {"X-Admin-Key": SEC_A}, man_slip)
+         {"X-Admin-Key": RELKEY}, man_slip)
     run_tool("update")
     check(not os.path.exists(pend_fp), "zip-slip entry → abort")
     check(not os.path.exists(os.path.join(mdata, "evil.txt")),
@@ -244,9 +254,9 @@ try:
     make_zip(zbad2, {"etc/passwd": "x", "tools/a.txt": "ok"})
     man_wl = sign_manifest("1.0.5", zbad2, "outside.zip")
     http("POST", base + "/api/releases/outside.zip",
-         {"X-Admin-Key": SEC_A}, raw=open(zbad2, "rb").read())
+         {"X-Admin-Key": RELKEY}, raw=open(zbad2, "rb").read())
     http("POST", base + "/api/releases",
-         {"X-Admin-Key": SEC_A}, man_wl)
+         {"X-Admin-Key": RELKEY}, man_wl)
     run_tool("update")
     check(not os.path.exists(pend_fp), "entry ngoài whitelist → abort")
 

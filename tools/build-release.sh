@@ -91,4 +91,5 @@ echo "RELEASE OK: $ZIP"
 cat "$OUT/manifest.json"
 echo
 echo "Đẩy lên origin:  scp -r $OUT/* <vps>:<site>/releases/"
-echo "Hoặc collector:  POST /api/releases/<file> + /api/releases"
+echo "Hoặc collector:  POST /api/releases/<file> + /api/releases" \
+     "(header X-Admin-Key: <release_key> trong collector.json)"

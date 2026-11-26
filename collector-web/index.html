@@ -438,6 +438,7 @@ const I18N = {
       + 'Dán key — đó chính là admin_key trong collector.json của cty bạn.',
     refresh: 'Làm mới', logout: 'Thoát', chpass: 'Đổi mật khẩu',
     pending: 'Máy chờ duyệt', approve: 'Duyệt', revoke: 'Thu hồi',
+    repairTag: 'cấp lại key',
     revokeOne: 'Thu hồi máy này',
     cols: { machine: 'Máy / nhân viên', org: 'Org', brain: 'Não',
             ver: 'Ver / Ext', seen: 'Báo lúc', today: 'Hôm nay',
@@ -507,6 +508,7 @@ const I18N = {
       + 'that is the admin_key in your company collector.json.',
     refresh: 'Refresh', logout: 'Sign out', chpass: 'Change password',
     pending: 'Pending machines', approve: 'Approve', revoke: 'Revoke',
+    repairTag: 're-issue key',
     revokeOne: 'Revoke this machine',
     cols: { machine: 'Machine / user', org: 'Org', brain: 'Brain',
             ver: 'Ver / Ext', seen: 'Seen', today: 'Today',
@@ -863,6 +865,7 @@ async function renderFleet() {
   $('#pending-list').innerHTML = pl.map(m =>
     `<div class="prow"><span class="mono"><b>${esc(m.hostname || m.machine_id)}</b></span>` +
     `<span class="tag">${esc(m.org || '')}</span>` +
+    (m.repair ? `<span class="tag warn">${esc(t('repairTag'))}</span>` : '') +
     `<span class="tag gray">${esc(m.os || '')}</span>` +
     `<button class="btn btn--sm" data-approve="${esc(m.machine_id)}">${esc(t('approve'))}</button>` +
     `<button class="btn btn--sm btn--danger" data-revoke="${esc(m.machine_id)}">${esc(t('revoke'))}</button>` +

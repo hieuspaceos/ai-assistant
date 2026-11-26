@@ -117,9 +117,22 @@ cfg_fp = os.path.join(tmp, "collector.json")
 data_dir = os.path.join(tmp, "data")
 web_dir = os.path.join(ROOT, "collector-web")
 SEC_B, SEC_L, SEC_A = "beacon-sec-test", "lic-sec-test", "admin-key-test"
+# org thứ hai + telemetry key: cần cho PoC traversal (vendor "*") và
+# license org-chéo. telemetry không có "url" → loop tự tắt, không gọi
+# ra ngoài.
+SEC_B2, SEC_L2, SEC_A2 = "beacon2-sec", "lic2-sec", "admin2-key"
+VEND = "vendor-key-test"          # telemetry.key — chỉ ghi org-ping
+VREAD = "vread-key-test"          # vendor_read_key — chỉ đọc rollup
+RELKEY = "release-key-test"       # release_key — đẩy release
 json.dump({"orgs": {"TST": {"beacon_secret": SEC_B,
                             "license_secret": SEC_L,
-                            "admin_key": SEC_A}}},
+                            "admin_key": SEC_A},
+                    "ORG2": {"beacon_secret": SEC_B2,
+                             "license_secret": SEC_L2,
+                             "admin_key": SEC_A2}},
+           "telemetry": {"key": VEND},
+           "vendor_read_key": VREAD,
+           "release_key": RELKEY},
           open(cfg_fp, "w"))
 port = free_port()
 base = f"http://127.0.0.1:{port}"
@@ -145,6 +158,17 @@ try:
                    env=env, check=True, capture_output=True)
     lic = json.load(open(lic_fp))
     bad_lic = dict(lic, seats=99)           # sửa field → sig phải hỏng
+    # license của ORG2 — sig HỢP LỆ dưới secret ORG2 nhưng org khác máy
+    # → collector phải flag invalid (verify theo org của row, không tin
+    # lic["org"] máy tự khai)
+    lic2_fp = os.path.join(tmp, "license-org2.json")
+    env2 = dict(os.environ, TROLY_LICENSE_SECRET=SEC_L2)
+    subprocess.run([sys.executable,
+                    os.path.join(TOOLS, "make-license.py"),
+                    "--org", "ORG2", "--seats", "5",
+                    "--expiry", "2099-01-01", "--out", lic2_fp],
+                   env=env2, check=True, capture_output=True)
+    lic_org2 = json.load(open(lic2_fp))
 
     pair_body = {"machine_id": "m-test-1", "hostname": "PC-01",
                  "os": "Windows 11", "org": "TST", "license": lic}
@@ -172,11 +196,39 @@ try:
     mkey = r.get("machine_key")
     check(code == 200 and mkey, "approve → cấp machine_key")
 
+    # pair sau duyệt → máy NHẬN key (approve ghi pending_key, pair phát)
     code, r = http("POST", base + "/api/pair",
                    {"X-Beacon-Key": SEC_B}, pair_body)
     check(r.get("status") == "approved"
           and r.get("machine_key") == mkey,
-          "re-pair sau duyệt → trả lại đúng machine_key")
+          "pair sau duyệt → nhận machine_key")
+
+    # repair flow (audit-4 1.3): re-pair máy ĐÃ CÓ key → KHÔNG trả key
+    # chỉ vì biết beacon_secret — flag repair, chờ admin duyệt; duyệt →
+    # pending_key, máy nhận key MỚI ở pair kế, key cũ chết (rotate)
+    code, r = http("POST", base + "/api/pair",
+                   {"X-Beacon-Key": SEC_B}, pair_body)
+    check(r.get("status") == "pending" and "machine_key" not in r,
+          "re-pair máy đã có key → pending, không trả key")
+    code, r = http("GET", base + "/api/pending",
+                   {"X-Admin-Key": SEC_A})
+    check(code == 200 and any(p.get("repair")
+                              for p in r.get("pending") or []),
+          "pending list hiện repair=1 cho máy xin cấp lại")
+    code, r = http("POST", base + "/api/pair-approve",
+                   {"X-Admin-Key": SEC_A}, {"machine_id": "m-test-1"})
+    mkey2 = r.get("machine_key")
+    check(code == 200 and mkey2 and mkey2 != mkey,
+          "approve repair → key mới khác key cũ")
+    code, r = http("POST", base + "/api/pair",
+                   {"X-Beacon-Key": SEC_B}, pair_body)
+    check(r.get("status") == "approved"
+          and r.get("machine_key") == mkey2,
+          "re-pair sau duyệt repair → nhận key mới")
+    code, _ = http("POST", base + "/api/beacon",
+                   {"X-Beacon-Key": mkey}, {})
+    check(code == 403, "beacon bằng key cũ sau rotate → 403")
+    mkey = mkey2
 
     snap = {"bridge_up": True,
             "health": {"ok": True, "version": "1.0.2",
@@ -230,6 +282,126 @@ try:
           "/api/license: mọi license invalid → seats=None, "
           "status invalid")
 
+    # ---- regression audit-4 phase-01 ----
+    # detail check chạy TRƯỚC junk beacon — junk sẽ ghi snapshot_json
+    # "{}" đè lên snapshot thật
+    code, r = http("GET", base + "/api/fleet/m-test-1",
+                   {"X-Admin-Key": SEC_A})
+    check(code == 200 and r.get("snapshot", {}).get("bridge_up"),
+          "detail trả snapshot đầy đủ cho trang chi tiết")
+
+    # body top-level sai kiểu → 400 có response (trước: handler crash,
+    # connection rớt)
+    code, _ = http("POST", base + "/api/beacon",
+                   {"X-Beacon-Key": mkey}, [1, 2, 3])
+    check(code == 400, f"beacon body list → 400 (got {code})")
+    code, _ = http("POST", base + "/api/pair-approve",
+                   {"X-Admin-Key": SEC_A}, [1, 2, 3])
+    check(code == 400, f"approve body list → 400 (got {code})")
+
+    # nested sai kiểu → 200, không traceback; snapshot_json "{}" cũng
+    # không được làm /api/fleet phía sau crash
+    code, r = http("POST", base + "/api/beacon",
+                   {"X-Beacon-Key": mkey},
+                   dict(beacon_body, snapshot=[1, 2], counts=[1, 2]))
+    check(code == 200 and r.get("ok"),
+          f"nested non-dict → 200 không crash (got {code})")
+    code, r = http("GET", base + "/api/fleet", {"X-Admin-Key": SEC_A})
+    check(code == 200, "snapshot_json '{}' không làm fleet crash")
+
+    # license org khác → invalid (verify theo org của máy, không tin
+    # lic["org"] máy khai — trước: verify bằng secret ORG2 → "ok")
+    code, r = http("POST", base + "/api/beacon",
+                   {"X-Beacon-Key": mkey},
+                   dict(beacon_body, license=lic_org2, counts={}))
+    check(code == 200, "beacon license org khác vẫn nhận (gentle)")
+    code, r = http("GET", base + "/api/fleet", {"X-Admin-Key": SEC_A})
+    check(r["machines"][0]["license_status"] == "invalid",
+          "license ORG2 trên máy TST → invalid")
+
+    # vendor key tách (audit-4 1.2): telemetry.key chỉ ghi org-ping —
+    # không còn quyền admin inbound; vendor_read_key đọc rollup nhưng
+    # không machine-level, không write
+    code, _ = http("GET", base + "/api/fleet", {"X-Admin-Key": VEND})
+    check(code == 401, f"telemetry.key GET /api/fleet → 401 (got {code})")
+    code, _ = http("POST", base + "/api/packs",
+                   {"X-Admin-Key": VEND},
+                   {"org": "TST", "pack_version": 9})
+    check(code == 401, f"telemetry.key POST pack → 401 (got {code})")
+    code, r = http("POST", base + "/api/org-ping",
+                   {"X-Admin-Key": VEND},
+                   {"org": "TST", "machines_active": 1})
+    check(code == 200 and r.get("ok"),
+          f"telemetry.key POST org-ping → 200 (got {code})")
+    code, r = http("GET", base + "/api/org-pings",
+                   {"X-Admin-Key": VREAD})
+    check(code == 200 and len(r.get("pings") or []) >= 1,
+          f"vendor_read_key đọc org-pings (got {code})")
+    code, r = http("GET", base + "/api/license",
+                   {"X-Admin-Key": VREAD})
+    check(code == 200, f"vendor_read_key GET license → 200 (got {code})")
+    code, _ = http("GET", base + "/api/fleet", {"X-Admin-Key": VREAD})
+    check(code == 403,
+          f"vendor_read_key GET /api/fleet → 403, không machine-level "
+          f"(got {code})")
+    code, _ = http("GET", base + "/api/fleet/m-test-1",
+                   {"X-Admin-Key": VREAD})
+    check(code == 403, f"vendor_read_key GET fleet detail → 403 "
+          f"(got {code})")
+    code, _ = http("POST", base + "/api/packs",
+                   {"X-Admin-Key": VREAD},
+                   {"org": "TST", "pack_version": 9})
+    check(code == 403, f"vendor_read_key POST pack → 403 (got {code})")
+    code, _ = http("POST", base + "/api/pair-approve",
+                   {"X-Admin-Key": VREAD}, {"machine_id": "m-test-1"})
+    check(code == 403, f"vendor_read_key approve → 403 (got {code})")
+
+    # porg traversal (PoC audit): org "../.." trước ghi được JSON ra
+    # ngoài DATA/ — giờ 400 ngay từ validate
+    code, _ = http("POST", base + "/api/packs",
+                   {"X-Admin-Key": SEC_A},
+                   {"org": "../../esc2", "pack_version": 9,
+                    "payload": "x"})
+    check(code == 400
+          and not os.path.exists(os.path.join(tmp, "esc2")),
+          f"porg '../..' → 400, không ghi ngoài DATA (got {code})")
+    code, _ = http("POST", base + "/api/packs",
+                   {"X-Admin-Key": SEC_A},
+                   {"org": "TST", "pack_version": 1, "payload": "x"})
+    check(code == 200 and os.path.isfile(
+            os.path.join(data_dir, "packs", "TST", "1.json")),
+          "pack hợp lệ → ghi packs/TST/1.json")
+    code, _ = http("POST", base + "/api/packs",
+                   {"X-Admin-Key": SEC_A},
+                   {"org": "TST", "pack_version": True})
+    check(code == 400, f"pack_version bool → 400 (got {code})")
+
+    # release upload cần release_key riêng (audit-4 1.5b) — admin_key
+    # org không được đẩy release xuống fleet org khác
+    code, _ = http("POST", base + "/api/releases/foo-x.zip",
+                   {"X-Admin-Key": SEC_A}, {"x": 1})
+    check(code == 401, f"admin_key upload release → 401 (got {code})")
+    code, _ = http("POST", base + "/api/releases/latest.json",
+                   {"X-Admin-Key": RELKEY}, {"x": 1})
+    check(code == 400, f"upload latest.json → 400 (got {code})")
+    code, r = http("POST", base + "/api/releases/foo-1.0.zip",
+                   {"X-Admin-Key": RELKEY}, {"x": 1})
+    check(code == 200 and r.get("sha256"),
+          f"release_key upload zip → 200 (got {code})")
+    code, _ = http("POST", base + "/api/releases",
+                   {"X-Admin-Key": SEC_A},
+                   {"version": "9.9.9", "url": "foo-1.0.zip",
+                    "sha256": "x", "sig": "y"})
+    check(code == 401, f"admin_key POST manifest → 401 (got {code})")
+    code, r2 = http("POST", base + "/api/releases",
+                    {"X-Admin-Key": RELKEY},
+                    {"version": "9.9.9", "url": "foo-1.0.zip",
+                     "sha256": r.get("sha256"), "sig": "fakesig"})
+    check(code == 200 and json.load(open(
+            os.path.join(data_dir, "releases", "latest.json"))
+            )["version"] == "9.9.9",
+          "manifest qua POST /api/releases → latest.json ghi đúng")
+
     code, _ = http("POST", base + "/api/pair-revoke",
                    {"X-Admin-Key": SEC_A}, {"machine_id": "m-test-1"})
     check(code == 200, "revoke → 200")
@@ -237,11 +409,6 @@ try:
                    {"X-Beacon-Key": mkey}, beacon_body)
     check(code == 403 and r.get("status") == "revoked",
           f"beacon sau revoke → 403 revoked (got {code})")
-
-    code, r = http("GET", base + "/api/fleet/m-test-1",
-                   {"X-Admin-Key": SEC_A})
-    check(code == 200 and r.get("snapshot", {}).get("bridge_up"),
-          "detail trả snapshot đầy đủ cho trang chi tiết")
 
     # dashboard tĩnh phục vụ không cần key (data thì khoá)
     try:

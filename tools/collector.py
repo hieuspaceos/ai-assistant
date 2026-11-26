@@ -19,20 +19,35 @@ collector.json (KHÔNG commit — chứa secret):
             "admin_key": "khoá-dashboard"}
   },
   "telemetry": {"url": "https://troly.hieuspace.com/fleet/api/org-ping",
-                "key": "vendor-key"}        # bỏ trống = không ping
-}
+                "key": "vendor-key"},       # bỏ trống = không ping;
+                # inbound chỉ mở POST /api/org-ping, không quyền admin
+  "vendor_read_key": "khoá-đọc-rollup",  # CHỈ đặt trên collector của
+                # vendor — GET rollup org-level (org-pings/license/
+                # packs), không machine-level, không write
+  "release_key": "khoá-đẩy-release",     # ai được POST /api/releases;
+                # không set = upload tắt (chỉ mirror/copy tay)
+  "trust_proxy": true    # CHỈ khi sau nginx/proxy — rate limit theo
+}                        # X-Forwarded-For; bật khi không có proxy =
+                         # client tự forge IP né rate limit
 
-Hai lớp khoá — GIỮ RIÊNG, không trộn:
+Các lớp khoá — GIỮ RIÊNG, không trộn:
   beacon_secret : máy NV trình khi PAIR (chung cả org — chỉ là vé vào
-                  cửa; sau khi duyệt, mỗi máy có machine_key riêng)
+                  cửa; sau khi duyệt, mỗi máy có machine_key riêng;
+                  re-pair máy đã duyệt → flag repair chờ admin, không
+                  trả lại key)
   admin_key     : IT cty đọc dashboard (máy NV không bao giờ có —
                   không đọc được data máy khác)
+  vendor_read_key: vendor đọc rollup org-level (chỉ trên collector
+                  vendor — config khách không có)
+  release_key   : đẩy release xuống fleet (không set = upload tắt)
+  telemetry.key : CHỈ outbound — máy khách ghi org-ping lên vendor,
+                  không quyền gì khác
 
 License check là "đếm và báo" (gentle): sai/hết hạn vẫn lưu snapshot,
 đánh dấu license_status → dashboard flag, máy NV không bị khoá.
 """
 import datetime, hmac, hashlib, http.server, json, os, secrets
-import sqlite3, sys, threading, time, urllib.parse, urllib.request
+import re, sqlite3, sys, threading, time, urllib.parse, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PORT, BIND = 8790, "0.0.0.0"
@@ -73,10 +88,18 @@ ORGS = CFG["orgs"]
 # nhau giữa các org → hành vi không xác định, vendor phải cấp khác nhau)
 ADMIN2ORG = {o["admin_key"]: name for name, o in ORGS.items()
              if o.get("admin_key")}
-# key telemetry (vendor) — đọc được rollup MỌI org (cho meta-dashboard),
-# nhưng chỉ tầng org-level, không machine-level
+# telemetry.key = credential OUTBOUND (ghi org-ping lên vendor) —
+# inbound chỉ mở POST /api/org-ping, KHÔNG có quyền admin. Key này nằm
+# plaintext trong collector.json của mọi khách nên không được làm
+# god-mode. Đọc rollup mọi org cần vendor_read_key riêng — chỉ đặt
+# trên collector của vendor, không bao giờ ship trong config khách.
 TELE = CFG.get("telemetry") or {}
-VENDOR_KEY = TELE.get("key") or ""
+PING_KEY = TELE.get("key") or ""
+VENDOR_READ = CFG.get("vendor_read_key") or ""
+# release_key: ai được đẩy release xuống fleet — release là artifact
+# vendor đã ký, không phải việc của org admin. Không set = upload tắt,
+# release chỉ lên qua mirror_loop hoặc copy tay vào DATA/releases/.
+RELEASE_KEY = CFG.get("release_key") or ""
 
 def _eq(a, b):
     return hmac.compare_digest((a or "").encode("utf-8", "replace"),
@@ -85,7 +108,9 @@ def _eq(a, b):
 # ---------- DB: SQLite + schema_version (migrate tuần tự) ----------
 
 DB_FP = os.path.join(DATA, "fleet.db")
-_db_lock = threading.Lock()
+# RLock (không phải Lock): q() tự acquire lock — bọc read+write ngoài
+# bằng `with _db_lock` (merge counts trong _beacon) cần re-entrant
+_db_lock = threading.RLock()
 
 MIGRATIONS = {
     1: [
@@ -113,6 +138,12 @@ MIGRATIONS = {
              PRIMARY KEY(machine_id, day))""",
         """CREATE TABLE org_pings(
              org TEXT, ts INTEGER, payload TEXT)""",
+    ],
+    2: [
+        # repair flow (audit-4 1.3): re-pair máy approved chỉ set flag,
+        # admin duyệt → key mới vào pending_key, máy nhận ở pair kế
+        "ALTER TABLE machines ADD COLUMN repair INTEGER DEFAULT 0",
+        "ALTER TABLE machines ADD COLUMN pending_key TEXT",
     ],
 }
 
@@ -154,7 +185,12 @@ def license_status(lic, org_name):
     trong: missing / invalid / expired / expiring / ok."""
     if not isinstance(lic, dict):
         return "missing"
-    sec = (ORGS.get(lic.get("org") or org_name) or {}).get("license_secret")
+    if lic.get("org") != org_name:
+        # máy khai org nào thì verify bằng secret org đó — license org B
+        # sẽ "ok" trên máy org A. Ép org theo máy (row), không theo lời
+        # máy khai trong license.
+        return "invalid"
+    sec = (ORGS.get(org_name) or {}).get("license_secret")
     if not sec:
         return "invalid"
     payload = "{}|{}|{}|{}".format(
@@ -174,6 +210,11 @@ def license_status(lic, org_name):
     if (exp - today).days <= 30:
         return "expiring"
     return "ok"
+
+def _as_dict(x):
+    # body JSON hợp lệ nhưng field sai kiểu (snapshot=[1], counts=[1])
+    # vẫn crash handler khi .get/.items — bọc mọi nested dict vào đây
+    return x if isinstance(x, dict) else {}
 
 # ---------- HTTP ----------
 
@@ -230,11 +271,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b)
 
+    def _client_ip(self):
+        # Sau reverse proxy (customer-hosted tier) mọi request cùng IP
+        # proxy → cả fleet chia một bucket rate limit. Chỉ tin XFF khi
+        # config "trust_proxy" bật; bật mà không có proxy = client tự
+        # forge XFF né rate limit (lỗi deploy, không phải lỗi code).
+        if CFG.get("trust_proxy"):
+            xff = self.headers.get("X-Forwarded-For")
+            if xff:
+                return xff.split(",")[0].strip()
+        return self.client_address[0]
+
     def _admin_org(self):
-        """X-Admin-Key → tên org được phép xem; vendor key → "*" (mọi
-        org, nhưng chỉ nên dùng cho endpoint rollup)."""
+        """X-Admin-Key → tên org được phép xem; vendor_read_key → "*"
+        (mọi org, nhưng chỉ rollup — gate ở do_GET/do_POST)."""
         k = self.headers.get("X-Admin-Key") or ""
-        if VENDOR_KEY and _eq(k, VENDOR_KEY):
+        if VENDOR_READ and _eq(k, VENDOR_READ):
             return "*"
         return ADMIN2ORG.get(k) if any(_eq(k, ak) for ak in ADMIN2ORG) \
             else None
@@ -256,10 +308,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._json({"err": "body quá lớn"}, 413)
             return None
         try:
-            return json.loads(self.rfile.read(cl) or b"{}")
+            b = json.loads(self.rfile.read(cl) or b"{}")
         except Exception:
             self._json({"err": "json không hợp lệ"}, 400)
             return None
+        # [1,2,3] hoặc "str" qua được json.loads — b.get() ở handler sẽ
+        # AttributeError → traceback + connection rớt không response
+        if not isinstance(b, dict):
+            self._json({"err": "body phải là json object"}, 400)
+            return None
+        return b
 
     # ----- machine-side endpoints (X-Beacon-Key) -----
 
@@ -282,9 +340,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # đụng vào (re-pair trả key / đổi org đều bị chặn)
             return self._json({"status": "pending"})
         if row and row["approved"] and not row["revoked"]:
-            # re-pair (máy mất machine.key file) → trả lại key đã cấp
-            return self._json({"status": "approved",
-                               "machine_key": row["machine_key"]})
+            if row["pending_key"]:
+                # admin đã duyệt (cấp mới hoặc cấp lại) — key LUÔN đi
+                # qua pending_key, máy chỉ nhận qua pair: phát key và
+                # set machine_key tại đây (rotate nếu key cũ tồn tại —
+                # kẻ cầm key cũ mất quyền ngay)
+                mk = row["pending_key"]
+                q("UPDATE machines SET machine_key=?, repair=0, "
+                  "pending_key=NULL WHERE machine_id=?",
+                  (mk, mid), write=True)
+                return self._json({"status": "approved",
+                                   "machine_key": mk})
+            # re-pair máy approved ĐÃ CÓ key (mất machine.key) → KHÔNG
+            # trả key chỉ vì biết beacon_secret — shared toàn org.
+            # Flag repair → /api/pending hiện cho admin duyệt cấp lại
+            if not row["repair"]:
+                q("UPDATE machines SET repair=1 WHERE machine_id=?",
+                  (mid,), write=True)
+            return self._json({"status": "pending"})
         if row and row["revoked"]:
             return self._json({"status": "revoked"})
         q("""INSERT INTO machines(machine_id,org,hostname,os,approved,
@@ -315,10 +388,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if b is None:
             return
         now = int(time.time())
-        snap = b.get("snapshot") or {}
-        cfg = snap.get("config") or {}
-        brain = ((snap.get("brain") or {}).get("current") or {})
-        health = snap.get("health") or {}
+        snap = _as_dict(b.get("snapshot"))
+        cfg = _as_dict(snap.get("config"))
+        brain = _as_dict(_as_dict(snap.get("brain")).get("current"))
+        health = _as_dict(snap.get("health"))
+        counts = _as_dict(b.get("counts"))
         lic_st = license_status(b.get("license"), row["org"])
         q("""UPDATE machines SET hostname=?, os=?, last_seen=?,
              learner=?, brain=?, version=?, ext_version=?, pack_version=?,
@@ -334,25 +408,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
            json.dumps(snap, ensure_ascii=False),
            json.dumps(b.get("license"), ensure_ascii=False),
            lic_st,
-           json.dumps(b.get("counts") or {}, ensure_ascii=False),
+           json.dumps(counts, ensure_ascii=False),
            row["machine_id"]), write=True)
         # gộp counts vào bucket NGÀY — dashboard hỏi "hôm nay dùng mấy
-        # lượt" mà không cần giữ từng event
-        counts = b.get("counts") or {}
+        # lượt" mà không cần giữ từng event. Read+write trong MỘT lock —
+        # hai beacon cùng máy song song không được mất nhánh cộng
         if counts:
             day = datetime.date.today().isoformat()
-            old = q("SELECT counts FROM usage WHERE machine_id=? AND day=?",
-                    (row["machine_id"], day), one=True)
-            merged = dict(json.loads(old[0])) if old else {}
-            for k, v in counts.items():
-                try:
-                    merged[k] = merged.get(k, 0) + int(v)
-                except (TypeError, ValueError):
-                    pass
-            q("""INSERT INTO usage(machine_id,day,counts) VALUES(?,?,?)
-                 ON CONFLICT(machine_id,day) DO UPDATE SET
-                   counts=excluded.counts""",
-              (row["machine_id"], day, json.dumps(merged)), write=True)
+            with _db_lock:
+                old = q("SELECT counts FROM usage WHERE machine_id=? "
+                        "AND day=?", (row["machine_id"], day), one=True)
+                merged = dict(json.loads(old[0])) if old else {}
+                for k, v in counts.items():
+                    try:
+                        merged[k] = merged.get(k, 0) + int(v)
+                    except (TypeError, ValueError):
+                        pass
+                q("""INSERT INTO usage(machine_id,day,counts) VALUES(?,?,?)
+                     ON CONFLICT(machine_id,day) DO UPDATE SET
+                       counts=excluded.counts""",
+                  (row["machine_id"], day, json.dumps(merged)), write=True)
         # plan 2 cắm vào đây: file releases.json/packs.json trong DATA
         resp = {"ok": True}
         rel = _release_hint(b)
@@ -383,7 +458,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return p
 
     def do_GET(self):
-        if not rate_ok(self.client_address[0], False):
+        if not rate_ok(self._client_ip(), False):
             return self._json({"err": "quá nhiều request"}, 429)
         path = self._path()
         # ----- machine-side download (X-Beacon-Key = machine_key) -----
@@ -443,6 +518,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         org = self._scope()
         if org is None:
             return
+        # "*" (vendor_read_key) = read-rollup-only — KHÔNG machine-level:
+        # /api/fleet, /api/pending, /api/fleet/<mid> chứa hostname,
+        # learner, perms (PII) nên 403; chỉ rollup org-level được qua
+        if org == "*" and path not in ("/api/org-pings", "/api/license",
+                                       "/api/packs"):
+            return self._json(
+                {"err": "vendor key chỉ đọc rollup org-level"}, 403)
         if path == "/api/fleet":
             rows = q("SELECT * FROM machines WHERE approved=1 "
                      "AND revoked=0" + ("" if org == "*"
@@ -469,8 +551,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                "ts": int(time.time())})
         if path == "/api/pending":
             rows = q("SELECT machine_id,org,hostname,os,first_seen,"
-                     "last_seen,license_status FROM machines "
-                     "WHERE approved=0 AND revoked=0"
+                     "last_seen,license_status,repair FROM machines "
+                     "WHERE (approved=0 OR repair=1) AND revoked=0"
                      + ("" if org == "*" else " AND org=?"),
                      () if org == "*" else (org,))
             return self._json({"pending": [dict(r) for r in rows]})
@@ -550,7 +632,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return self._json({"err": "not found"}, 404)
 
     def do_POST(self):
-        if not rate_ok(self.client_address[0], True):
+        if not rate_ok(self._client_ip(), True):
             return self._json({"err": "quá nhiều request"}, 429)
         path = self._path()
         if path == "/api/pair":
@@ -567,49 +649,82 @@ class Handler(http.server.BaseHTTPRequestHandler):
             org = self._scope()
             if org is None:
                 return
+            if org == "*":
+                return self._json(
+                    {"err": "vendor key chỉ đọc, không write"}, 403)
             b = self._body()
             if b is None:
                 return
             mid = str(b.get("machine_id") or "")
             r = q("SELECT org FROM machines WHERE machine_id=?", (mid,),
                   one=True)
-            if not r or (org != "*" and r["org"] != org):
+            if not r or r["org"] != org:
                 return self._json({"err": "not found"}, 404)
             if path.endswith("approve"):
                 mk = secrets.token_hex(24)
+                # key LUÔN vào pending_key — máy nhận qua pair lần kế
+                # (phát ở _pair). Cấp mới lẫn cấp lại đều một đường:
+                # approve response cho admin xem, máy không đọc được —
+                # beacon_secret một mình không lấy được key.
                 q("UPDATE machines SET approved=1, revoked=0, "
-                  "machine_key=? WHERE machine_id=?", (mk, mid),
+                  "pending_key=? WHERE machine_id=?", (mk, mid),
                   write=True)
                 return self._json({"ok": True, "machine_key": mk})
             # GIỮ machine_key: máy bị revoke vẫn tra ra được row → trả
             # status:"revoked" rõ ràng thay vì "key sai" — beacon biết
-            # đường xoá key local và re-pair hiện pending cho admin
-            q("UPDATE machines SET approved=0, revoked=1 "
-              "WHERE machine_id=?", (mid,), write=True)
+            # đường xoá key local và re-pair hiện pending cho admin.
+            # Dọn cờ repair/pending_key cũ — revoke là reset sạch.
+            q("UPDATE machines SET approved=0, revoked=1, repair=0, "
+              "pending_key=NULL WHERE machine_id=?", (mid,),
+              write=True)
             return self._json({"ok": True})
         if path == "/api/org-ping":
             # rollup org-level từ collector khác gửi về vendor — chỉ
             # vendor key mới ghi được, và chỉ lưu payload nguyên trạng
-            if not (VENDOR_KEY and
-                    _eq(self.headers.get("X-Admin-Key"), VENDOR_KEY)):
+            if not (PING_KEY and
+                    _eq(self.headers.get("X-Admin-Key"), PING_KEY)):
                 return self._json({"err": "thiếu hoặc sai key"}, 401)
             b = self._body()
             if b is None:
                 return
+            # cắt thẳng [:8000] có thể phá JSON giữa chừng → /api/org-pings
+            # json.loads crash → mỗi GET dashboard rớt. Telemetry key là
+            # semi-public nên ai cũng đầu độc được — payload quá dài thì
+            # thu về bản tóm tắt hợp lệ thay vì lưu rác
+            payload = json.dumps(b, ensure_ascii=False)
+            if len(payload) > 8000:
+                payload = json.dumps(
+                    {"org": str(b.get("org") or "?")[:80],
+                     "_truncated": True})
             q("INSERT INTO org_pings(org,ts,payload) VALUES(?,?,?)",
               (str(b.get("org") or "?")[:80], int(time.time()),
-               json.dumps(b, ensure_ascii=False)[:8000]), write=True)
+               payload), write=True)
+            # bảng phình vô hạn nếu không prune — ping là rollup gần
+            # nhất, giữ 90 ngày là dư cho LIMIT 500 lúc đọc
+            q("DELETE FROM org_pings WHERE ts<?",
+              (int(time.time()) - 90 * 86400,), write=True)
             return self._json({"ok": True})
         # ----- admin phát hành (X-Admin-Key) -----
         # upload 2 bước: POST /api/releases/<file> (zip raw) rồi POST
         # /api/releases (manifest json trỏ tên file đó) — tránh
         # base64/multipart, zip có thể vài chục MB
         if path.startswith("/api/releases/"):
-            org = self._scope()
-            if org is None:
-                return
+            # release là artifact vendor đã ký ed25519 — upload bằng
+            # release_key RIÊNG, không phải admin_key org (admin org A
+            # không được đẩy release xuống máy org B). Chưa set
+            # release_key → upload tắt, chỉ mirror/copy tay
+            if not (RELEASE_KEY and
+                    _eq(self.headers.get("X-Admin-Key"), RELEASE_KEY)):
+                return self._json(
+                    {"err": "thiếu hoặc sai release_key"}, 401)
             fn = os.path.basename(path[len("/api/releases/"):])
-            if not fn or fn in (".", ".."):
+            # latest.json là manifest do POST /api/releases quản — upload
+            # đè trực tiếp = /api/releases/latest trả rác → fleet update
+            # hỏng. Regex bắt đầu alnum cũng chặn dotfile; giữ ("." ,
+            # "..") tường minh cho chắc.
+            if not fn or fn in (".", "..") or \
+                    fn.lower() == "latest.json" or \
+                    not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", fn):
                 return self._json({"err": "tên file lạ"}, 400)
             try:
                 cl = int(self.headers.get("Content-Length") or 0)
@@ -624,9 +739,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._json({"ok": True, "file": fn,
                                "sha256": hashlib.sha256(data).hexdigest()})
         if path == "/api/releases":
-            org = self._scope()
-            if org is None:
-                return
+            if not (RELEASE_KEY and
+                    _eq(self.headers.get("X-Admin-Key"), RELEASE_KEY)):
+                return self._json(
+                    {"err": "thiếu hoặc sai release_key"}, 401)
             b = self._body()
             if b is None:
                 return
@@ -642,22 +758,29 @@ class Handler(http.server.BaseHTTPRequestHandler):
             man = {"version": str(b["version"]), "url": fn,
                    "sha256": b["sha256"], "sig": b["sig"],
                    "min_ver": str(b.get("min_ver") or "0.0.0")}
-            with open(os.path.join(REL_DIR, "latest.json"), "w") as f:
-                json.dump(man, f, indent=2)
+            _write_rel_manifest(man)
             return self._json({"ok": True})
         if path == "/api/packs":
             org = self._scope()
             if org is None:
                 return
+            if org == "*":
+                return self._json(
+                    {"err": "vendor key chỉ đọc, không write"}, 403)
             b = self._body()
             if b is None:
                 return
             porg = str(b.get("org") or "")
             ver = b.get("pack_version")
-            if not porg or not isinstance(ver, int):
+            # porg phải là org đã khai trong config — "../.." trước đây
+            # đi thẳng vào os.path.join = ghi JSON ra ngoài DATA/, và
+            # porg chứa '/' crash ở latest-{porg}.json (FileNotFoundError
+            # → handler chết, connection rớt)
+            if porg not in ORGS or type(ver) is not int or ver < 0:
                 return self._json(
-                    {"err": "pack cần org + pack_version int"}, 400)
-            if org != "*" and porg != org:
+                    {"err": "pack cần org trong config + "
+                            "pack_version int >= 0"}, 400)
+            if porg != org:
                 return self._json(
                     {"err": "admin_key chỉ đẩy pack org mình"}, 403)
             sub = os.path.join(PACK_DIR, porg)
@@ -690,6 +813,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
 REL_DIR = os.path.join(DATA, "releases")
 PACK_DIR = os.path.join(DATA, "packs")
 REL_CAP = 200_000_000            # zip upload tối đa 200MB
+
+def _write_rel_manifest(man):
+    # tmp + os.replace — máy pull /api/releases/latest giữa chừng ghi
+    # không được thấy half-JSON (json.dump không atomic)
+    tmp = os.path.join(REL_DIR, ".latest.json.tmp")
+    with open(tmp, "w") as f:
+        json.dump(man, f, indent=2)
+    os.replace(tmp, os.path.join(REL_DIR, "latest.json"))
 
 def _ver_tuple(s):
     try:
@@ -773,9 +904,7 @@ def mirror_loop():
                         with open(os.path.join(REL_DIR, fn), "wb") as f:
                             f.write(data)
                         man["url"] = fn
-                        with open(os.path.join(REL_DIR, "latest.json"),
-                                  "w") as f:
-                            json.dump(man, f, indent=2)
+                        _write_rel_manifest(man)
         except Exception:
             pass                            # mirror là phụ — lỗi thôi
         time.sleep(6 * 3600)
@@ -840,6 +969,9 @@ if __name__ == "__main__":
     threading.Thread(target=telemetry_loop, daemon=True).start()
     threading.Thread(target=mirror_loop, daemon=True).start()
     print(f"collector: http://{BIND}:{PORT}  orgs={list(ORGS)}")
-    print(f"  dashboard: http://<ip>:{PORT}/?key=<admin_key>")
+    # không in ?key= vào URL — key rơi vào browser history/proxy log/
+    # Referer; dashboard có tab "Dán key" gửi X-Admin-Key header
+    print(f"  dashboard: http://<ip>:{PORT}/  (mở → tab 'Dán key', "
+          f"nhập admin_key)")
     print(f"  data: {DATA}")
     BoundedServer((BIND, PORT), Handler).serve_forever()
