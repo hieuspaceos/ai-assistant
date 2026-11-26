@@ -63,6 +63,12 @@ const I18N = {
     noExercise: 'Bài này không có bài tập — chỉ cần mở được trợ lý là đạt.',
     wzStep: 'Bước', wzBack: 'Quay lại', wzNext: 'Tiếp', wzDone: 'Xong — xem toàn bộ',
     wzAll: 'Xem hết', wzSteps: 'Xem từng bước', wzIntro: 'Giới thiệu',
+    wtLaunch: '▶ Dùng ngay', wtClose: 'Đóng hướng dẫn',
+    wtSkip: 'Bỏ qua', wtSend: 'Gửi', wtPick: 'Chọn file/folder',
+    wtOpenUrl: 'Mở trang', wtDidIt: 'Mình đã làm xong', wtWaiting: 'Trợ lý đang làm — đợi xíu…',
+    wtAuto: 'Để trợ lý lo luôn', wtReveal: 'Mở trong Finder',
+    wtDownload: 'Tải file', wtOk: 'Đúng rồi', wtNotYet: 'Chưa thấy — nhờ trợ lý',
+    wtCopy: 'Copy', wtCopied: 'Đã copy ✓', wtDone: 'Xong', wtAsked: 'Đã nhờ trợ lý ✓',
     delConfirmTitle: 'Xoá bài "{t}"?',
     delConfirmMsg: 'Toàn bộ nội dung của bài này (hướng dẫn và file kèm theo) sẽ mất hết. Công thức nhanh (như /anh-web) vẫn được giữ lại vì bạn đã học xong.',
     delOk: 'Xoá bài',
@@ -159,6 +165,12 @@ const I18N = {
     noExercise: 'This lesson has no exercise — opening the assistant is enough.',
     wzStep: 'Step', wzBack: 'Back', wzNext: 'Next', wzDone: 'Done — view all',
     wzAll: 'View all', wzSteps: 'Step by step', wzIntro: 'Overview',
+    wtLaunch: '▶ Use it now', wtClose: 'Close walkthrough',
+    wtSkip: 'Skip', wtSend: 'Send', wtPick: 'Pick file/folder',
+    wtOpenUrl: 'Open page', wtDidIt: 'I did it', wtWaiting: 'Assistant is working — hold on…',
+    wtAuto: 'Let the assistant do it', wtReveal: 'Open in Finder',
+    wtDownload: 'Download', wtOk: 'Looks right', wtNotYet: 'Not there — ask the assistant',
+    wtCopy: 'Copy', wtCopied: 'Copied ✓', wtDone: 'Done', wtAsked: 'Assistant asked ✓',
     delConfirmTitle: 'Delete lesson "{t}"?',
     delConfirmMsg: 'All of this lesson\u2019s content (guide and any bundled files) will be gone for good. Quick recipes (like /web-images) stay because you already learned them.',
     delOk: 'Delete',
@@ -390,6 +402,7 @@ function loadLesson(lesson) {
     : emptyMsg(t('slideCreating')));
   loadMdInto('guide', base + 'guide.md');
   if (lesson.has_exercise !== false) loadMdInto('exercise', base + 'exercise.md');
+  loadWalkthrough(base);
 
   const gv = $('#guide-video');
   if (lesson.has_video) {
@@ -486,6 +499,283 @@ function buildGuideWizard(md, render) {
 
 function setPaneHtml(pane, html) {
   $(pane === 'guide' ? '#guide-md' : '#pane-' + pane).innerHTML = html;
+}
+
+/* ============ WALKTHROUGH — hướng dẫn tương tác từng-bước ============
+   walkthrough.json trong folder bài → nút "▶ Dùng ngay" trong pane guide.
+   Runner là renderer câm: mỗi step.kind một widget, vars nối data giữa
+   các bước, cond/optional/then_probe điều khiển flow. */
+
+let currentWT = null;   // {data, base} của bài đang mở
+let wt = null;          // trạng thái runner đang chạy
+
+async function loadWalkthrough(base) {
+  currentWT = null;
+  try {
+    const r = await bfetch(base + 'walkthrough.json?_=' + Date.now());
+    if (r.ok) currentWT = { data: await r.json(), base };
+  } catch { /* không có file → không nút */ }
+  const btn = $('#wt-launch');
+  if (btn) { btn.hidden = !currentWT; btn.textContent = t('wtLaunch'); btn.onclick = () => wtStart(); }
+}
+
+function wtStart() {
+  if (!currentWT || wt) return;
+  const saved = JSON.parse(localStorage.getItem(wtSaveKey()) || '0');
+  wt = { data: currentWT.data, base: currentWT.base, vars: {},
+         i: saved || 0, timer: null, onDocClick: null };
+  const ov = document.createElement('div');
+  ov.id = 'wt-overlay';
+  ov.innerHTML = '<div class="wt-dim"></div><div class="wt-spot" hidden></div>' +
+                 '<div class="wt-card"></div>';
+  document.body.appendChild(ov);
+  wtDraw();
+}
+
+function wtSaveKey() { return 'wt_progress_' + (currentLesson ? currentLesson.folder : 'x'); }
+
+function wtStop() {
+  if (!wt) return;
+  if (wt.timer) clearInterval(wt.timer);
+  if (wt.onDocClick) document.removeEventListener('click', wt.onDocClick, true);
+  const ov = $('#wt-overlay');
+  if (ov) ov.remove();
+  localStorage.removeItem(wtSaveKey());
+  wt = null;
+}
+
+function wtSubst(s) {
+  return String(s == null ? '' : s).replace(/\{\{(\w+)\}\}/g,
+    (m, k) => wt.vars[k] != null ? wt.vars[k] : m);
+}
+
+/* cond: {conn:'zalo'} | {var:'x',equals:'v'} | {path:'~/...'} → true = hiện */
+async function wtCondOk(s) {
+  const c = s.cond;
+  if (!c) return true;
+  try {
+    if (c.conn) {
+      const r = await (await bfetch(BRIDGE_URL + '/api/check-connection', {
+        method: 'POST', body: JSON.stringify({ id: c.conn })
+      })).json();
+      return !!r.ok;
+    }
+    if (c.var) return String(wt.vars[c.var]) === String(c.equals);
+    if (c.path) {
+      const r = await (await bfetch(BRIDGE_URL + '/api/check-path', {
+        method: 'POST', body: JSON.stringify({ path: wtSubst(c.path) })
+      })).json();
+      return !!r.ok;
+    }
+  } catch { /* probe lỗi → cứ hiện bước */ }
+  return true;
+}
+
+/* tìm step hiện kế tiếp (bỏ qua step có cond sai), hướng +1/-1 */
+async function wtNextIdx(from, dir) {
+  let i = from;
+  while (i >= 0 && i < wt.data.steps.length) {
+    if (await wtCondOk(wt.data.steps[i])) return i;
+    i += dir;
+  }
+  return i < 0 ? 0 : wt.data.steps.length - 1;
+}
+
+async function wtGo(delta) {
+  localStorage.setItem(wtSaveKey(), String(wt.i));
+  wt.i = await wtNextIdx(wt.i + delta, delta >= 0 ? 1 : -1);
+  wtDraw();
+}
+
+function wtPoll(until) {   // until: 'event' | 'done' | {conn:id}
+  if (wt.timer) clearInterval(wt.timer);
+  let after = null, tries = 0;
+  wt.timer = setInterval(async () => {
+    if (!wt) return;
+    try {
+      if (until.conn) {
+        const r = await (await bfetch(BRIDGE_URL + '/api/check-connection', {
+          method: 'POST', body: JSON.stringify({ id: until.conn })
+        })).json();
+        if (r.ok) { clearInterval(wt.timer); wt.timer = null; wtGo(1); }
+      } else {
+        if (after == null) {
+          const d0 = await (await bfetch(BRIDGE_URL + '/api/poll?since=0')).json();
+          after = d0.next || 0;
+          return;
+        }
+        const d = await (await bfetch(BRIDGE_URL + '/api/poll?since=' + after)).json();
+        after = (d.next != null) ? d.next : after;
+        const hit = (d.events || []).some(ev =>
+          until === 'done' ? (ev.t === 'done' || ev.t === 'err')
+                           : (ev.t !== 'perm'));
+        if (hit) { clearInterval(wt.timer); wt.timer = null; wtGo(1); }
+      }
+      if (++tries > 300) { clearInterval(wt.timer); wt.timer = null; }
+    } catch { /* vòng sau thử tiếp */ }
+  }, 2000);
+}
+
+function wtSpot(target) {
+  const spot = $('#wt-overlay .wt-spot');
+  const el = target && document.querySelector(target);
+  if (!el) { spot.hidden = true; return; }
+  const r = el.getBoundingClientRect();
+  spot.hidden = false;
+  spot.style.cssText = `left:${r.left - 6}px;top:${r.top - 6}px;` +
+    `width:${r.width + 12}px;height:${r.height + 12}px;`;
+}
+
+async function wtPostPrompt(text) {
+  await bfetch(BRIDGE_URL + '/api/prompt', {
+    method: 'POST', body: JSON.stringify({ text }) });
+}
+
+async function wtDraw() {
+  if (!wt) return;
+  if (wt.timer) { clearInterval(wt.timer); wt.timer = null; }
+  if (wt.onDocClick) { document.removeEventListener('click', wt.onDocClick, true); wt.onDocClick = null; }
+
+  const steps = wt.data.steps;
+  const s = steps[wt.i];
+  const card = $('#wt-overlay .wt-card');
+  const N = steps.length;
+  const sub = x => wtSubst(x);
+  const md = x => (window.marked && window.DOMPurify)
+    ? DOMPurify.sanitize(marked.parse(sub(x))) : escapeHtml(sub(x)).replace(/\n/g, '<br>');
+
+  /* spotlight (hoặc dim thường) */
+  if (s.kind === 'spotlight' && s.target) wtSpot(s.target);
+  else wtSpot(null);
+
+  /* media kèm step */
+  let media = '';
+  const m = s.media;
+  if (m && m.src) {
+    const src = wt.base + m.src;
+    if (m.type === 'video') media = `<video controls class="wt-media" src="${escapeHtml(src)}"></video>`;
+    else if (m.type === 'file') media = `<a class="wt-chip" href="${escapeHtml(src)}" target="_blank" download>📎 ${escapeHtml(m.src)}</a>`;
+    else media = `<img class="wt-media" src="${escapeHtml(src)}" alt="">`;
+  }
+
+  /* widget theo kind */
+  let w = '', nav = '';
+  const next = `<button class="wt-btn wt-primary" data-a="next">${escapeHtml(t('wzNext'))} →</button>`;
+  const back = wt.i > 0 ? `<button class="wt-btn" data-a="back">← ${escapeHtml(t('wzBack'))}</button>` : '<span></span>';
+  const skip = s.optional ? `<button class="wt-link" data-a="next">${escapeHtml(t('wtSkip'))}</button>` : '';
+
+  switch (s.kind) {
+    case 'prompt':
+      w = `<input class="wt-input" id="wt-in" value="${escapeHtml(sub(s.prefill))}"` +
+          ` placeholder="${escapeHtml(sub(s.placeholder))}">` +
+          `<button class="wt-btn wt-primary" data-a="send">${escapeHtml(t('wtSend'))} →</button>`;
+      nav = back + '<span class="wt-nav-r">' + skip + '</span>'; break;
+    case 'input': case 'pick-file':
+      w = `<input class="wt-input" id="wt-in" placeholder="${escapeHtml(sub(s.placeholder))}">` +
+          (s.kind === 'pick-file' ? `<button class="wt-btn" data-a="pick">${escapeHtml(t('wtPick'))}…</button>` : '') +
+          `<button class="wt-btn wt-primary" data-a="save">${escapeHtml(t('wzNext'))} →</button>`;
+      nav = back + '<span class="wt-nav-r">' + skip + '</span>'; break;
+    case 'choice':
+      w = (s.options || []).map(o =>
+        `<button class="wt-btn wt-opt" data-a="choice" data-v="${escapeHtml(o)}">${escapeHtml(o)}</button>`).join('');
+      nav = back + '<span class="wt-nav-r">' + skip + '</span>'; break;
+    case 'open-url':
+      w = `<button class="wt-btn wt-primary" data-a="openurl">${escapeHtml(t('wtOpenUrl'))} ↗</button>`;
+      nav = back + `<span class="wt-nav-r">${skip}<button class="wt-btn wt-primary" data-a="next">${s.then_probe ? escapeHtml(t('wtDidIt')) : escapeHtml(t('wzNext'))} →</button></span>`; break;
+    case 'wait-perm': case 'wait-run':
+      w = `<div class="wt-waiting">⏳ ${escapeHtml(t('wtWaiting'))}</div>`;
+      nav = back + '<span class="wt-nav-r"><button class="wt-link" data-a="next">' + escapeHtml(t('wzNext')) + ' →</button></span>'; break;
+    case 'auto':
+      w = `<button class="wt-btn wt-primary" data-a="auto">${escapeHtml(t('wtAuto'))} →</button>`;
+      nav = back + '<span></span>'; break;
+    case 'open':
+      w = `<code class="wt-chip">${escapeHtml(sub(s.path))}</code>` +
+          `<button class="wt-btn" data-a="reveal">${escapeHtml(t('wtReveal'))}</button>`;
+      nav = back + `<span class="wt-nav-r">${skip}${next}</span>`; break;
+    case 'watch': case 'download':
+      if (s.kind === 'download' && m && m.src)
+        w = `<a class="wt-btn wt-primary" href="${escapeHtml(wt.base + m.src)}" download>${escapeHtml(t('wtDownload'))} 📎</a>`;
+      nav = back + `<span class="wt-nav-r">${skip}${next}</span>`; break;
+    case 'check':
+      w = (s.expect ? `<div class="wt-expect">✅ ${escapeHtml(sub(s.expect))}</div>` : '') +
+          `<button class="wt-btn wt-primary" data-a="next">${escapeHtml(t('wtOk'))} →</button>` +
+          `<button class="wt-btn" data-a="help">${escapeHtml(t('wtNotYet'))}</button>`;
+      nav = back + '<span></span>'; break;
+    case 'copy':
+      w = `<code class="wt-chip">${escapeHtml(sub(s.text))}</code>` +
+          `<button class="wt-btn" data-a="copy">${escapeHtml(t('wtCopy'))}</button>`;
+      nav = back + `<span class="wt-nav-r">${skip}${next}</span>`; break;
+    case 'done':
+      nav = `<span></span><button class="wt-btn wt-primary" data-a="close">${escapeHtml(t('wtDone'))} ✓</button>`; break;
+    default: /* say */
+      nav = back + `<span class="wt-nav-r">${skip}${next}</span>`;
+  }
+
+  card.innerHTML =
+    `<div class="wt-head"><span class="wt-prog">${escapeHtml(t('wzStep'))} ${wt.i + 1}/${N}</span>` +
+    `<button class="wt-x" data-a="close" title="${escapeHtml(t('wtClose'))}">✕</button></div>` +
+    `<h3 class="wt-title">${escapeHtml(sub(s.title))}</h3>` +
+    `<div class="wt-body md">${md(s.body)}${media}</div>` +
+    (w ? `<div class="wt-widget">${w}</div>` : '') +
+    `<div class="wt-nav">${nav}</div>`;
+
+  /* hành vi nút */
+  card.querySelectorAll('[data-a]').forEach(b => b.onclick = async () => {
+    const a = b.dataset.a;
+    if (a === 'close') return wtStop();
+    if (a === 'back') return wtGo(-1);
+    if (a === 'next') return wtGo(1);
+    if (a === 'send') {
+      const v = ($('#wt-in') || {}).value; if (!v || !v.trim()) return;
+      b.disabled = true; await wtPostPrompt(v.trim()).catch(() => {});
+      return wtGo(1);
+    }
+    if (a === 'save') {
+      const v = ($('#wt-in') || {}).value || '';
+      if (s.var) wt.vars[s.var] = v.trim();
+      return wtGo(1);
+    }
+    if (a === 'pick') {
+      const r = await (await bfetch(BRIDGE_URL + '/api/pick-folder',
+        { method: 'POST', body: '{}' })).json().catch(() => ({}));
+      if (r.path) { $('#wt-in').value = r.path; if (s.var) wt.vars[s.var] = r.path; }
+      return;
+    }
+    if (a === 'choice') { if (s.var) wt.vars[s.var] = b.dataset.v; return wtGo(1); }
+    if (a === 'openurl') { window.open(sub(s.url), '_blank'); if (s.then_probe && s.then_probe.app) wtPoll({ conn: s.then_probe.app }); return; }
+    if (a === 'auto') {
+      b.disabled = true; b.textContent = '⏳ ' + t('wtWaiting');
+      await wtPostPrompt(sub(s.send)).catch(() => {});
+      wtPoll('done'); return;
+    }
+    if (a === 'reveal') {
+      await bfetch(BRIDGE_URL + '/api/reveal', {
+        method: 'POST', body: JSON.stringify({ path: sub(s.path) }) }).catch(() => {});
+      return;
+    }
+    if (a === 'copy') {
+      try { await navigator.clipboard.writeText(sub(s.text)); b.textContent = t('wtCopied'); } catch {}
+      return;
+    }
+    if (a === 'help') {
+      await wtPostPrompt('mình đang làm theo hướng dẫn từng bước nhưng kẹt ở bước "' + sub(s.title) + '" — ' + sub(s.expect || s.body)).catch(() => {});
+      b.textContent = t('wtAsked'); return;
+    }
+  });
+
+  /* wait kinds tự qua */
+  if (s.kind === 'wait-run') wtPoll('done');
+  if (s.kind === 'wait-perm') wtPoll('event');
+  if (s.kind === 'open-url' && s.then_probe && s.then_probe.app) wtPoll({ conn: s.then_probe.app });
+
+  /* spotlight click_target: bấm thật vào chỗ sáng là qua bước */
+  if (s.kind === 'spotlight' && s.target && s.click_target) {
+    wt.onDocClick = e => {
+      const el = e.target.closest(s.target);
+      if (el) { e.preventDefault(); e.stopPropagation(); el.click(); wtGo(1); }
+    };
+    document.addEventListener('click', wt.onDocClick, true);
+  }
 }
 // sandbox="allow-scripts" (KHÔNG allow-same-origin): slide thành opaque
 // origin — script chạy nhưng tự nó cũng không đọc được localStorage/token

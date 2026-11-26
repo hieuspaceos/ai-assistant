@@ -1,0 +1,86 @@
+{
+  "_comment": "TEMPLATE WALKTHROUGH — agent điền khi sinh bài mới. Màn hướng dẫn từng-bước TƯƠNG TÁC trong portal: modal nhỏ + spotlight chỉ đúng chỗ cần bấm, nhiều bước LÀM ĐƯỢC LUÔN trong modal. Song song với guide.md (bản đọc). Quy tắc: mỗi step = MỘT hành động; body lời thường ELI10; cấm 'đơn giản/chỉ cần/hiển nhiên/dễ'. Chạy tools/test-walkthrough.py để kiểm file trước khi xong.",
+
+  "_kinds": {
+    "say":        "Chỉ đọc + nút Tiếp. Intro, giải thích, VÀ mọi việc tay ngoài portal (kéo file gửi Zalo, export trong app...) — kind phủ địa hết.",
+    "prompt":     "Ô nhập thật → bấm Gửi là tin vào chat như gõ tay. prefill = chữ điền sẵn chạy được, có thể chứa {{bien}} từ input/pick-file/choice trước.",
+    "input":      "Ô nhập thu thập thông tin của học viên (tên shop, link, số) → lưu biến `var`.",
+    "choice":     "Dãy nút chọn 1 (options: [\"a\",\"b\"]) → lưu biến `var`. VD chọn tỉnh, chọn định dạng file.",
+    "pick-file":  "Nút mở hộp chọn file/folder native (bridge /api/pick-folder) → path lưu biến `var`.",
+    "open-url":   "Nút mở app/web trên trình duyệt thật qua extension. Bước chuẩn bị: đăng nhập app, mở Canva export...",
+    "wait-perm":  "Chờ học viên bấm Đồng ý trên hộp thoại xin phép — tự qua bước khi run tiếp.",
+    "wait-run":   "Chờ trợ lý làm xong lượt vừa gửi (poll đợi done) — tự qua bước, có text 'đang làm'.",
+    "auto":       "Trợ lý TỰ làm — nút 'để mình lo': tự POST prompt `send` (có thể chứa {{bien}}) rồi chờ done, user chỉ xem.",
+    "spotlight":  "Màn hình tối, sáng đúng element portal (target = CSS selector). click_target=true → bấm vào chỗ sáng là qua bước.",
+    "open":       "Mở file/folder kết quả — `path` hiện code chip + nút 'Mở trong Finder' (bridge /api/reveal).",
+    "watch":      "Xem media minh hoạ trong step — `media`: {type:'video'|'image', src}. Clip ngắn do video-builder quay khi cần.",
+    "download":   "Nút tải/mở file đính kèm — `media`: {type:'file', src}. File mẫu để luyện, hoặc file trợ lý vừa tạo.",
+    "check":      "Bước 'thấy gì là đúng' — `expect` mô tả kết quả kỳ vọng + 2 nút [Đúng →]/[Chưa thấy → tự gửi hỏi trợ lý]. Đặt sau mỗi bước quan trọng.",
+    "copy":       "Nút copy `text` (có thể chứa {{bien}}) vào clipboard để dán chỗ khác — ô web ngoài, Zalo compose...",
+    "done":       "Màn chúc mừng cuối + nút đóng."
+  },
+  "_flow": {
+    "cond":       "Step có `cond` bị BỎ QUA khi điều kiện sai — dạng: {conn:'zalo'} (đã nối app), {var:'x','equals':'v'} (biến khớp), {path:'~/...'} (path tồn tại). VD: bước đăng nhập Zalo có {conn:'zalo'} → ai đã nối rồi thì khỏi thấy.",
+    "optional":   "optional:true → hiện nút 'Bỏ qua' phụ cho bước không bắt buộc.",
+    "then_probe": "Trên open-url: {app:'zalo'} → step tự qua khi app báo đã nối (user login xong không cần bấm).",
+    "media":      "Mọi step kèm `media`: {type:'image'|'video'|'file'|'audio', src}. Ảnh/bảng/link cứ viết trong body markdown."
+  },
+  "_patterns": "Trợ lý HAY HỎI LẼ giữa một run (xác nhận 'làm luôn không?', hỏi nghĩa dữ liệu, xin quyền) — không đoán trướ được bao nhiêu lượt. Sau MỖI bước prompt/wait-run, luôn xếp một prompt optional 'Trả lời trợ lý' (placeholder 'trả lời câu hỏi của trợ lý…', body nhắc: hỏi gì thì gõ, không thì Bỏ qua) rồi một wait-run — vòng lặp thủ công này gánh mọi lượt hỏi lẻ mà runner không cần thông minh.",
+
+  "title": "{{tên công cụ — VD: Tách khách theo tỉnh}}",
+  "steps": [
+    {
+      "kind": "say",
+      "title": "Giới thiệu",
+      "body": "{{tool_name}} {{làm gì bằng phép so sánh đời thường}}. Bài này mình làm thật luôn — theo từng bước với mình nhé."
+    },
+    {
+      "kind": "open-url",
+      "title": "Bước chuẩn bị — {{nếu task cần app/file sẵn}}",
+      "body": "{{VD: Mở Zalo Web và đăng nhập sẵn nhé / Mở Canva export ảnh về Downloads}}.",
+      "url": "https://{{url_app}}"
+    },
+    {
+      "kind": "input",
+      "title": "Bước — {{thu thập dữ liệu riêng}}",
+      "body": "{{hỏi thông tin cụ thể của học viên}}.",
+      "var": "bien",
+      "placeholder": "{{gợi ý nhập}}"
+    },
+    {
+      "kind": "pick-file",
+      "title": "Bước — {{chỉ file nguồn}}",
+      "body": "{{file nào, thường nằm ở đâu}}.",
+      "var": "file",
+      "placeholder": "~/Downloads/{{goi_y}}"
+    },
+    {
+      "kind": "prompt",
+      "title": "Bước — Gõ lệnh",
+      "body": "Gõ lệnh vào ô dưới rồi bấm Gửi.",
+      "prefill": "/{{command}} {{bien}} {{file}}"
+    },
+    {
+      "kind": "wait-perm",
+      "title": "Bước — Duyệt quyền",
+      "body": "Hộp thoại hiện lên xin {{quyen_gi}} — đọc xem nó định làm gì rồi bấm **Đồng ý**."
+    },
+    {
+      "kind": "prompt",
+      "title": "Bước — Gật đầu đồng ý",
+      "body": "Trợ lý báo {{thong_tin_gi}} và hỏi làm không — gõ đồng ý rồi Gửi.",
+      "prefill": "đồng ý"
+    },
+    {
+      "kind": "open",
+      "title": "Bước — Mở kết quả",
+      "body": "Mở folder này để xem file kết quả:",
+      "path": "~/Downloads/{{folder_ket_qua}}"
+    },
+    {
+      "kind": "done",
+      "title": "Xong!",
+      "body": "Từ giờ mỗi lần {{tinh_huong}} bạn chỉ cần gõ `/{{command}}` là xong. Quên bước nào thì mở lại mục này."
+    }
+  ]
+}

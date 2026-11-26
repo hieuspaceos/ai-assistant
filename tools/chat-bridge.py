@@ -1533,6 +1533,7 @@ class Handler(BaseHTTPRequestHandler):
         "/api/emit-event":    "_h_emit_event",
         "/api/install-brain": "_h_install_brain",
         "/api/pick-folder":   "_h_pick_folder",
+        "/api/reveal":        "_h_reveal",
     }
 
     def do_GET(self):
@@ -1691,6 +1692,26 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": False, "err": "không mở được hộp chọn"})
         finally:
             _pick_folder_lock.release()
+
+    def _h_reveal(self, data):
+        """Nút 'Mở trong Finder' của walkthrough — `open <path>` để học
+        viên thấy folder kết quả thay vì phải tự lần path. Cùng chống-
+        oracle của check-path: chỉ dưới ~, không đụng .devin, không
+        vùng nhạy (deny-list)."""
+        if sys.platform != "darwin":
+            return self._json({"ok": False, "err": "không hỗ trợ"})
+        p = os.path.abspath(os.path.expanduser(str(data.get("path") or "")))
+        home = os.path.abspath(os.path.expanduser("~"))
+        dev = os.path.join(os.path.abspath(CWD), ".devin")
+        if not (p.startswith(home + os.sep)
+                and not (p == dev or p.startswith(dev + os.sep))
+                and not path_sensitive(p)):
+            return self._json({"ok": False, "err": "path này không mở được"})
+        if not os.path.exists(p):
+            return self._json({"ok": False, "err": "chưa thấy path này"})
+        subprocess.Popen(["open", p],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self._json({"ok": True})
 
     def _g_count_glob(self):
         # verify engine của workflow hỏi "folder này có bao nhiêu file
