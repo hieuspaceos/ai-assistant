@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
 <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
-<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="style.css?v=11">
 <link rel="stylesheet" href="story.css?v=8">
 </head>
 <body>
@@ -214,6 +214,8 @@
       <button type="button" class="switcher-tab" role="tab" aria-selected="true" data-panel="cty1">Màn hình quản lý</button>
       <button type="button" class="switcher-tab" role="tab" aria-selected="false" data-panel="cty2">Máy của nhân viên</button>
       <button type="button" class="switcher-tab" role="tab" aria-selected="false" data-panel="cty3">Gói quy trình công ty</button>
+      <button type="button" class="switcher-tab" role="tab" aria-selected="false" data-panel="cty4">Người mới vào việc</button>
+      <button type="button" class="switcher-tab" role="tab" aria-selected="false" data-panel="cty5">Người nghỉ việc</button>
     </div>
     <div id="cty1" role="tabpanel">
       <div class="story__frame">
@@ -278,7 +280,46 @@
         </div>
       </div>
     </div>
-    <dl class="plugs plugs--3">
+    <div id="cty4" role="tabpanel">
+      <div class="story__frame">
+        <div class="story__chrome"><span>máy của Trâm — ngày đầu đi làm</span><i class="w-min"></i><i class="w-max"></i><i class="w-close"></i></div>
+        <div class="emp">
+          <p class="emp__hi">Chào Trâm! Công ty đã cài sẵn cho bạn:</p>
+          <ul class="emp__list">
+            <li><i class="eok">✓</i>/dang-bai — đăng blog đúng mẫu công ty</li>
+            <li><i class="eok">✓</i>/seo-meta — meta chuẩn SEO công ty</li>
+            <li><i class="eok">✓</i>Mẫu báo giá · mẫu trả lời khách</li>
+            <li><i class="eok">✓</i>Luật: chưa duyệt — không đăng, không gửi</li>
+          </ul>
+          <div class="ask">
+            <p>Thử việc đầu tiên: "đọc hộ Zalo nhóm khách hàng"</p>
+            <div class="ask__btns"><span class="abtn abtn--yes">Chạy thử</span></div>
+          </div>
+          <p class="emp__note">Không cần ai kèm từng đầu việc — cách làm của công ty có sẵn trong máy.</p>
+        </div>
+      </div>
+    </div>
+    <div id="cty5" role="tabpanel">
+      <div class="story__frame">
+        <div class="story__chrome"><span>màn hình quản lý — Tuấn nghỉ việc</span><i class="w-min"></i><i class="w-max"></i><i class="w-close"></i></div>
+        <div class="fleet">
+          <ul class="fleet__rows">
+            <li class="is-off"><i class="fdot fdot--off"></i><span class="fwho"><b>PC-SALE-02</b> Tuấn — nghỉ 15/11</span><span class="ftag ftag--off">đã thu hồi quyền</span></li>
+          </ul>
+          <div class="keep">
+            <p class="keep__title">12 công thức Tuấn để lại — vẫn trong hệ thống:</p>
+            <ul class="keep__tags">
+              <li>/doc-zalo</li><li>/bao-gia</li><li>/chot-don</li><li>/bao-cao-tuan</li><li>+8 khác</li>
+            </ul>
+          </div>
+          <ul class="fleet__rows">
+            <li><i class="fdot"></i><span class="fwho"><b>PC-SALE-03</b> Phương — vào thay</span><span class="ftag">nhận đủ 12 công thức</span></li>
+          </ul>
+          <p class="fleet__note">Quy trình nằm trên hệ thống công ty — người thay thế dùng tiếp ngay, không mất know-how.</p>
+        </div>
+      </div>
+    </div>
+    <dl class="plugs">
       <div class="plug">
         <dt><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="11" cy="9" r="4"/><path d="M4 22c0-4 3-7 7-7s7 3 7 7"/><path d="M20 8v6M23 11h-6"/></svg>Mỗi người thêm một tay phụ</dt>
         <dd>Việc lặp lại của từng nhân viên tự chạy trên máy họ — người chỉ duyệt kết quả. Đội 20 người như có thêm 20 tay phụ</dd>
@@ -290,14 +331,6 @@
       <div class="plug">
         <dt><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="4" width="22" height="15" rx="2"/><path d="M10 23h8"/><path d="M7 12h6M7 15h9"/></svg>Một màn hình — thấy cả đội</dt>
         <dd>Máy nào đang dùng, bản nào, có lỗi không — chỉ con số tổng quan, không đọc chat của nhân viên</dd>
-      </div>
-      <div class="plug">
-        <dt><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="14" cy="9" r="4"/><path d="M6 22c0-4 3.5-7 8-7s8 3 8 7"/></svg>Người mới vào việc ngay</dt>
-        <dd>Trợ lý đã có sẵn cách làm của công ty — không cần ai kèm từng đầu việc</dd>
-      </div>
-      <div class="plug">
-        <dt><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="4" y="6" width="20" height="16" rx="2"/><path d="M4 10h20"/><path d="M11 14h6"/></svg>Người nghỉ — quy trình ở lại</dt>
-        <dd>Công thức làm việc nằm trên máy và hệ thống công ty, không đi theo cá nhân</dd>
       </div>
       <div class="plug">
         <dt><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="14" cy="14" r="10"/><path d="M9.5 14.5l3 3 6-7"/></svg>Không lo AI làm bậy</dt>
