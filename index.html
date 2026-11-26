@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
 <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=8">
 <link rel="stylesheet" href="story.css?v=8">
 </head>
 <body>
@@ -203,12 +203,81 @@
 
 
   <!-- for companies -->
-  <section class="section container" id="cho-cty">
+  <section class="section ctyband" id="cho-cty">
+   <div class="container">
     <div class="headblock">
       <h2>Một trợ lý cho mỗi nhân viên — một màn hình cho người quản lý</h2>
       <p class="lead">Mỗi người tiết kiệm ~45 phút mỗi ngày — đội 20 người là
         ~15 giờ, tương đương thêm hai nhân sự. Và mọi người làm theo cùng một
         quy trình chuẩn của công ty.</p>
+    </div>
+    <div class="switcher-tabs" role="tablist" aria-label="Xem từ góc nào">
+      <button type="button" class="switcher-tab" role="tab" aria-selected="true" data-panel="cty1">Màn hình quản lý</button>
+      <button type="button" class="switcher-tab" role="tab" aria-selected="false" data-panel="cty2">Máy của nhân viên</button>
+      <button type="button" class="switcher-tab" role="tab" aria-selected="false" data-panel="cty3">Gói quy trình công ty</button>
+    </div>
+    <div id="cty1" role="tabpanel">
+      <div class="story__frame">
+        <div class="story__chrome"><span>màn hình quản lý — công ty An Pha</span><i class="w-min"></i><i class="w-max"></i><i class="w-close"></i></div>
+        <div class="fleet">
+          <div class="fleet__stats">
+            <div class="fstat"><b>12/15</b><span>máy đang online</span></div>
+            <div class="fstat"><b>15</b><span>máy trong đội</span></div>
+            <div class="fstat"><b>0</b><span>máy chờ duyệt</span></div>
+            <div class="fstat"><b>1</b><span>lỗi hôm nay</span></div>
+          </div>
+          <ul class="fleet__rows">
+            <li><i class="fdot"></i><span class="fwho"><b>PC-MKT-01</b> Ngọc — marketing</span><span class="fapps">Zalo · Sheets · Canva</span><span class="fnum">14 việc xong</span><span class="ftag">đang dùng</span></li>
+            <li><i class="fdot"></i><span class="fwho"><b>PC-MKT-02</b> Huy — marketing</span><span class="fapps">Zalo · WordPress</span><span class="fnum">9 việc xong</span><span class="ftag">đang dùng</span></li>
+            <li><i class="fdot"></i><span class="fwho"><b>PC-SALE-01</b> Linh — sale</span><span class="fapps">Zalo · Excel</span><span class="fnum">21 việc xong</span><span class="ftag">đang dùng</span></li>
+            <li><i class="fdot"></i><span class="fwho"><b>PC-SALE-02</b> Tuấn — sale</span><span class="fapps">Zalo · Excel</span><span class="fnum">11 việc xong</span><span class="ftag ftag--err">1 lỗi</span></li>
+            <li><i class="fdot"></i><span class="fwho"><b>PC-KT-01</b> Thảo — kế toán</span><span class="fapps">Excel · Word</span><span class="fnum">8 việc xong</span><span class="ftag">đang dùng</span></li>
+            <li class="is-off"><i class="fdot fdot--off"></i><span class="fwho"><b>LAP-HR</b> Mai — nhân sự</span><span class="fapps">Zalo</span><span class="fnum">2 giờ trước</span><span class="ftag ftag--off">ngoại tuyến</span></li>
+          </ul>
+          <p class="fleet__note">Chỉ thấy con số và trạng thái — không đọc chat, không xem file của nhân viên.</p>
+        </div>
+      </div>
+    </div>
+    <div id="cty2" role="tabpanel">
+      <div class="story__frame">
+        <div class="story__chrome"><span>máy của Ngọc — marketing</span><i class="w-min"></i><i class="w-max"></i><i class="w-close"></i></div>
+        <div class="emp">
+          <p class="emp__hi">Chào Ngọc — sáng nay trợ lý đã làm:</p>
+          <ul class="emp__list">
+            <li><i class="eok">✓</i>Đọc hộ 9 tin Zalo — 2 khách đang chờ báo giá</li>
+            <li><i class="eok">✓</i>Cập nhật sheet theo dõi chiến dịch tháng này</li>
+            <li><i class="eok">✓</i>Soạn nháp bài blog theo brief tuần</li>
+          </ul>
+          <div class="ask">
+            <p>Đăng "Top 5 mẫu poster Tết" lên blog công ty?</p>
+            <div class="ask__btns"><span class="abtn abtn--yes">Đăng bài</span><span class="abtn">Xem nháp trước</span></div>
+          </div>
+          <p class="emp__note">Việc gửi đi — đăng bài, nhắn khách, xoá file — luôn chờ người bấm duyệt.</p>
+        </div>
+      </div>
+    </div>
+    <div id="cty3" role="tabpanel">
+      <div class="story__frame">
+        <div class="story__chrome"><span>gói quy trình — phòng marketing</span><i class="w-min"></i><i class="w-max"></i><i class="w-close"></i></div>
+        <div class="pack">
+          <div class="pack__card">
+            <b>Quy trình Marketing · v2</b>
+            <ul class="pack__items">
+              <li>/dang-bai — đăng blog theo mẫu công ty</li>
+              <li>/seo-meta — meta chuẩn SEO của công ty</li>
+              <li>/nen-anh — nén ảnh banner đúng size</li>
+              <li>Mẫu báo giá · mẫu trả lời khách</li>
+              <li>Luật: không đăng hay gửi khi chưa duyệt</li>
+            </ul>
+          </div>
+          <ul class="pack__machines">
+            <li><span class="fwho"><b>PC-MKT-01</b> Ngọc</span><span class="ftag">v2 · đã cài</span></li>
+            <li><span class="fwho"><b>PC-MKT-02</b> Huy</span><span class="ftag">v2 · đã cài</span></li>
+            <li><span class="fwho"><b>PC-MKT-03</b> Trâm — vào hôm nay</span><span class="ftag ftag--wait">đang cài…</span></li>
+          </ul>
+          <p class="fleet__note">Người mới vào việc — cài một lần là có ngay cách làm chuẩn của công ty.</p>
+        </div>
+      </div>
     </div>
     <dl class="plugs plugs--3">
       <div class="plug">
@@ -253,6 +322,7 @@
       </form>
       <p class="cty-note">Bắt đầu với 2-3 người trước — chưa cần triển khai cả công ty.</p>
     </div>
+   </div>
   </section>
 
   <!-- privacy statement -->
@@ -333,14 +403,17 @@
 <script src="story.js?v=9" defer></script>
 <script>
 // switcher: hide non-active panels once JS is up (all visible without it)
-const tabs = document.querySelectorAll('.switcher-tab');
-const panels = [...tabs].map(t => document.getElementById(t.dataset.panel));
-panels.slice(1).forEach(p => p.hidden = true);
-tabs.forEach(tab => tab.addEventListener('click', () => {
-  tabs.forEach(t => t.setAttribute('aria-selected', t === tab ? 'true' : 'false'));
-  panels.forEach(p => p.hidden = p.id !== tab.dataset.panel);
-  panels.forEach(p => p.querySelector('video')?.pause());
-}));
+// mỗi .switcher-tabs tự quản nhóm tab + panel của mình
+document.querySelectorAll('.switcher-tabs').forEach(group => {
+  const gtabs = [...group.querySelectorAll('.switcher-tab')];
+  const gpanels = gtabs.map(t => document.getElementById(t.dataset.panel));
+  gpanels.slice(1).forEach(p => p.hidden = true);
+  gtabs.forEach(tab => tab.addEventListener('click', () => {
+    gtabs.forEach(t => t.setAttribute('aria-selected', t === tab ? 'true' : 'false'));
+    gpanels.forEach(p => p.hidden = p.id !== tab.dataset.panel);
+    gpanels.forEach(p => p.querySelector('video')?.pause());
+  }));
+});
 // map reveal: nodes ink on once as the map enters the viewport
 const mw = document.getElementById('mapwell');
 if ('IntersectionObserver' in window) {
