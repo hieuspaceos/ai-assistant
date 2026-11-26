@@ -252,6 +252,18 @@ def spawn(name, cmd, log_fp):
     return subprocess.Popen(cmd, cwd=DATA, env=os.environ.copy(),
                             stdout=log, stderr=subprocess.STDOUT)
 
+def terminal_enabled():
+    # Tab Terminal trong portal là tuỳ chọn nâng cao (Cài đặt → Nâng cao).
+    # Mặc định TẮT: không spawn ttyd → tiết kiệm RAM + học viên không
+    # lạc vào màn hình đen. Bật trong Cài đặt → config.terminal=true.
+    try:
+        cfg = json.load(open(os.path.join(DATA, "workspace", "config.json"),
+                             encoding="utf-8"))
+        return bool(cfg.get("terminal"))
+    except Exception:
+        return False
+
+
 def brain_terminal():
     try:
         return json.load(open(os.path.join(DATA, "brain.json"),
@@ -277,7 +289,7 @@ def supervisor():
             run_tool("gen-sandbox", [DATA])
         except Exception:
             pass
-    if shutil.which("ttyd"):
+    if shutil.which("ttyd") and terminal_enabled():
         # ttyd không tự xác thực được → spawn qua term-gate (đòi mã kết nối
         # trong shell trước khi exec não); -a để portal tự điền mã qua ?arg=.
         # term-gate.* nằm trong tools/ → CODE_DIRS đã copy sang DATA.
@@ -311,6 +323,8 @@ def supervisor():
             fails[n] = fails[n] + 1 if time.time() - born[n] < 10 else 0
             if fails[n] > 5:
                 continue                  # crash-loop → bỏ, portal báo offline
+            if n == "ttyd" and not terminal_enabled():
+                continue                  # user vừa tắt Terminal → để chết
             time.sleep(2)
             procs[n] = spawn(n, cmd_of(n, spec), os.path.join(LOGDIR, n + ".log"))
             born[n] = time.time()

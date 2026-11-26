@@ -46,7 +46,6 @@ header {
 }
 .brand-sub { font-size: var(--text-sm); color: var(--muted); }
 /* margin-left:auto để cụm tên + chip trình duyệt dồn hẳn về phải, nhường giữa cho tabs */
-#learner-name { color: var(--muted); font-size: var(--text-sm); font-family: var(--mono); flex-shrink: 0; margin-left: auto; }
 
 /* ---------- tabs — pills nằm trong header, căn giữa theo vùng content ----------
    sidebar rộng 292px → tâm content = 292 + (100vw - 292)/2 = 50% + 146px */

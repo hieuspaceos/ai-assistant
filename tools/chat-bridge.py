@@ -1527,6 +1527,7 @@ class Handler(BaseHTTPRequestHandler):
         "/api/secrets":       "_h_secrets",
         "/api/setup":         "_h_setup",
         "/api/check-connection":"_h_check_connection",
+        "/api/config":        "_h_config",
         "/api/bot":           "_h_bot",
         "/api/bot-import":    "_h_bot_import",
         "/api/bot-import-confirm":"_h_bot_import_confirm",
@@ -1714,6 +1715,80 @@ class Handler(BaseHTTPRequestHandler):
         subprocess.Popen(["open", "-R", p],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self._json({"ok": True})
+
+    # ---- Terminal (ttyd) — tuỳ chọn nâng cao, mặc định TẮT ----
+    # config.terminal=true thì mới spawn ttyd (launcher đọc cùng flag
+    # lúc boot); bridge spawn ngay khi user bật trong Cài đặt để khỏi
+    # phải restart app. Pidfile .devin/ttyd.pid để tắt được sau.
+    TTYD_PID = os.path.join(os.path.abspath(CWD), ".devin", "ttyd.pid")
+
+    def _ttyd_cmd(self):
+        brain_term = "devin"
+        try:
+            brain_term = json.load(open(os.path.join(CWD, "brain.json"),
+                                        encoding="utf-8")).get("terminal") or "devin"
+        except Exception:
+            pass
+        env = os.environ.copy(); env["BRAIN_TERM"] = brain_term
+        if platform.system() == "Windows":
+            gate = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                    "-File", os.path.join(CWD, "tools", "term-gate.ps1")]
+        else:
+            gate = ["sh", os.path.join(CWD, "tools", "term-gate.sh")]
+        return (["ttyd", "-p", "7681", "-i", "127.0.0.1", "-W", "-a", "-O"]
+                + gate), env
+
+    def _ttyd_up(self):
+        import socket as _s
+        try:
+            _s.create_connection(("127.0.0.1", 7681), 0.4).close(); return True
+        except OSError:
+            return False
+
+    def _h_config(self, data):
+        """Cài đặt nhỏ do user lật trong portal — hiện chỉ whitelist key
+        `terminal` (bật/tắt tab Terminal). terminal:true → spawn ttyd
+        ngay (khỏi restart); false → giết process theo pidfile/port."""
+        patch = {}
+        if "terminal" in data:
+            patch["terminal"] = bool(data.get("terminal"))
+        if not patch:
+            return self._json({"err": "không có key nào được phép"}, 400)
+        cfg = load_json(CONFIG_FP, {})
+        cfg.update(patch)
+        save_json(CONFIG_FP, cfg)
+        if "terminal" in patch:
+            if patch["terminal"] and not self._ttyd_up() and shutil.which("ttyd"):
+                cmd, env = self._ttyd_cmd()
+                p = subprocess.Popen(cmd, cwd=CWD, env=env,
+                                     stdout=subprocess.DEVNULL,
+                                     stderr=subprocess.DEVNULL)
+                try:
+                    os.makedirs(os.path.dirname(self.TTYD_PID), exist_ok=True)
+                    open(self.TTYD_PID, "w").write(str(p.pid))
+                except Exception:
+                    pass
+            elif not patch["terminal"]:
+                # tắt: kill theo pidfile (do bridge spawn) hoặc lsof port
+                # (do launcher spawn). Watchdog cũng skip respawn vì flag
+                # đã về false.
+                try:
+                    pid = int(open(self.TTYD_PID).read().strip())
+                    os.kill(pid, 15)
+                except Exception:
+                    try:
+                        out = subprocess.run(
+                            ["lsof", "-ti:7681"], capture_output=True,
+                            text=True, timeout=3).stdout.split()
+                        for s in out:
+                            os.kill(int(s), 15)
+                    except Exception:
+                        pass
+                try:
+                    os.unlink(self.TTYD_PID)
+                except Exception:
+                    pass
+        self._json({"ok": True, "config": cfg})
 
     def _g_count_glob(self):
         # verify engine của workflow hỏi "folder này có bao nhiêu file
@@ -2317,7 +2392,9 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"err": "language phải là vi hoặc en"}, 400); return
         def _apply(lang=lang, name=name):
             os.makedirs(MC_DIR, exist_ok=True)
-            save_json(CONFIG_FP, {"language": lang, "learner_name": name})
+            cfg_old = load_json(CONFIG_FP, {})   # giữ key cũ (terminal…)
+            cfg_old.update({"language": lang, "learner_name": name})
+            save_json(CONFIG_FP, cfg_old)
             # Đồng bộ tên + recipes (công thức nhanh) vào manifest khoá học —
             # recipes đi kèm pack ngôn ngữ nên sidebar đúng lệnh, đúng tiếng
             mf = os.path.join(MC_DIR, "manifest.json")

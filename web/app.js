@@ -50,6 +50,8 @@ const I18N = {
     readOnly: 'chỉ đọc', readWrite: 'đọc + sửa',
     addBtn: 'Thêm', addFolderBtn: '+ thêm folder',
     adminLink: 'Dành cho quản trị viên (IT) →',
+    advancedTitle: 'Nâng cao',
+    termToggle: 'Hiện chế độ Terminal (màn hình lệnh — chỉ khi bạn biết mình đang làm gì)',
     delPermTitle: 'Gỡ quyền', recheckTitle: 'Kiểm tra lại',
     btnOpen: 'Mở trang', btnSetup: 'Cài',
     openTitle: 'Mở trang này trên trình duyệt', setupTitle: 'Điền thông tin kết nối',
@@ -76,7 +78,7 @@ const I18N = {
     delFailMsg: 'Kiểm tra lại xem chat-bridge có đang chạy không nhé — thử chạy lại file start.',
     gateTitle: 'Cần bạn xác nhận',
     gateMsg: 'Đã gửi thẻ xác nhận vào tab "Hỏi trợ lý" — bấm "Đồng ý" bên đó để hoàn tất.',
-    warnChat: '<b>Chế độ Chat chưa mở:</b> chạy lại <code>start.bat</code>, hoặc bấm sang tab <b>Terminal</b> bên cạnh để dùng tạm.',
+    warnChat: '<b>Trợ lý chưa mở:</b> chạy lại file <code>start</code> rồi tải lại trang này.',
     warnCli: '<b>Terminal chưa mở:</b> chạy lại <code>start.bat</code>, hoặc mở PowerShell gõ <code>devin</code> để học bình thường.',
     hintNotReady: 'Trợ lý chưa sẵn sàng — mở lại file <code>start</code> rồi tải lại trang này. Nếu mới dùng lần đầu, bấm <a href="onboarding.html"><b>vào đây để cài đặt</b></a>.',
     hintNoLessons: 'Chưa có công cụ nào? Bấm <b>Hỏi trợ lý</b> và gõ <code>/phong-van</code>, nó sẽ hỏi vài câu rồi làm bộ công cụ riêng cho bạn.',
@@ -152,6 +154,8 @@ const I18N = {
     readOnly: 'read-only', readWrite: 'read + write',
     addBtn: 'Add', addFolderBtn: '+ add folder',
     adminLink: 'For IT administrators →',
+    advancedTitle: 'Advanced',
+    termToggle: 'Show Terminal mode (command screen — only if you know what you\'re doing)',
     delPermTitle: 'Remove access', recheckTitle: 'Check again',
     btnOpen: 'Open', btnSetup: 'Set up',
     openTitle: 'Open this page in your browser', setupTitle: 'Enter connection details',
@@ -178,7 +182,7 @@ const I18N = {
     delFailMsg: 'Check whether the chat bridge is running — try running the start file again.',
     gateTitle: 'Needs your confirmation',
     gateMsg: 'A confirmation card was sent to the "Ask the assistant" tab — tap "Đồng ý" (agree) there to finish.',
-    warnChat: '<b>Chat mode isn\'t up:</b> run the <code>start</code> file again, or switch to the <b>Terminal</b> tab meanwhile.',
+    warnChat: '<b>The assistant isn\'t up:</b> run the <code>start</code> file again, then reload this page.',
     warnCli: '<b>Terminal isn\'t up:</b> run the <code>start</code> file again, or open a shell and type <code>devin</code>.',
     hintNotReady: 'The assistant isn\'t ready — run the <code>start</code> file again and reload. First time here? <a href="onboarding.html"><b>Click to set up</b></a>.',
     hintNoLessons: 'No tools yet? Click <b>Ask the assistant</b> and type <code>/interview</code> — it will ask a few questions then build tools just for you.',
@@ -329,8 +333,6 @@ function renderLessonList() {
     box.appendChild(btn);
   });
 
-  if (manifest.learner_name) $('#learner-name').textContent = '👋 ' + manifest.learner_name;
-
   if (manifest.recipes && manifest.recipes.length) {
     $('#recipes').hidden = false;
     $('#recipe-list').innerHTML = manifest.recipes.map(c =>
@@ -400,9 +402,11 @@ function loadLesson(lesson) {
   setPaneHtml('slide', lesson.has_slides !== false
     ? iframe(base + 'slides.html')
     : emptyMsg(t('slideCreating')));
-  loadMdInto('guide', base + 'guide.md');
+  // walkthrough probe TRƯỚC khi render guide: có walkthrough.json thì
+  // guide là tài liệu tra cứu (render thường), wizard từng-bước chỉ dành
+  // cho bài cũ không có walkthrough — khỏi hai UI step chồng nhau.
+  loadWalkthrough(base).then(() => loadMdInto('guide', base + 'guide.md'));
   if (lesson.has_exercise !== false) loadMdInto('exercise', base + 'exercise.md');
-  loadWalkthrough(base);
 
   const gv = $('#guide-video');
   if (lesson.has_video) {
@@ -422,8 +426,9 @@ async function loadMdInto(pane, url, fallbackTitle) {
     const render = txt => (window.marked && window.DOMPurify)
       ? DOMPurify.sanitize(marked.parse(txt))
       : escapeHtml(txt).replace(/\n/g, '<br>');   // thiếu thư viện → chữ thường
-    // guide có các "### Bước/Step" → render thành wizard từng-bước
-    if (pane === 'guide' && /^###\s+/m.test(md)) { buildGuideWizard(md, render); return; }
+    // guide có các "### Bước/Step" → wizard từng-bước — NHƯNG chỉ khi bài
+    // không có walkthrough (có walkthrough rồi thì guide là tài liệu tra cứu)
+    if (pane === 'guide' && !currentWT && /^###\s+/m.test(md)) { buildGuideWizard(md, render); return; }
     setPaneHtml(pane, `<div class="md">${render(md)}</div>`);
     if (pane === 'guide') watchGuideScroll($('#guide-md .md'));
   } catch {
@@ -600,9 +605,14 @@ function wtPoll(until) {   // until: 'event' | 'done' | {conn:id}
         if (r.ok) { clearInterval(wt.timer); wt.timer = null; wtGo(1); }
       } else {
         if (after == null) {
-          const d0 = await (await bfetch(BRIDGE_URL + '/api/poll?since=0')).json();
-          after = d0.next || 0;
-          return;
+          // ưu tiên cursor ghi lúc gửi prompt — hứng được event phát ra
+          // giữa lúc gửi và lúc vào step chờ (agent xong trước khi tới đây)
+          if (wt.runFrom != null) { after = wt.runFrom; wt.runFrom = null; }
+          else {
+            const d0 = await (await bfetch(BRIDGE_URL + '/api/poll?since=0')).json();
+            after = d0.next || 0;
+            return;
+          }
         }
         const d = await (await bfetch(BRIDGE_URL + '/api/poll?since=' + after)).json();
         after = (d.next != null) ? d.next : after;
@@ -627,6 +637,12 @@ function wtSpot(target) {
 }
 
 async function wtPostPrompt(text) {
+  // mốc event TRƯỚC khi gửi — wait-perm/wait-run sau đó poll từ đây,
+  // khỏi bỏ lỡ event đến trong lúc user còn đang ở step trước
+  try {
+    const d0 = await (await bfetch(BRIDGE_URL + '/api/poll?since=0')).json();
+    wt.runFrom = d0.next || 0;
+  } catch { /* bridge lỗi thì wait tự dò từ hiện tại */ }
   await bfetch(BRIDGE_URL + '/api/prompt', {
     method: 'POST', body: JSON.stringify({ text }) });
 }
@@ -814,10 +830,21 @@ async function ping(url, path, cors) {
 }
 
 let brainTerminal = 'devin';   // lệnh mở CLI của não — đọc từ /api/brain
+let terminalOn = false;        // config.terminal — mặc định TẮT (chỉ chat)
+function applyTerminalUI() {
+  // Terminal tắt → giấu cặp nút Chat/Terminal (chỉ còn chat — một mode
+  // thì toggle vô nghĩa); #terminal-status vẫn giữ để báo bridge chết.
+  $('#mode-chat').hidden = !terminalOn;
+  $('#mode-cli').hidden = !terminalOn;
+}
 async function initChat() {
   chatChecked = true;
   $('#mode-chat').onclick = () => setChatMode('chat');
   $('#mode-cli').onclick = () => setChatMode('cli');
+  applyTerminalUI();
+  bfetch(BRIDGE_URL + '/api/config').then(r => r.json())
+    .then(d => { terminalOn = !!d.terminal; applyTerminalUI(); })
+    .catch(() => {});
   bfetch(BRIDGE_URL + '/api/brain').then(r => r.json())
     .then(d => { brainTerminal = (d.current && d.current.terminal) || 'devin'; })
     .catch(() => {});
@@ -937,6 +964,16 @@ $('#settings-btn').onclick = async () => {
   renderBrain();
   renderConnCode();
   renderFolders();
+  bfetch(BRIDGE_URL + '/api/config').then(r => r.json())
+    .then(d => { terminalOn = !!d.terminal; $('#term-toggle').checked = terminalOn; })
+    .catch(() => { $('#term-toggle').checked = terminalOn; });
+  $('#term-toggle').onchange = async (e) => {
+    terminalOn = e.target.checked;
+    applyTerminalUI();
+    await bfetch(BRIDGE_URL + '/api/config', {
+      method: 'POST', body: JSON.stringify({ terminal: terminalOn })
+    }).catch(() => {});
+  };
   const apps = await renderApps();
   // kiểm tra lại trạng thái THẬT của từng app ngầm — panel cập nhật dần,
   // không hiện số liệu cũ đã lưu từ lần trước

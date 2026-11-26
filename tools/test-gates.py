@@ -46,6 +46,7 @@ OPEN_OK = {
     "/api/emit-event":       "append-only, whitelist event type — chỉ inflate được đếm dashboard",
     "/api/pick-folder":      "mở hộp chọn folder native (dialog macOS) — chỉ trả path user tự chọn; serialized + 1 dialog/lần, không ghi gì",
     "/api/reveal":           "`open -R` = chỉ highlight trong Finder, không thực thi file; path giới hạn dưới ~ + deny-list nhạy cảm như check-path",
+    "/api/config":           "whitelist merge — chỉ key `terminal` (bool); spawn ttyd đi qua term-gate đòi mã kết nối, agent đã có mã nên không leo thang; reversible",
 }
 
 fail = False

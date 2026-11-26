@@ -31,7 +31,6 @@
     <button data-tab="exercise" class="tab tool-tab" hidden data-i18n="tabExercise">Bài tập</button>
     <button data-tab="chat" class="tab chat-tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5c-1.6 0-3.1-.4-4.4-1.2L3 20l1.2-5.1A8.5 8.5 0 1 1 21 11.5z"/></svg><span data-i18n="tabAsk">Hỏi trợ lý</span></button>
   </div>
-  <div id="learner-name"></div>
   <button id="bot-chip" type="button" hidden title="Đổi trợ lý" data-i18n-title="botChipTitle"><span id="bot-chip-ava">🤖</span><span id="bot-chip-name">Trợ lý</span><span class="bot-chip-caret">▾</span></button>
   <div id="bot-menu" hidden></div>
   <input id="bot-file" type="file" accept=".zip,application/zip" hidden>
@@ -124,6 +123,8 @@
         <button id="folder-save" data-i18n="addBtn">Thêm</button>
       </div>
       <button id="folder-add-btn" class="mini-btn" data-i18n="addFolderBtn">+ thêm folder</button>
+      <div class="nav-title" data-i18n="advancedTitle">Nâng cao</div>
+      <label class="check"><input type="checkbox" id="term-toggle"><span data-i18n="termToggle">Hiện chế độ Terminal (màn hình lệnh — chỉ khi bạn biết mình đang làm gì)</span></label>
       <p class="settings-hint" style="margin-top:var(--space-md)"><a href="admin.html" target="_blank" rel="noopener" data-i18n="adminLink">Dành cho quản trị viên (IT) →</a></p>
     </div>
   </div>

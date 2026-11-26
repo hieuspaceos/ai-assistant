@@ -168,7 +168,7 @@ const chipsEl = document.getElementById('chips');
 const STR = {
   vi: {
     hints: [{label: 'Bắt đầu phỏng vấn', text: '/phong-van'},
-            {label: 'Học một bài', text: '/hoc-bai'},
+            {label: 'Dạy mình một công cụ', text: '/huong-dan'},
             {label: 'Giúp em việc này…', text: ''}],
     hello: 'Xin chào! Mình là trợ lý AI của bạn. Bạn cứ nhắn như nhắn tin cho một người giúp việc.\n\nChưa biết bắt đầu từ đâu thì gõ **`/phong-van`**, mình sẽ hỏi vài câu rồi làm bộ công cụ riêng cho bạn.',
     helloBot: 'Xin chào! Mình là **{n}** — trợ lý của bạn. Bạn cứ nhắn như nhắn tin cho một người giúp việc.\n\nChưa biết bắt đầu từ đâu thì gõ **`/phong-van`**, mình sẽ hỏi vài câu rồi làm bộ công cụ riêng cho bạn.',
@@ -180,7 +180,7 @@ const STR = {
   },
   en: {
     hints: [{label: 'Start the interview', text: '/interview'},
-            {label: 'Learn a lesson', text: '/tutor'},
+            {label: 'Teach me a tool', text: '/guide'},
             {label: 'Help me with…', text: ''}],
     hello: 'Hi! I\'m your AI assistant — just message me like you\'d message a helpful coworker.\n\nNot sure where to start? Type **`/interview`** and I\'ll ask a few questions, then build tools just for you.',
     helloBot: 'Hi! I\'m **{n}** — your assistant. Just message me like you\'d message a helpful coworker.\n\nNot sure where to start? Type **`/interview`** and I\'ll ask a few questions, then build tools just for you.',
@@ -292,14 +292,13 @@ function addTool(title, status) {
   flushBubble();
   curBubble = null;   // tool call = ranh giới tin nhắn → text sau mở bubble mới
   removeTyping();
+  // KHÔNG vẽ dòng "Đang làm/Xong" vào khung chat — một việc chạy chục
+  // tool call là rác màn hình; trạng thái sống nằm ở dòng busy trên
+  // đầu (lastTool + giây), đủ cho học viên biết trợ lý đang chạy.
   if (status === 'in_progress' && title) {
     lastTool = title.slice(0, 60);
     if (busyTimer) statusEl.textContent = fmtBusy();
   }
-  const d = document.createElement('div');
-  d.className = 'tool' + (status !== 'in_progress' ? ' done' : '');
-  d.textContent = (status === 'in_progress' ? 'Đang làm: ' : 'Xong: ') + (title || 'một bước');
-  msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight;
 }
 function addPerm(ev) {
   const d = document.createElement('div');
