@@ -74,3 +74,27 @@ Reset sạch `~/TroLyAI-e2e` + `~/lan-test-brave`, fixture lan-test về nguyên
 
 ## Ghi chú vận hành
 - Lần chạy `launcher.py run` đầu in "đang chạy sẵn" rồi thoát vì phát hiện orphans từ run trước → phải kill orphans + chạy lại. Nhỏ nhưng là trap khi reset thủ công.
+
+## Run 4 — retest /phong-van sau rework (công cụ + guide, bỏ slide/video)
+
+Reset toàn bộ (xoá install + Brave profile + fixture artifacts), fresh
+install, onboarding qua CDP thay orca. Kết quả **PASS toàn tuyến**:
+
+- `/phong-van` nhận ra khoá học có sẵn → chỉ hỏi thêm việc mới, không
+  phỏng vấn lại.
+- Với pain "lọc khách theo tỉnh" agent chọn đúng dạng **skill có sẵn**
+  (`/loc-khach`) — không tạo skill trùng.
+- Sinh `lesson-03-tach-khach-theo-tinh/` **chỉ chứa guide.md** — không
+  slides.html, exercise.md, video-script.md, sample-files.
+- Guide 6 bước dùng đúng "từ vựng bước" (Gõ lệnh / Chỉ file / Duyệt
+  quyền / Mở kết quả), agent đọc CSV thật và phát hiện 4 khách thiếu
+  tỉnh → ghi vào lời chốt.
+- Manifest: `has_slides:false, has_video:false, has_exercise:false` →
+  portal chỉ hiện tab **Hướng dẫn**, guide render thành **wizard
+  Bước 1/9** (intro + 6 bước + 2 bảng phụ lục), nav Tiếp/Quay lại/Xem
+  hết hoạt động. Shot: `shots/wizard-new-lesson.png`.
+- Thời gian sinh bài: ~1-2 phút (trước ~15 phút do render video).
+
+Finding mới (nhỏ): khi click gallery không trúng card, onboarding tạo
+bot theo tên học viên + role office mặc định ("Lan — văn phòng") — hơi
+lẫn giữa tên người và tên bot.
