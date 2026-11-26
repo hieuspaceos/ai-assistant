@@ -181,7 +181,7 @@ function scenePile(c) {
 function sceneTasks(c) {
   return `<div class="scene scene--tasks" role="group" aria-label="Trợ lý làm hộ">
     <div class="tasks">
-      <span class="bot" aria-hidden="true"></span>
+      <span class="bot" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="3" r="1.6"/><path d="M12 4.8v2.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="3.5" y="7" width="17" height="13" rx="4.5"/><rect x="1.5" y="11" width="2" height="4" rx="1"/><rect x="20.5" y="11" width="2" height="4" rx="1"/><circle cx="8.8" cy="12.5" r="1.7" fill="#fff" stroke="none"/><circle cx="15.2" cy="12.5" r="1.7" fill="#fff" stroke="none"/><path d="M9.8 16.2h4.4" stroke="#fff" stroke-width="1.4" stroke-linecap="round" fill="none"/></svg></span>
       ${c.tasks.map(([ask, app, res], i) => `<div class="task beat" style="--i:${i}">
         <span class="task__ask">“${esc(ask)}”</span>
         <span class="task__res">${tag(app)}${esc(res)}</span>
