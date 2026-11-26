@@ -17,7 +17,8 @@ def endpoints(fp):
 # Khai TƯỜNG MINH ở đây: warn, không fail. Endpoint trong list này mà lại
 # có trong .ps1 thì tự động ra khỏi warn.
 PY_ONLY_OK = {"/api/bot", "/api/bots", "/api/bot-import",
-              "/api/bot-import-confirm", "/api/install-brain"}
+              "/api/bot-import-confirm", "/api/install-brain",
+              "/api/pick-folder", "/api/reveal", "/api/config"}
 
 py = endpoints(os.path.join(ROOT, "tools", "chat-bridge.py"))
 ps = endpoints(os.path.join(ROOT, "tools", "chat-bridge.ps1"))

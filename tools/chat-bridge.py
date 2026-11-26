@@ -892,7 +892,13 @@ class Acp:
             except Exception:
                 self._waiters.pop(mid, None)
                 return None
-        ev.wait(timeout)
+        # chờ từng nhịp ngắn + coi self.dead — não chết trước/sau khi đăng
+        # ký waiter thì thoát sớm, không đợi hết timeout
+        waited = 0.0
+        while waited < timeout:
+            if ev.wait(0.2) or self.dead:
+                break
+            waited += 0.2
         self._waiters.pop(mid, None)
         return self._replies.pop(mid, None)
 
@@ -922,6 +928,10 @@ class Acp:
         # expect_death: chính bridge giết (watchdog timeout/đổi não) —
         # đã báo lỗi đúng nghĩa rồi, không thêm "dừng đột ngột" gây hoang.
         self.dead = True
+        # não chết → đánh thức mọi call_sync đang chờ reply, khỏi chờ hết
+        # timeout (server bind/respawn bị trễ khi não không lên được)
+        for ev in list(self._waiters.values()):
+            ev.set()
         if not self.expect_death:
             broadcast({"t": "err",
                        "msg": "trợ lý vừa dừng đột ngột — chạy lại file start rồi thử lại"})
@@ -2656,7 +2666,10 @@ def spawn_brain():
                 "clientCapabilities": {"fs": {"readTextFile": False,
                                               "writeTextFile": False},
                                        "terminal": False}})
-            if r and r.get("result"):
+            # result tồn tại và không null — KHÔNG check truthy: não trả
+            # result:{} rỗng vẫn là handshake thành công, dict rỗng mà
+            # falsy là bỏ session/new luôn
+            if r and r.get("result") is not None:
                 # chờ luôn session/new để session_id sẵn khi hàm trả về
                 acp.call_sync("session/new", {"cwd": CWD,
                                               "mcpServers": []})

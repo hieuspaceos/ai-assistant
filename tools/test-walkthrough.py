@@ -144,6 +144,10 @@ def main():
     errs, files = [], []
     if os.path.isdir(root):
         for dp, _, fns in os.walk(root):
+            # bỏ templates/ — file schema có {{biến}} minh hoạ, không phải
+            # walkthrough thật nên không validate như tool của học viên
+            if os.sep + "templates" in dp:
+                continue
             for fn in fns:
                 if fn == "walkthrough.json":
                     files.append(os.path.join(dp, fn))
