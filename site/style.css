@@ -51,6 +51,8 @@
 
 /* ————— sections ————— */
 .section { padding-block: var(--section-gap-s); }
+.storyband { background: var(--color-accent-soft); }
+.storyband .headblock { max-width: 46rem; margin-inline: auto; text-align: center; }
 .headblock { margin-bottom: var(--space-2xl); max-width: 40rem; }
 .headblock .lead { margin-top: var(--space-md); color: var(--color-ink-2); }
 
