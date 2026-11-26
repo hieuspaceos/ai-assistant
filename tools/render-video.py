@@ -60,6 +60,15 @@ def find_browser():
 
 def tts(text, out_wav, workdir):
     """Sinh file wav đọc `text`. Trả về True nếu được."""
+    # ưu tiên VieNeu-TTS local: TTS_PY = python của venv đã `pip install vieneu`
+    tts_py = os.environ.get('TTS_PY')
+    if tts_py and os.path.exists(tts_py):
+        helper = os.path.join(ROOT, 'tools', 'tts-vieneu.py')
+        raw = os.path.join(workdir, 'seg-raw.wav')
+        if run([tts_py, helper, text, raw]).returncode == 0:
+            # vieneu trả 48kHz — chuẩn hoá về 44.1kHz mono cho đồng nhất với say
+            return sh(['ffmpeg', '-y', '-loglevel', 'error', '-i', raw,
+                       '-ar', '44100', '-ac', '1', out_wav])
     sysname = platform.system()
     if sysname == 'Darwin':
         aiff = os.path.join(workdir, 'seg.aiff')
@@ -106,6 +115,7 @@ def bake(scene, workdir):
             if tts(s['say'], w, workdir):
                 aud = wav_dur(w)
                 s['_w'] = w
+                s['_aud'] = aud
         if 'dur' in s:
             base = float(s['dur'])
         elif s['kind'] == 'type':
@@ -472,6 +482,19 @@ def main():
             sys.exit('ffmpeg trộn audio lỗi:\n' + r.stderr.decode()[:800])
 
         print(f'xong → {out_mp4} ({os.path.getsize(out_mp4)//1024} KB)')
+
+        # phụ đề .vtt cùng tên video — cue = câu thoại, theo đúng offset timeline
+        cues = [(s['start'], s['start'] + s.get('_aud', s['dur']), s['say'])
+                for s in steps if s.get('_w')]
+        if cues:
+            def ts(t):
+                m, s_ = divmod(t, 60)
+                return f'{int(m):02d}:{s_:06.3f}'
+            vtt = 'WEBVTT\n\n' + '\n\n'.join(
+                f'{ts(a)} --> {ts(b)}\n{text}' for a, b, text in cues) + '\n'
+            vpath = os.path.splitext(out_mp4)[0] + '.vtt'
+            open(vpath, 'w', encoding='utf-8').write(vtt)
+            print(f'xong → {vpath} ({len(cues)} cues)')
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
 

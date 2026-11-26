@@ -1,7 +1,11 @@
 {
   "title": "Bài 2 · Trang giống trang mẫu, nội dung của mình",
   "lessons": [
-    {"name": "Làm trang giống trang mẫu", "sub": "Bài 2 · khoảng 15 phút", "active": true}
+    {
+      "name": "Làm trang giống trang mẫu",
+      "sub": "Bài 2 · khoảng 15 phút",
+      "active": true
+    }
   ],
   "steps": [
     {
@@ -15,7 +19,12 @@
     {
       "kind": "files",
       "title": "sample-files/ — trang mẫu trong bài",
-      "items": [["trang-mau.html", "landing page mỹ phẩm bịa"]],
+      "items": [
+        [
+          "trang-mau.html",
+          "landing page mỹ phẩm bịa"
+        ]
+      ],
       "say": "Đây là trang mẫu đi kèm bài — ảnh to, khẩu hiệu ngắn, ba ô ưu điểm, giá gạch giá, nút mua vàng chóe. Thuê người làm vài triệu; giờ mình nhờ trợ lý bắt chước cái khuôn này."
     },
     {
@@ -27,10 +36,15 @@
       "kind": "type",
       "text": "Đọc trang my-course/lesson-02-trang-giong-trang-mau/sample-files/trang-mau.html rồi dựng cho em một trang web giống về bố cục và phong cách — nội dung của em: sản phẩm \"Trà thảo mộc Thanh Lọc\", khẩu hiệu \"Ngủ ngon mỗi đêm\", ưu điểm: nguyên liệu tự nhiên, không caffeine, túi lọc tiện dụng, giá 149.000đ gạch giá cũ 220.000đ, nút \"ĐẶT NGAY\". Lưu ra my-course/trang-cua-em.html rồi mở cho em xem.",
       "cps": 18,
-      "say": "Nhìn dài vậy thôi chứ toàn lời thường: chỉ cho nó file trang mẫu, kể tên sản phẩm, khẩu hiệu, ưu điểm, giá, chữ trên nút — rồi bảo lưu ra file mới và mở cho mình xem. Gõ xong bấm gửi."
+      "say": "Nhìn dài vậy thôi chứ toàn lời thường: chỉ cho trợ lý file trang mẫu, kể tên sản phẩm, khẩu hiệu, ưu điểm, giá, chữ trên nút — rồi bảo lưu ra file mới và mở cho mình xem. Gõ xong bấm gửi."
     },
-    {"kind": "click", "target": "send"},
-    {"kind": "send"},
+    {
+      "kind": "click",
+      "target": "send"
+    },
+    {
+      "kind": "send"
+    },
     {
       "kind": "work",
       "text": "Đang đọc trang mẫu…",
@@ -41,7 +55,7 @@
       "who": "agent",
       "text": "Mình thấy trang mẫu trình bày theo nhịp: **ảnh lớn + khẩu hiệu → 3 ô ưu điểm → giá → nút kêu gọi**. Mình sẽ dựng một trang mới cùng khuôn đó nhưng toàn bộ chữ, tên, giá là của bạn — không mang chữ của trang mẫu sang. Làm nhé?",
       "reveal": 0.04,
-      "say": "Nghe nè — nó học nhịp của trang mẫu thôi: ảnh lớn, ưu điểm, giá, nút. Chữ với tên là của mình hết, không mang của họ sang. Cái đó gọi là học khuôn chứ không phải chôm bài."
+      "say": "Nghe nè — trợ lý học nhịp của trang mẫu thôi: ảnh lớn, ưu điểm, giá, nút. Chữ với tên là của mình hết, không mang của họ sang. Cái đó gọi là học khuôn chứ không phải chôm bài."
     },
     {
       "kind": "work",
@@ -51,7 +65,12 @@
     {
       "kind": "files",
       "title": "my-course/ — file mới tạo",
-      "items": [["trang-cua-em.html", "1 trang web hoàn chỉnh"]]
+      "items": [
+        [
+          "trang-cua-em.html",
+          "1 trang web hoàn chỉnh"
+        ]
+      ]
     },
     {
       "kind": "bubble",
