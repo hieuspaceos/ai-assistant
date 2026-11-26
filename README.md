@@ -124,7 +124,8 @@ ai-assistant/
 ├── tools/chat-bridge.ps1      # browser ↔ ACP brain bridge: long-poll, respond-gate, prompt lock; on Windows also spawns the brain under the restricted `troly-agent` user (CreateProcessWithLogonW + NTFS ACL — set up once via setup-agent-user.ps1); .py on macOS/Linux spawns under Seatbelt
 ├── tools/term-gate.*          # gate between ttyd and the brain — requires the connection code before exec (.sh/.ps1 — the .cmd is only an arg-less forwarder since batch can't read argv safely)
 ├── tools/read-brain.ps1       # validated brain.json read (charset + deny-list) shared by start.bat + chat-terminal.ps1
-├── tools/gen-sandbox.py       # generates .devin/agent.sb from permissions.json — macOS enforcement
+├── tools/gen-sandbox.py       # generates .devin/agent.sb from permissions.json — macOS enforcement (re-validates each grant at profile build: path_sensitive + symlink-divergence + rw_grant_ok)
+├── tools/path_guard.py        # sensitive-path policy shared by chat-bridge (request/apply checks) and gen-sandbox (enforcement) — underscore name required so hyphenated scripts can import it
 ├── tools/launcher.py          # supervisor inside the packaged binary — builds ~/TroLyAI, spawns all processes
 ├── tools/chat-terminal.ps1    # ttyd launcher, light theme + large font (Terminal mode)
 ├── tools/beacon.py/.ps1       # fleet beacon — push-only snapshot 15' → collector (fleet machines only)

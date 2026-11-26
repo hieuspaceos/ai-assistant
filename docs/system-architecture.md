@@ -68,7 +68,14 @@ extension = cánh tay trên trình duyệt · serve.py = file tĩnh.
   `web/chat.html`.
 - Não nào chạy đọc từ `brain.json` ở gốc project; `GET /api/brain`
   liệt kê preset + cờ đã cài, `POST /api/brain` đổi não (ghi file +
-  khởi động lại agent nóng, không cần chạy lại start).
+  khởi động lại agent nóng, không cần chạy lại start) — MỌI đổi não
+  đều qua card xác nhận, kể cả preset (audit-3 M5: agent tự gọi được
+  endpoint này qua BRIDGE_TOKEN nên preset đổi thẳng = tự kill
+  session/ghi brain.json qua cửa vòng).
+- Dispatch bằng route table: `GET_ROUTES`/`POST_ROUTES` dict literal
+  trong `Handler` → `do_GET`/`do_POST` chỉ còn preamble (auth, body
+  cap, parse JSON) + `getattr` — thêm endpoint = thêm key + một method
+  `_g_*`/`_h_*`, và `test-gates.py` enumerate dict thay regex-parse.
 - Agent chết/chưa cài: bridge không chết theo — báo lỗi về UI và tự
   thử bật lại ở prompt kế tiếp.
 - Gửi prompt vào session ACP (`prompt_lock` — một lượt tại một thời
@@ -135,7 +142,12 @@ extension = cánh tay trên trình duyệt · serve.py = file tĩnh.
   `.devin/agent.sb` từ `permissions.json` rồi chat-bridge spawn qua
   `sandbox-exec -f`. Đọc = allow `/` trừ sibling bị deny-enumerate
   (quirk compiler Darwin: `process*` chỉ compile khi `file-read*` phủ
-  `/`); ghi = whitelist CWD + folder `read-write`. `bridge.token`
+  `/`); ghi = whitelist CWD + folder `read-write`. Mỗi grant trong
+  `permissions.json` được `_grant_ok` re-validate TẠI profile build —
+  `path_sensitive` trên realpath + divergence rule (realpath ≠
+  normpath ngoài canonicalization `/private` → bỏ grant), chặn TOCTOU
+  symlink swap sau approve; policy sống trong `tools/path_guard.py`
+  dùng chung với chat-bridge. `bridge.token`
   đọc-được-không-ghi; `secrets*.json` deny-read. **Windows: não chạy
   dưới user hạn chế `troly-agent`** — `tools/setup-agent-user.ps1`
   (admin, một lần) tạo user + đặt NTFS ACL tương đương Seatbelt (RX

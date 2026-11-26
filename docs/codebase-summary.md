@@ -20,7 +20,8 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 | `chat-bridge.py` / `.ps1` | Chat portal ↔ não ACP (`brain.json` chọn não, `/api/brain` đổi nóng); API config/permissions/connections/secrets/save-page; long-poll + prompt_lock + respond-gate; spawn não qua Seatbelt (macOS) |
 | `term-gate.sh` / `.ps1` | Cửa gác giữa ttyd và não — đòi mã kết nối (từ `?arg=`) trước khi exec não; macOS bọc sandbox-exec. `.cmd` chỉ là forwarder không-arg (batch không đọc argv an toàn) |
 | `read-brain.ps1` | Đọc `brain.json` → in `cmd|terminal` ĐÃ validate (charset + deny-list) — `start.bat`/`chat-terminal.ps1` dùng chung, tránh expansion injection trong batch |
-| `gen-sandbox.py` | Sinh `.devin/agent.sb` từ `permissions.json` — whitelist write + deny-enumerate read + deny exec binary thoát-sandbox |
+| `gen-sandbox.py` | Sinh `.devin/agent.sb` từ `permissions.json` — whitelist write + deny-enumerate read + deny exec binary thoát-sandbox; `_grant_ok` re-validate từng grant lúc build (path_sensitive trên realpath + symlink-divergence) — enforcement point chặn TOCTOU |
+| `path_guard.py` | Policy đường dẫn nhạy cảm dùng CHUNG: `_SENSITIVE_DIRS`/`_SENSITIVE_ROOTS`, `path_sensitive` (two-way, case-insensitive, realpath), `rw_grant_ok` — chat-bridge kiểm lúc request/apply, gen-sandbox kiểm lúc phát quyền. Tên underscore bắt buộc (script gạch ngang import được); lọc `isabs` sau expanduser — entry không resolve được trên nền đó bị loại (Windows `~\…` trên POSIX và ngược lại) |
 | `setup-agent-user.ps1` | Windows sandbox (admin một lần): tạo user hạn chế `troly-agent`, ACL icacls tương đương Seatbelt, credential DPAPI → `.devin/agent-user.cred`; `chat-bridge.ps1` spawn não cross-user qua `CreateProcessWithLogonW` (`TroLy.AgentSpawn` + Job Object) — verify trên CI `test-windows` |
 | `launcher.py` | Supervisor của bản đóng gói (`troly`/`TroLyAI.exe`) — tự dựng `~/TroLyAI`, spawn 4 process |
 | `build.sh` | Đóng gói binary một file (PyInstaller) |
@@ -31,7 +32,7 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 | `test-bridges.py` | Smoke test endpoint: auth 401, save-page sandbox, brain whitelist — spawn bridge thật trên port động |
 | `test-parity.py` | Diff tập endpoint `/api/*` giữa chat-bridge `.py` ↔ `.ps1` — bắt drift |
 | `test-packs.py` | Diff `.devin/skills/` ↔ `skill-packs/` + kiểm recipes trỏ đúng skill — bắt "quên đồng bộ pack" |
-| `test-gates.py` | Mọi endpoint POST `/api/*` phải khai `GATED` (handler gọi `gate_local`/`New-Gate`) hoặc `OPEN_OK` — bắt "write đặc quyền quên consent gate" |
+| `test-gates.py` | Mọi endpoint POST `/api/*` phải khai `GATED` (handler gọi `gate_local`/`New-Gate`) hoặc `OPEN_OK` — bắt "write đặc quyền quên consent gate"; `.py` enumerate `POST_ROUTES` dict rồi quét source method đích (`.ps1` vẫn regex-parse) |
 | `beacon.py` / `.ps1` | Máy nhân viên → collector: pair (pending → machine_key) rồi snapshot 15' (đếm lượt/version/license — không nội dung); pending poll 60s, fail backoff 300s×3 |
 | `collector.py` | Trung tâm fleet (3 tier cùng code): pairing + approve/revoke, license check, dashboard, store `releases/` + `packs/` phát xuống, mirror upstream 6h |
 | `worker/` | **Port của collector.py** sang Cloudflare Workers + D1 + R2 — tier vendor-hosted ĐANG CHẠY tại `troly.hieuspace.com/fleet/`; `wrangler.toml` (route/cron/binding), `src/index.js`, `schema.sql`; thêm tầng tài khoản admin 2-role (admins/sessions/audit trong D1) |

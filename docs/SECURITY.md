@@ -374,3 +374,50 @@ Accepted-risk (ghi nhận, không vá đợt này):
   không áp); riêng `$BrainCmdDeny` ps1 vẫn exact-match cũ →
   `python3.12` lọt được trên Windows (impact thấp — cũng qua consent
   gate, và Windows không có sandbox kernel-level để thoát).
+
+### Audit lại 2 vòng — regression do chính đợt vá gây ra
+
+Đợt vá trên được tự audit lại hai lần; bắt được 3 regression mới
+(đã vá + khoá bằng regression test trong `test-bridges.py`):
+
+- **Route-table dispatch crash** (phase-06): `getattr(self,
+  POST_ROUTES.get(path), None)` — `.get()` trả `None` mà
+  `getattr(name=None)` raise `TypeError` → handler thread chết,
+  connection đứt không response thay vì 404 JSON. Fix: check `mn`
+  trước getattr và VẪN giữ default `None` (route trỏ method không
+  tồn tại → 404, không AttributeError).
+- **`_SENSITIVE_DIRS` nhiễm độc trên POSIX** (phase-01): entry Windows
+  `~\AppData\…` không được `expanduser` ("\" không phải sep) →
+  `realpath` resolve tương đối theo cwd lúc import →
+  `<cwd>/~\appdata\…` lọt vào list → two-way check biến MỌI ancestor
+  của cwd thành "sensitive" → grant `~/Desktop` bị từ chối oan (phá
+  use-case grant folder chứa project). Fix: lọc `isabs` sau
+  `expanduser` — mỗi nền chỉ giữ entry resolve được (POSIX bỏ `~\…`,
+  Windows bỏ `/Library/…` vì thiếu drive).
+- **Recipe schema sai field** (M2): cap `recipes` ghi `{command,
+  label}` nhưng schema thật (`skill-packs/recipes/*.json` + portal
+  render `c.meaning`) là `{command, meaning}` → mất meaning lặng lẽ.
+  Fix: `_clean_recipes()` dùng chung cho cả `/api/bot` create lẫn
+  bot-import (vốn không cap — cùng lỗ phình).
+- **`BRAIN_CMD_DENY` + runner đời mới**: `nodemon`, `tsx`, `ts-node`,
+  `bunx`, `uv`, `uvx`, `pipx`, `conda`, `poetry`, `pdm`, `jupyter`,
+  `vitest`, `jest`, `mocha`, `clj`, `clojure`, `lein`, `stack`,
+  `cabal`, `mise`, `asdf` — cùng lỗ exec-via-args.
+
+Bài học ghi nhận (pattern lặp): *mọi hàm "chuẩn hoá/whitelist" viết lại
+phải đối chiếu schema thật của consumer* — cap `recipes` nhìn an toàn
+nhưng đoán tên field = mất dữ liệu; và *giá trị "vô hại" phải verify
+bằng code, không bằng lý luận* — entry literal tương đối tưởng không
+match gì lại resolve thành path thật dưới cwd.
+
+Residual còn lại sau audit lại:
+
+- Grant symlink→đích-không-nhạy-cảm được `_apply` LƯU vào
+  `permissions.json` nhưng `_grant_ok` drop ở profile → grant "chết"
+  hiện trong danh sách quyền (fail-safe, không phải lỗ hổng — nhiễu
+  UI nhẹ khi xem quyền).
+- `permissions.json`/`bots.json` bị sửa tay sai kiểu (`"bots"` không
+  phải list) → một số endpoint crash 500 thay vì 400 (pre-existing,
+  chỉ reachable với token).
+- HOME unset (kèm pwd lookup fail) → mọi entry `~/` bị lọc isabs →
+  `path_sensitive` fail-open — cực hiếm, ghi nhận.

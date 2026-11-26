@@ -3,6 +3,50 @@
 Các quyết định kiến trúc và **tại sao** — để sau này không gỡ ngược lại
 vì quên lý do. Mới nhất lên đầu.
 
+## 2026 — Audit đợt 3: path_guard dùng chung, 2 vòng audit-lại tự bắt regression
+
+**Policy đường dẫn sống trong `tools/path_guard.py`, không nhân bản.**
+Vì: cả hai lỗ HIGH của audit-3 cùng một mô-típ — điểm validate
+(chat-bridge, request/apply-time) và điểm enforce (gen-sandbox, mỗi
+spawn) nằm ở hai file khác nhau và phía enforce tin mù. Nhân bản
+`_SENSITIVE_DIRS`/`rw_grant_ok` = chắc chắn drift, mà drift ở đây là
+sandbox escape. Tên underscore bắt buộc vì `gen-sandbox.py` gạch ngang
+không import được. Bẫy đã học: `runpy.run_path` KHÔNG add script-dir
+vào `sys.path` → mọi script frozen import sibling PHẢI tự
+`sys.path.insert(dirname(__file__))` — thiếu thì exception bị
+supervisor nuốt = spawn não KHÔNG Seatbelt (fail-open âm thầm).
+
+**Hai vòng audit-lại sau khi vá, tự bắt 3 regression — đáng ghi vì
+cả ba đều là kiểu lỗi "trông vô hại":**
+- `getattr(self, ROUTES.get(path), None)`: `.get()` trả `None` mà
+  getattr yêu cầu name là string → TypeError giết handler thread thay
+  vì 404. Default của getattr không cứu được name=None — phải check
+  trước VÀ vẫn giữ default (route trỏ method hỏng → 404 không crash).
+- `_SENSITIVE_DIRS` entry Windows `~\AppData\…`: trên POSIX expanduser
+  trả literal tương đối → realpath resolve dưới cwd lúc import →
+  two-way check biến ancestor của cwd thành sensitive → grant
+  `~/Desktop` bị từ chối oan. Lý luận "literal không match gì nên vô
+  hại" SAI vì realpath làm nó tuyệt đối. Fix: lọc `isabs` sau
+  expanduser — mỗi nền chỉ giữ entry resolve được.
+- Cap `recipes` đoán field `label` trong khi schema thật là
+  `{command, meaning}` → mất dữ liệu lặng lẽ. Bài học: hàm
+  chuẩn-hoá/whitelist phải đối chiếu schema của consumer (đây là
+  `skill-packs/recipes/*.json` + `app.js` render), không đoán.
+
+**`NATIVE_MAX` reject chứ không queue/downgrade.** Vì: mọi đường
+xuống card không-native đều là Origin-forgeable — "chờ một lát" nghe
+hiền nhưng tạo kênh attack mới đúng lúc hệ thống đang bị spam. Reject
+409 / JSON-RPC error cho cả hai phía (portal + não ACP) và đếm qua CẢ
+`local_pending` lẫn `perm_pending` — đếm một bên thì flood được bằng
+bên kia.
+
+**Preset `/api/brain` cũng qua card.** Vì: agent cầm `BRIDGE_TOKEN`
+(env) gọi được endpoint — preset đổi thẳng = kill session, spawn
+churn, ghi `brain.json` (file mà sandbox deny-write) qua cửa vòng.
+Denylist `BRAIN_CMD_DENY` không bao giờ đầy đủ nên card custom phải
+nói thẳng "chạy lệnh tuỳ ý" — nếu card trông như "đã lọc" thì học
+viên duyệt với kỳ vọng sai.
+
 ## 2026 — Admin 2 tầng: pack CỐ Ý không ký, rotate-secret, bridge.token rotate
 
 **Pack KHÔNG ký ed25519 như release — trust bất đối xứng là chủ đích.**
