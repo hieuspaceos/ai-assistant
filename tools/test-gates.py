@@ -46,47 +46,57 @@ OPEN_OK = {
 }
 
 fail = False
-for name, fp, pat, gate_tok in (
-    ("chat-bridge.py",
-     os.path.join(ROOT, "tools", "chat-bridge.py"),
-     r'^\s+(?:elif|if) path == "(/api/[^"]+)"',
-     "gate_local("),
-    ("chat-bridge.ps1",
-     os.path.join(ROOT, "tools", "chat-bridge.ps1"),
-     r'HttpMethod -eq "POST" -and \$path -eq "(/api/[^"]+)"',
-     "New-Gate"),
-):
-    src = open(fp, encoding="utf-8-sig").read()
-    # .py: chỉ vùng do_POST trở đi (do_GET nằm trước, cùng pattern path ==)
-    # .ps1: pattern đã tự lọc POST nên quét cả file
-    if name.endswith(".py"):
-        src = src[src.index("def do_POST"):]
-    ms = list(re.finditer(pat, src, re.M))
-    blocks = {m.group(1): src[m.start():ms[i+1].start()
-                              if i+1 < len(ms) else len(src)]
-              for i, m in enumerate(ms)}
-    for ep, blk in sorted(blocks.items()):
-        if ep in GATED:
-            if gate_tok not in blk:
-                print(f"FAIL — {name}: {ep} khai GATED nhưng handler "
-                      f"không gọi {gate_tok}")
-                fail = True
-        elif ep not in OPEN_OK:
-            print(f"FAIL — {name}: endpoint POST mới {ep} chưa khai "
-                  f"GATED hay OPEN_OK trong tools/test-gates.py")
+found = set()
+
+# --- chat-bridge.py: enumerate POST_ROUTES dict → quét source của method
+# đích cho gate_local(. Chính xác hơn parse elif chain cũ: gate trong
+# helper (_apply closure…) vẫn match, không bị nhiễu code endpoint kề.
+src_py = open(os.path.join(ROOT, "tools", "chat-bridge.py"),
+              encoding="utf-8-sig").read()
+rt = re.search(r'POST_ROUTES = \{(.*?)\}', src_py, re.S)
+assert rt, "không thấy POST_ROUTES dict trong chat-bridge.py"
+routes = dict(re.findall(r'"(/api/[^"]+)":\s*"(_h_[a-z_]+)"', rt.group(1)))
+def _method_src(name):
+    i = src_py.index(f"    def {name}(")
+    j = src_py.find("\n    def ", i + 1)
+    k = src_py.find("\ndef ", i + 1)          # method cuối của class
+    end = min(x for x in (j, k) if x > 0)
+    return src_py[i:end]
+for ep, mn in sorted(routes.items()):
+    found.add(ep)
+    blk = _method_src(mn)
+    if ep in GATED:
+        if "gate_local(" not in blk:
+            print(f"FAIL — chat-bridge.py: {ep} khai GATED nhưng {mn} "
+                  f"không gọi gate_local(")
             fail = True
+    elif ep not in OPEN_OK:
+        print(f"FAIL — chat-bridge.py: endpoint POST mới {ep} chưa khai "
+              f"GATED hay OPEN_OK trong tools/test-gates.py")
+        fail = True
+
+# --- chat-bridge.ps1: vẫn elif-style, pattern đã tự lọc POST ---
+src_ps = open(os.path.join(ROOT, "tools", "chat-bridge.ps1"),
+              encoding="utf-8-sig").read()
+ms = list(re.finditer(
+    r'HttpMethod -eq "POST" -and \$path -eq "(/api/[^"]+)"', src_ps))
+blocks = {m.group(1): src_ps[m.start():ms[i+1].start()
+                            if i+1 < len(ms) else len(src_ps)]
+          for i, m in enumerate(ms)}
+for ep, blk in sorted(blocks.items()):
+    found.add(ep)
+    if ep in GATED:
+        if "New-Gate" not in blk:
+            print(f"FAIL — chat-bridge.ps1: {ep} khai GATED nhưng handler "
+                  f"không gọi New-Gate")
+            fail = True
+    elif ep not in OPEN_OK:
+        print(f"FAIL — chat-bridge.ps1: endpoint POST mới {ep} chưa khai "
+              f"GATED hay OPEN_OK trong tools/test-gates.py")
+        fail = True
 
 # ngược chiều: endpoint đã xoá mà khai còn → nhắc dọn (không fail —
 # /api/bot* chỉ có .py nên hợp lệ vắng mặt trong .ps1)
-found = set()
-src_py = open(os.path.join(ROOT, "tools", "chat-bridge.py"),
-              encoding="utf-8-sig").read()
-found |= set(re.findall(r'^\s+(?:elif|if) path == "(/api/[^"]+)"',
-                        src_py[src_py.index("def do_POST"):], re.M))
-src_ps = open(os.path.join(ROOT, "tools", "chat-bridge.ps1"),
-              encoding="utf-8-sig").read()
-found |= set(re.findall(
-    r'HttpMethod -eq "POST" -and \$path -eq "(/api/[^"]+)"', src_ps))
 for ep in sorted((set(GATED) | set(OPEN_OK)) - found):
     print(f"  warn — {ep} khai trong test-gates.py nhưng không còn "
           f"endpoint nào mang tên đó")

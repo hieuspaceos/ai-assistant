@@ -1364,102 +1364,49 @@ class Handler(BaseHTTPRequestHandler):
             return
         self.send_response(204); self._cors(); self.end_headers()
 
+    # Route table — danh sách endpoint thành DỮ LIỆU đọc được bằng
+    # code: test-gates.py enumerate dict này thay vì regex-parse elif
+    # chain, nên thêm endpoint POST mới = thêm key + một method _h_*.
+    GET_ROUTES = {
+        "/api/health":        "_g_health",
+        "/api/brain":         "_g_brain",
+        "/api/poll":          "_g_poll",
+        "/api/permissions":   "_g_permissions",
+        "/api/connections":   "_g_connections",
+        "/api/config":        "_g_config",
+        "/api/check-path":    "_g_check_path",
+        "/api/count-glob":    "_g_count_glob",
+        "/api/bots":          "_g_bots",
+    }
+    POST_ROUTES = {
+        "/api/prompt":        "_h_prompt",
+        "/api/respond":       "_h_respond",
+        "/api/brain":         "_h_brain",
+        "/api/delete-lesson": "_h_delete_lesson",
+        "/api/save-page":     "_h_save_page",
+        "/api/permissions":   "_h_permissions",
+        "/api/remove-permission":"_h_remove_permission",
+        "/api/connections":   "_h_connections",
+        "/api/remove-connection":"_h_remove_connection",
+        "/api/secrets":       "_h_secrets",
+        "/api/setup":         "_h_setup",
+        "/api/check-connection":"_h_check_connection",
+        "/api/bot":           "_h_bot",
+        "/api/bot-import":    "_h_bot_import",
+        "/api/bot-import-confirm":"_h_bot_import_confirm",
+        "/api/emit-event":    "_h_emit_event",
+    }
+
     def do_GET(self):
         if self._blocked():
             return
         path = urllib.parse.urlparse(self.path).path
         if path != "/api/health" and not self._authed():
             return self._json({"err": "thiếu hoặc sai mã kết nối"}, 401)
-        if path == "/api/health":
-            # không trả sessionId — endpoint không auth, session id là
-            # handle nội bộ không ai dùng (portal chỉ đọc ok/brain/version)
-            self._json({"ok": True,
-                        "brain": getattr(acp, "brain_id", None) or load_brain().get("id"),
-                        "version": app_version(),
-                        "extVersion": ext_expected_version()})
-        elif path == "/api/brain":
-            cur = load_brain()
-            presets = []
-            for p in BRAIN_PRESETS:
-                presets.append({
-                    "id": p["id"], "label": p["label"],
-                    "cost": p.get("cost", "paid"),
-                    "desc": p.get("desc", {}),
-                    "install": p.get("install"),
-                    "cmd_display": " ".join([p["cmd"]] + p["args"]),
-                    "installed": all(shutil.which(r)
-                                     for r in p.get("requires", [p["cmd"]])),
-                })
-            self._json({"current": {k: cur.get(k)
-                                    for k in ("id", "label", "cmd", "args", "terminal")},
-                        "presets": presets})
-        elif path == "/api/poll":
-            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-            try:
-                since = int(q.get("since", ["0"])[0])
-            except ValueError:
-                since = 0
-            try:
-                wait_ms = min(int(q.get("wait", ["0"])[0] or 0), 30000)
-            except ValueError:
-                wait_ms = 0
-            with store_lock:
-                total = event_base + len(event_store)
-                # reset: cursor của client trỏ ngoài vùng event còn giữ —
-                # thường là bridge vừa restart → replay toàn bộ cho client dựng lại
-                reset = since < 0 or since < event_base or since > total
-                # long-poll: không có event mới và không cần reset → chờ tới
-                # wait hoặc broadcast() đánh thức. wait() tự release lock khi
-                # ngủ và reacquire khi dậy — xong phải TÍNH LẠI mọi thứ.
-                if wait_ms and not reset and total <= since:
-                    new_event.wait(wait_ms / 1000)
-                    total = event_base + len(event_store)
-                    reset = since < 0 or since < event_base or since > total
-                evs = list(event_store) if reset else list(event_store[since - event_base:])
-            self._json({"events": evs, "next": total, "reset": reset})
-        elif path == "/api/permissions":
-            self._json(load_json(PERM_FP, {"folders": []}))
-        elif path == "/api/connections":
-            self._json(load_json(CONN_FP, {"apps": []}))
-        elif path == "/api/config":
-            self._json(load_json(CONFIG_FP, {}))
-        elif path == "/api/check-path":
-            # onboarding hỏi "folder này có tồn tại không" trước khi thêm —
-            # POST /api/permissions tạo card nên không dùng để kiểm được.
-            # Chỉ trả isdir, không lộ metadata; vẫn đòi token.
-            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-            p = os.path.expanduser((q.get("path") or [""])[0].strip())
-            # path nhạy cảm không trả kết quả — endpoint này vốn chỉ để
-            # onboarding hỏi folder, trả isdir của ~/.ssh/… thành oracle
-            # dò-tồn-tại-file cho bất kỳ ai cầm token
-            self._json({"ok": True, "isdir":
-                        os.path.isdir(p) if p and not path_sensitive(p) else False})
-        elif path == "/api/count-glob":
-            # verify engine của workflow hỏi "folder này có bao nhiêu file
-            # khớp pattern" — trả SỐ, không trả tên (danh sách file = lộ
-            # nội dung máy). Cùng chống-oracle của check-path.
-            import glob as _glob
-            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-            d = os.path.normpath(os.path.expanduser(
-                (q.get("path") or [""])[0].strip()))
-            pat = (q.get("pattern") or ["*"])[0].strip()[:100]
-            # pattern không được leo lên trên (../) — chỉ glob trong dir
-            if ".." in pat or "/" in pat or "\\" in pat:
-                pat = "*"
-            if d and os.path.isdir(d) and not path_sensitive(d):
-                n = sum(1 for _ in _glob.iglob(
-                    os.path.join(d, pat), recursive=False))
-                self._json({"ok": True, "count": min(n, 2000),
-                            "capped": n > 2000})
-            else:
-                self._json({"ok": True, "count": 0})
-        elif path == "/api/bots":
-            b = load_json(BOTS_FP, {"active": None, "bots": []})
-            self._json({"active": b.get("active"),
-                        "bots": b.get("bots") or [],
-                        "templates": role_templates()})
-        else:
-            self._json({"err": "not found"}, 404)
+        h = getattr(self, self.GET_ROUTES.get(path), None)
+        if h is None:
+            return self._json({"err": "not found"}, 404)
+        h()
 
     def do_POST(self):
         if self._blocked():
@@ -1485,659 +1432,774 @@ class Handler(BaseHTTPRequestHandler):
             # JSON hợp lệ nhưng không phải object ([], "x", 5) — để nguyên
             # thì data.get(...) raise AttributeError → handler thread chết
             data = {}
-        if path == "/api/prompt":
-            if acp is None or acp.dead:
-                # não chết (process rớt hoặc chưa cài) → thử bật lại một lần,
-                # học viên không phải tự chạy lại file start
-                spawn_brain()
-                self._json({"err": "đang khởi động lại trợ lý — gửi lại sau vài giây"}, 503); return
-            if not acp.session_id:
-                self._json({"err": "chưa có session"}, 503); return
-            # acquire + bump gen PHẢI atomic so với watchdog (cùng
-            # store_lock): lượt N vừa xong, lock mở, lượt N+1 giữ lock
-            # nhưng chưa kịp gen++ → timer cũ thấy gen khớp + locked()
-            # → giết não giữa lượt mới. Cửa sổ chỉ vài µs nhưng thật.
-            with store_lock:
-                locked = prompt_lock.acquire(blocking=False)
-                if locked:
-                    turn_gen[0] += 1   # đánh dấu lượt mới — timer lượt cũ
-                                       # thấy gen lệch → không giết nhầm
-                    run_id[0] += 1     # lượt mới — event con cháu kèm
-                                       # run_id này (beacon đếm theo lượt)
-            if not locked:
-                self._json({"err": "trợ lý đang xử lý câu trước"}, 409); return
-            try:
-                acp.call("session/prompt", {
-                    "sessionId": acp.session_id,
-                    "prompt": [{"type": "text", "text": data.get("text", "")}]})
-            except (BrokenPipeError, OSError):
-                prompt_lock.release()   # não chết ngay khi gửi → không kẹt busy
-                self._json({"err": "trợ lý đã dừng — chạy lại file start"}, 503); return
-            threading.Timer(TURN_TIMEOUT, _turn_watchdog,
-                            args=(turn_gen[0],)).start()
-            self._json({"ok": True})
-        elif path == "/api/respond":
-            rid = data.get("id")
-            oid = data.get("optionId")
-            # rid/oid không phải scalar (list/dict từ JSON) → get()/[in]
-            # raise TypeError giết thread — trả lỗi gọn thay vì crash
-            if not isinstance(rid, (int, str)) \
-                    or not isinstance(oid, (str, int)):
-                self._json({"err": "yêu cầu không còn hiệu lực"}, 404); return
-            # id PHẢI đang pending cho cả hai đường — __cancel__ chỉ miễn
-            # check optionId (option ảo do UI tự thêm), không miễn check id;
-            # nếu không kẻ có token vẫn bơm được id rác vào kênh điều khiển.
-            # Validate + consume PHẢI atomic trong lock, và chỉ pop khi hợp
-            # lệ — nếu pop trước thì request optionId lạ cũng giết card
-            # (kẻ xấu DoS được nút bấm của học viên).
-            o = self.headers.get("Origin")
-            with store_lock:
-                rec = perm_pending.get(rid)
-                # Card não (ACP): id do chính não tự khai + nó có sẵn token
-                # nên PHẢI đòi Origin trình duyệt y như card nội bộ, kẻo
-                # não (hay script nhiễm trong trang) tự duyệt tool call của
-                # mình. Card native (macOS) còn siết hơn: chỉ "__cancel__"
-                # qua chat — mọi option duyệt phải từ hộp thoại hệ điều
-                # hành (_perm_native_confirm), forge Origin cũng không ăn.
-                valid = (rec is not None
-                         and time.time() - rec["ts"] <= PERM_TTL
-                         and (oid == "__cancel__" or oid in rec["options"])
-                         and bool(o) and is_local_origin(o)
-                         and not (rec.get("native") and oid != "__cancel__"))
-                if valid:
-                    perm_pending.pop(rid, None)   # one-shot, không replay
-                lrec = local_pending.get(rid)
-                lfresh = lrec is not None \
-                    and time.time() - lrec["ts"] <= PERM_TTL
-                # chỉ pop khi đủ điều kiện — thiếu Origin/oid lạ KHÔNG được
-                # giết card (agent bơm request rác vẫn không DoS được nút
-                # xác nhận của học viên). Card native (macOS) mà oid="ok"
-                # cũng không pop: approve chỉ qua hộp thoại GUI — request
-                # này sẽ nhận 403 gợi ý ở dưới, card vẫn pending chờ.
-                lvalid = (lfresh and oid in ("ok", "__cancel__")
-                          and bool(o) and is_local_origin(o)
-                          and not (lrec.get("native") and oid == "ok"))
-                if lvalid:
-                    local_pending.pop(rid, None)
-            # Card nội bộ (consent gate — đổi quyền/xoá bài/đổi não): trả
-            # lời phải kèm Origin trình duyệt — agent gọi tay thường không
-            # có Origin (giả vẫn được, chỉ là thêm một vòng thủ). Trên
-            # macOS có NATIVE_GATE thì "ok" còn bị chặn hẳn — chỉ nút
-            # trong hộp thoại native mới là proof-of-human.
-            # NHÁNH LOCAL ĐỨNG TRƯỚC: không còn trường hợp trùng id nữa
-            # (đã chặn lúc đăng ký) nhưng vẫn ưu tiên local — lỡ có đường
-            # nào khác chen id vào perm_pending thì click của học viên
-            # vẫn resolve hành động local họ thấy, không nuôi card não.
-            if lrec is not None:
-                if not lfresh:
-                    self._json({"err": "yêu cầu không còn hiệu lực"}, 404); return
-                if not (o and is_local_origin(o)):
-                    self._json({"err": "thiếu Origin trình duyệt"}, 403); return
-                if lrec.get("native") and oid == "ok":
-                    self._json({"err": "bấm Đồng ý trong hộp thoại trên "
-                                "màn hình máy bạn"}, 403); return
-                if not lvalid:
-                    self._json({"err": "lựa chọn không hợp lệ"}, 400); return
-                if oid == "ok":
-                    try:
-                        lrec["apply"]()
-                    except Exception as e:
-                        self._json({"err": "làm không được — "
-                                    + str(e)[:120]}, 500); return
-                else:
-                    # cancel từ chat: giết luôn hộp thoại native đang mở
-                    # và đóng card (event perm_done → UI remove).
-                    p = lrec.get("proc")
-                    if p is not None:
-                        try:
-                            p.terminate()
-                        except Exception:
-                            pass
-                    broadcast({"t": "perm_done", "id": rid})
-                self._json({"ok": True}); return
-            if rec is None or time.time() - rec["ts"] > PERM_TTL:
+        h = getattr(self, self.POST_ROUTES.get(path), None)
+        if h is None:
+            return self._json({"err": "not found"}, 404)
+        h(data)
+
+    def _g_health(self):
+        # không trả sessionId — endpoint không auth, session id là
+        # handle nội bộ không ai dùng (portal chỉ đọc ok/brain/version)
+        self._json({"ok": True,
+                    "brain": getattr(acp, "brain_id", None) or load_brain().get("id"),
+                    "version": app_version(),
+                    "extVersion": ext_expected_version()})
+
+    def _g_brain(self):
+        cur = load_brain()
+        presets = []
+        for p in BRAIN_PRESETS:
+            presets.append({
+                "id": p["id"], "label": p["label"],
+                "cost": p.get("cost", "paid"),
+                "desc": p.get("desc", {}),
+                "install": p.get("install"),
+                "cmd_display": " ".join([p["cmd"]] + p["args"]),
+                "installed": all(shutil.which(r)
+                                 for r in p.get("requires", [p["cmd"]])),
+            })
+        self._json({"current": {k: cur.get(k)
+                                for k in ("id", "label", "cmd", "args", "terminal")},
+                    "presets": presets})
+
+    def _g_poll(self):
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        try:
+            since = int(q.get("since", ["0"])[0])
+        except ValueError:
+            since = 0
+        try:
+            wait_ms = min(int(q.get("wait", ["0"])[0] or 0), 30000)
+        except ValueError:
+            wait_ms = 0
+        with store_lock:
+            total = event_base + len(event_store)
+            # reset: cursor của client trỏ ngoài vùng event còn giữ —
+            # thường là bridge vừa restart → replay toàn bộ cho client dựng lại
+            reset = since < 0 or since < event_base or since > total
+            # long-poll: không có event mới và không cần reset → chờ tới
+            # wait hoặc broadcast() đánh thức. wait() tự release lock khi
+            # ngủ và reacquire khi dậy — xong phải TÍNH LẠI mọi thứ.
+            if wait_ms and not reset and total <= since:
+                new_event.wait(wait_ms / 1000)
+                total = event_base + len(event_store)
+                reset = since < 0 or since < event_base or since > total
+            evs = list(event_store) if reset else list(event_store[since - event_base:])
+        self._json({"events": evs, "next": total, "reset": reset})
+
+    def _g_permissions(self):
+        self._json(load_json(PERM_FP, {"folders": []}))
+
+    def _g_connections(self):
+        self._json(load_json(CONN_FP, {"apps": []}))
+
+    def _g_config(self):
+        self._json(load_json(CONFIG_FP, {}))
+
+    def _g_check_path(self):
+        # onboarding hỏi "folder này có tồn tại không" trước khi thêm —
+        # POST /api/permissions tạo card nên không dùng để kiểm được.
+        # Chỉ trả isdir, không lộ metadata; vẫn đòi token.
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        p = os.path.expanduser((q.get("path") or [""])[0].strip())
+        # path nhạy cảm không trả kết quả — endpoint này vốn chỉ để
+        # onboarding hỏi folder, trả isdir của ~/.ssh/… thành oracle
+        # dò-tồn-tại-file cho bất kỳ ai cầm token
+        self._json({"ok": True, "isdir":
+                    os.path.isdir(p) if p and not path_sensitive(p) else False})
+
+    def _g_count_glob(self):
+        # verify engine của workflow hỏi "folder này có bao nhiêu file
+        # khớp pattern" — trả SỐ, không trả tên (danh sách file = lộ
+        # nội dung máy). Cùng chống-oracle của check-path.
+        import glob as _glob
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        d = os.path.normpath(os.path.expanduser(
+            (q.get("path") or [""])[0].strip()))
+        pat = (q.get("pattern") or ["*"])[0].strip()[:100]
+        # pattern không được leo lên trên (../) — chỉ glob trong dir
+        if ".." in pat or "/" in pat or "\\" in pat:
+            pat = "*"
+        if d and os.path.isdir(d) and not path_sensitive(d):
+            n = sum(1 for _ in _glob.iglob(
+                os.path.join(d, pat), recursive=False))
+            self._json({"ok": True, "count": min(n, 2000),
+                        "capped": n > 2000})
+        else:
+            self._json({"ok": True, "count": 0})
+
+    def _g_bots(self):
+        b = load_json(BOTS_FP, {"active": None, "bots": []})
+        self._json({"active": b.get("active"),
+                    "bots": b.get("bots") or [],
+                    "templates": role_templates()})
+
+    def _h_prompt(self, data):
+        if acp is None or acp.dead:
+            # não chết (process rớt hoặc chưa cài) → thử bật lại một lần,
+            # học viên không phải tự chạy lại file start
+            spawn_brain()
+            self._json({"err": "đang khởi động lại trợ lý — gửi lại sau vài giây"}, 503); return
+        if not acp.session_id:
+            self._json({"err": "chưa có session"}, 503); return
+        # acquire + bump gen PHẢI atomic so với watchdog (cùng
+        # store_lock): lượt N vừa xong, lock mở, lượt N+1 giữ lock
+        # nhưng chưa kịp gen++ → timer cũ thấy gen khớp + locked()
+        # → giết não giữa lượt mới. Cửa sổ chỉ vài µs nhưng thật.
+        with store_lock:
+            locked = prompt_lock.acquire(blocking=False)
+            if locked:
+                turn_gen[0] += 1   # đánh dấu lượt mới — timer lượt cũ
+                                   # thấy gen lệch → không giết nhầm
+                run_id[0] += 1     # lượt mới — event con cháu kèm
+                                   # run_id này (beacon đếm theo lượt)
+        if not locked:
+            self._json({"err": "trợ lý đang xử lý câu trước"}, 409); return
+        try:
+            acp.call("session/prompt", {
+                "sessionId": acp.session_id,
+                "prompt": [{"type": "text", "text": data.get("text", "")}]})
+        except (BrokenPipeError, OSError):
+            prompt_lock.release()   # não chết ngay khi gửi → không kẹt busy
+            self._json({"err": "trợ lý đã dừng — chạy lại file start"}, 503); return
+        threading.Timer(TURN_TIMEOUT, _turn_watchdog,
+                        args=(turn_gen[0],)).start()
+        self._json({"ok": True})
+
+    def _h_respond(self, data):
+        rid = data.get("id")
+        oid = data.get("optionId")
+        # rid/oid không phải scalar (list/dict từ JSON) → get()/[in]
+        # raise TypeError giết thread — trả lỗi gọn thay vì crash
+        if not isinstance(rid, (int, str)) \
+                or not isinstance(oid, (str, int)):
+            self._json({"err": "yêu cầu không còn hiệu lực"}, 404); return
+        # id PHẢI đang pending cho cả hai đường — __cancel__ chỉ miễn
+        # check optionId (option ảo do UI tự thêm), không miễn check id;
+        # nếu không kẻ có token vẫn bơm được id rác vào kênh điều khiển.
+        # Validate + consume PHẢI atomic trong lock, và chỉ pop khi hợp
+        # lệ — nếu pop trước thì request optionId lạ cũng giết card
+        # (kẻ xấu DoS được nút bấm của học viên).
+        o = self.headers.get("Origin")
+        with store_lock:
+            rec = perm_pending.get(rid)
+            # Card não (ACP): id do chính não tự khai + nó có sẵn token
+            # nên PHẢI đòi Origin trình duyệt y như card nội bộ, kẻo
+            # não (hay script nhiễm trong trang) tự duyệt tool call của
+            # mình. Card native (macOS) còn siết hơn: chỉ "__cancel__"
+            # qua chat — mọi option duyệt phải từ hộp thoại hệ điều
+            # hành (_perm_native_confirm), forge Origin cũng không ăn.
+            valid = (rec is not None
+                     and time.time() - rec["ts"] <= PERM_TTL
+                     and (oid == "__cancel__" or oid in rec["options"])
+                     and bool(o) and is_local_origin(o)
+                     and not (rec.get("native") and oid != "__cancel__"))
+            if valid:
+                perm_pending.pop(rid, None)   # one-shot, không replay
+            lrec = local_pending.get(rid)
+            lfresh = lrec is not None \
+                and time.time() - lrec["ts"] <= PERM_TTL
+            # chỉ pop khi đủ điều kiện — thiếu Origin/oid lạ KHÔNG được
+            # giết card (agent bơm request rác vẫn không DoS được nút
+            # xác nhận của học viên). Card native (macOS) mà oid="ok"
+            # cũng không pop: approve chỉ qua hộp thoại GUI — request
+            # này sẽ nhận 403 gợi ý ở dưới, card vẫn pending chờ.
+            lvalid = (lfresh and oid in ("ok", "__cancel__")
+                      and bool(o) and is_local_origin(o)
+                      and not (lrec.get("native") and oid == "ok"))
+            if lvalid:
+                local_pending.pop(rid, None)
+        # Card nội bộ (consent gate — đổi quyền/xoá bài/đổi não): trả
+        # lời phải kèm Origin trình duyệt — agent gọi tay thường không
+        # có Origin (giả vẫn được, chỉ là thêm một vòng thủ). Trên
+        # macOS có NATIVE_GATE thì "ok" còn bị chặn hẳn — chỉ nút
+        # trong hộp thoại native mới là proof-of-human.
+        # NHÁNH LOCAL ĐỨNG TRƯỚC: không còn trường hợp trùng id nữa
+        # (đã chặn lúc đăng ký) nhưng vẫn ưu tiên local — lỡ có đường
+        # nào khác chen id vào perm_pending thì click của học viên
+        # vẫn resolve hành động local họ thấy, không nuôi card não.
+        if lrec is not None:
+            if not lfresh:
                 self._json({"err": "yêu cầu không còn hiệu lực"}, 404); return
             if not (o and is_local_origin(o)):
                 self._json({"err": "thiếu Origin trình duyệt"}, 403); return
-            if rec.get("native") and oid != "__cancel__":
+            if lrec.get("native") and oid == "ok":
                 self._json({"err": "bấm Đồng ý trong hộp thoại trên "
                             "màn hình máy bạn"}, 403); return
-            if not valid:
+            if not lvalid:
                 self._json({"err": "lựa chọn không hợp lệ"}, 400); return
-            if oid == "__cancel__":
-                # học viên từ chối / card không có nút nào → báo cancel cho agent
-                payload = {"jsonrpc": "2.0", "id": rid,
-                           "error": {"code": -32800, "message": "học viên không đồng ý"}}
-            else:
-                payload = {"jsonrpc": "2.0", "id": rid,
-                           "result": {"outcome": {"outcome": "selected",
-                                                  "optionId": oid}}}
-            # cancel từ chat: giết luôn hộp thoại native đang mở (nếu có)
-            p = rec.get("proc")
-            if p is not None:
+            if oid == "ok":
                 try:
-                    p.terminate()
-                except Exception:
-                    pass
+                    lrec["apply"]()
+                except Exception as e:
+                    self._json({"err": "làm không được — "
+                                + str(e)[:120]}, 500); return
+            else:
+                # cancel từ chat: giết luôn hộp thoại native đang mở
+                # và đóng card (event perm_done → UI remove).
+                p = lrec.get("proc")
+                if p is not None:
+                    try:
+                        p.terminate()
+                    except Exception:
+                        pass
+                broadcast({"t": "perm_done", "id": rid})
+            self._json({"ok": True}); return
+        if rec is None or time.time() - rec["ts"] > PERM_TTL:
+            self._json({"err": "yêu cầu không còn hiệu lực"}, 404); return
+        if not (o and is_local_origin(o)):
+            self._json({"err": "thiếu Origin trình duyệt"}, 403); return
+        if rec.get("native") and oid != "__cancel__":
+            self._json({"err": "bấm Đồng ý trong hộp thoại trên "
+                        "màn hình máy bạn"}, 403); return
+        if not valid:
+            self._json({"err": "lựa chọn không hợp lệ"}, 400); return
+        if oid == "__cancel__":
+            # học viên từ chối / card không có nút nào → báo cancel cho agent
+            payload = {"jsonrpc": "2.0", "id": rid,
+                       "error": {"code": -32800, "message": "học viên không đồng ý"}}
+        else:
+            payload = {"jsonrpc": "2.0", "id": rid,
+                       "result": {"outcome": {"outcome": "selected",
+                                              "optionId": oid}}}
+        # cancel từ chat: giết luôn hộp thoại native đang mở (nếu có)
+        p = rec.get("proc")
+        if p is not None:
             try:
-                if acp and not acp.dead:
-                    acp.send(payload)
-            except (BrokenPipeError, OSError):
+                p.terminate()
+            except Exception:
                 pass
-            broadcast({"t": "perm_done", "id": rid})
-            self._json({"ok": True})
-        elif path == "/api/brain":
-            # Đổi não: {"id": <preset>} hoặc lệnh tự nhập {"cmd","args","terminal"}.
-            # cmd chỉ cho phép tên lệnh trần (không path) — trang local bị
-            # nhiễm vẫn không trỏ được vào script lạ trên máy.
-            bid = str(data.get("id", "")).strip()
-            preset = next((p for p in BRAIN_PRESETS if p["id"] == bid), None)
-            if preset:
-                b = {"id": preset["id"], "label": preset["label"],
-                     "cmd": preset["cmd"], "args": list(preset["args"]),
-                     "terminal": preset["terminal"]}
-                requires = preset.get("requires", [preset["cmd"]])
-            else:
-                cmd = str(data.get("cmd", "")).strip()
-                if not re.fullmatch(r"[A-Za-z0-9_.-]+", cmd or ""):
-                    self._json({"err": "lệnh não không hợp lệ — chỉ nhận tên lệnh"}, 400); return
-                if _brain_cmd_denied(cmd.lower()):
-                    # .lower() bắt buộc: APFS/NTFS không phân biệt hoa-thường
-                    # nên "Python3" which-resolve vẫn ra python3 — deny mà
-                    # so nguyên xi là lọt (ps1 đã ToLower, load_brain cũng vậy)
-                    self._json({"err": "lệnh này chạy code tuỳ ý — không dùng làm não được"}, 400); return
-                term = str(data.get("terminal", cmd))
-                if not re.fullmatch(r"[A-Za-z0-9_.-]+", term):
-                    self._json({"err": "lệnh terminal không hợp lệ"}, 400); return
-                if _brain_cmd_denied(term.lower()):
-                    self._json({"err": "lệnh terminal này chạy code tuỳ ý — "
-                                       "không dùng được"}, 400); return
-                args = data.get("args")
-                args = [str(a)[:200] for a in args[:20]] if isinstance(args, list) else []
-                b = {"id": bid or "custom",
-                     "label": str(data.get("label", cmd))[:60],
-                     "cmd": cmd, "args": args,
-                     "terminal": term}
-                requires = [cmd]
-            missing = [r for r in requires if not shutil.which(r)]
-            if missing:
-                self._json({"err": "chưa cài trên máy: " + ", ".join(missing),
-                            "missing": missing}, 404); return
-            # Mọi đổi não đều qua card — kể cả preset: agent cũng gọi được
-            # endpoint này (BRIDGE_TOKEN có sẵn trong env) nên preset đổi
-            # thẳng = agent tự kill session/spam spawn/ghi brain.json qua
-            # cửa vòng (audit-3 M5). Text custom nói thẳng "chạy lệnh tuỳ
-            # ý" — denylist không bao giờ đầy đủ, đừng để học viên tưởng
-            # lệnh đã được lọc.
-            disp = " ".join([b["cmd"]] + b.get("args", []))[:80]
-            title = (f"Đổi não sang {preset['label']}?" if preset
-                     else f"Chạy lệnh tùy ý \"{disp}\" làm não?")
-            def _apply(b=b):
-                save_json(BRAIN_FP, b)
-                spawn_brain()
-            rid = gate_local(title, _apply)
-            self._gate_resp(rid, "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để đổi não")
-        elif path == "/api/delete-lesson":
-            folder = str(data.get("folder", ""))
-            if not re.fullmatch(r"[a-zA-Z0-9_-]+", folder):
-                self._json({"err": "tên folder lạ"}, 400); return
-            course = os.path.realpath(os.path.join(os.path.abspath(CWD), "my-course"))
-            target = os.path.realpath(os.path.join(course, folder))
-            if not target.startswith(course + os.sep) or not os.path.isdir(target):
-                self._json({"err": "không thấy folder bài"}, 404); return
-            def _apply(target=target, folder=folder, course=course):
-                # không xoá hẳn — move vào my-course/.trash/ để khôi phục
-                # được (bấm nhầm Đồng ý vẫn cứu lại bài); tên kèm timestamp
-                # + hex ngắn tránh đụng khi xoá lại folder cùng tên
-                trash = os.path.join(course, ".trash")
-                os.makedirs(trash, exist_ok=True)
-                dst = os.path.join(trash, folder + "-" +
-                                   time.strftime("%Y%m%d-%H%M%S") + "-" +
-                                   secrets.token_hex(3))
-                shutil.move(target, dst)
-                # GC thùng rác: không dọn thì video.mp4 trong bài xoá tích
-                # luỹ vĩnh viễn. Giữ 20 bản mới nhất; cũ hơn 30 ngày xoá
-                # hẳn (đã qua consent + 30 ngày khôi phục là đủ).
-                try:
-                    ents = sorted(
-                        (os.path.join(trash, d) for d in os.listdir(trash)),
-                        key=os.path.getmtime)
-                    now = time.time()
-                    for i, e in enumerate(ents):
-                        if len(ents) - i > 20 \
-                                or now - os.path.getmtime(e) > 30 * 86400:
-                            shutil.rmtree(e, ignore_errors=True)
-                except OSError:
-                    pass
-                mf = os.path.join(course, "manifest.json")
-                try:
-                    m = json.load(open(mf, encoding="utf-8"))
-                    m["lessons"] = [b for b in m.get("lessons", [])
-                                    if b.get("folder") != folder]
-                    save_json(mf, m)   # atomic — crash giữa ghi không corrupt
-                except Exception:
-                    pass
-            # xoá bài là hành động phá nhưng hoàn tác được — qua card xác
-            # nhận của học viên, bài nằm lại trong my-course/.trash/
-            rid = gate_local(f"Xoá bài học {folder}? (vào thùng rác — khôi phục được)", _apply)
-            self._gate_resp(rid, "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để xoá (bài giữ trong thùng rác)")
-        elif path == "/api/save-page":
-            # clone-view.html lưu bản đã chỉnh — chỉ cho ghi file .html
-            # trong my-course/, chặn path ra ngoài
-            rel = str(data.get("file", "")).strip().lstrip("/")
-            html = str(data.get("html", ""))
-            course = os.path.realpath(os.path.join(os.path.abspath(CWD), "my-course"))
-            target = os.path.realpath(os.path.join(os.path.abspath(CWD), rel))
-            if not rel.startswith("my-course/") or ".." in rel or \
-               not target.startswith(course + os.sep) or \
-               not re.search(r"\.html?$", target, re.I):
-                self._json({"err": "chỉ lưu file .html trong my-course/"}, 400); return
-            if not html:
-                self._json({"err": "trang trống"}, 400); return
-            os.makedirs(os.path.dirname(target), exist_ok=True)
-            # backup bản trước khi ghi đè — học viên sửa hỏng còn về được
-            if os.path.exists(target):
-                try:
-                    shutil.copy2(target, target + ".bak")
-                except OSError:
-                    pass
-            with open(target, "w", encoding="utf-8") as f:
-                f.write(html)
-            self._json({"ok": True})
-        elif path == "/api/permissions":
-            # Đổi quyền folder = đổi sandbox profile spawn kế → bắt buộc
-            # qua card xác nhận (agent tự cấp "/" = tự cởi còng). Batch
-            # {"paths": [...]} = MỘT card — onboarding thêm nhiều folder
-            # không spam card (mỗi card riêng = không card nào được đọc).
-            access = str(data.get("access", "read"))
-            if access not in ("read", "read-write"):
-                self._json({"err": "access phải là read hoặc read-write"}, 400); return
-            raw = data.get("paths") if isinstance(data.get("paths"), list) \
-                else [data.get("path")]
-            if len(raw) > 20:
-                self._json({"err": "quá nhiều folder một lần"}, 400); return
-            paths, bad = [], []
-            for rp in raw:
-                p = os.path.expanduser(str(rp or "").strip())
-                if not p or not os.path.isdir(p):
-                    bad.append(str(rp or ""))
-                    continue
-                if path_sensitive(p):
-                    self._json({"err": "folder chứa dữ liệu nhạy cảm — "
-                                       "không cấp quyền được: " + p}, 400); return
-                if access == "read-write" and not rw_grant_ok(p, CWD):
-                    self._json({"err": "không cấp ghi trong folder mã nguồn "
-                                       "của trợ lý — ghi được là code chạy "
-                                       "ngoài sandbox: " + p}, 400); return
-                paths.append(p)
-            if not paths:
-                self._json({"err": "không thấy folder này trên máy"}, 404); return
-            note = str(data.get("note", ""))[:120]
-            def _apply(paths=paths, access=access, note=note):
-                # Re-validate LÚC APPLY (audit-3 CAO-2): giữa request và
-                # bấm Đồng ý agent có thể rmdir + ln -s folder nhạy cảm —
-                # request-time check đã qua nhưng đích mới phải bị bắt ở
-                # đây. (Lớp chặn cuối vẫn là gen-sandbox._grant_ok lúc
-                # build profile mỗi spawn — đây là lớp báo lỗi thấy được.)
-                ok, refused = [], []
-                for p in paths:
-                    if (not os.path.isdir(p) or path_sensitive(p)
-                            or (access == "read-write"
-                                and not rw_grant_ok(p, CWD))):
-                        refused.append(p)
-                    else:
-                        ok.append(p)
-                if ok:
-                    q = load_json(PERM_FP, {"folders": []})
-                    # file hỏng/thiếu key → qua fallback hết — không crash
-                    q["folders"] = [f for f in (q.get("folders") or [])
-                                    if os.path.expanduser(str(f.get("path", "")))
-                                    not in ok]
-                    for p in ok:
-                        q["folders"].append({"path": p, "access": access,
-                                             "note": note})
-                    save_json(PERM_FP, q)
-                    gen_sandbox_profile()   # quyền mới áp ngay spawn não kế tiếp
-                if refused:
-                    broadcast({"t": "err",
-                               "msg": "bỏ qua folder không còn hợp lệ: "
-                                      + ", ".join(refused)[:160]})
-            disp = paths[0] if len(paths) == 1 \
-                else f"{len(paths)} folder ({', '.join(paths)[:120]})"
-            rid = gate_local(f"Thêm quyền {access} cho {disp}?", _apply)
-            self._gate_resp(rid,
-                "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để có hiệu lực",
-                {"skipped": bad} if bad else None)
-        elif path == "/api/remove-permission":
-            p = os.path.expanduser(str(data.get("path", "")).strip())
-            def _apply(p=p):
+        try:
+            if acp and not acp.dead:
+                acp.send(payload)
+        except (BrokenPipeError, OSError):
+            pass
+        broadcast({"t": "perm_done", "id": rid})
+        self._json({"ok": True})
+
+    def _h_brain(self, data):
+        # Đổi não: {"id": <preset>} hoặc lệnh tự nhập {"cmd","args","terminal"}.
+        # cmd chỉ cho phép tên lệnh trần (không path) — trang local bị
+        # nhiễm vẫn không trỏ được vào script lạ trên máy.
+        bid = str(data.get("id", "")).strip()
+        preset = next((p for p in BRAIN_PRESETS if p["id"] == bid), None)
+        if preset:
+            b = {"id": preset["id"], "label": preset["label"],
+                 "cmd": preset["cmd"], "args": list(preset["args"]),
+                 "terminal": preset["terminal"]}
+            requires = preset.get("requires", [preset["cmd"]])
+        else:
+            cmd = str(data.get("cmd", "")).strip()
+            if not re.fullmatch(r"[A-Za-z0-9_.-]+", cmd or ""):
+                self._json({"err": "lệnh não không hợp lệ — chỉ nhận tên lệnh"}, 400); return
+            if _brain_cmd_denied(cmd.lower()):
+                # .lower() bắt buộc: APFS/NTFS không phân biệt hoa-thường
+                # nên "Python3" which-resolve vẫn ra python3 — deny mà
+                # so nguyên xi là lọt (ps1 đã ToLower, load_brain cũng vậy)
+                self._json({"err": "lệnh này chạy code tuỳ ý — không dùng làm não được"}, 400); return
+            term = str(data.get("terminal", cmd))
+            if not re.fullmatch(r"[A-Za-z0-9_.-]+", term):
+                self._json({"err": "lệnh terminal không hợp lệ"}, 400); return
+            if _brain_cmd_denied(term.lower()):
+                self._json({"err": "lệnh terminal này chạy code tuỳ ý — "
+                                   "không dùng được"}, 400); return
+            args = data.get("args")
+            args = [str(a)[:200] for a in args[:20]] if isinstance(args, list) else []
+            b = {"id": bid or "custom",
+                 "label": str(data.get("label", cmd))[:60],
+                 "cmd": cmd, "args": args,
+                 "terminal": term}
+            requires = [cmd]
+        missing = [r for r in requires if not shutil.which(r)]
+        if missing:
+            self._json({"err": "chưa cài trên máy: " + ", ".join(missing),
+                        "missing": missing}, 404); return
+        # Mọi đổi não đều qua card — kể cả preset: agent cũng gọi được
+        # endpoint này (BRIDGE_TOKEN có sẵn trong env) nên preset đổi
+        # thẳng = agent tự kill session/spam spawn/ghi brain.json qua
+        # cửa vòng (audit-3 M5). Text custom nói thẳng "chạy lệnh tuỳ
+        # ý" — denylist không bao giờ đầy đủ, đừng để học viên tưởng
+        # lệnh đã được lọc.
+        disp = " ".join([b["cmd"]] + b.get("args", []))[:80]
+        title = (f"Đổi não sang {preset['label']}?" if preset
+                 else f"Chạy lệnh tùy ý \"{disp}\" làm não?")
+        def _apply(b=b):
+            save_json(BRAIN_FP, b)
+            spawn_brain()
+        rid = gate_local(title, _apply)
+        self._gate_resp(rid, "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để đổi não")
+
+    def _h_delete_lesson(self, data):
+        folder = str(data.get("folder", ""))
+        if not re.fullmatch(r"[a-zA-Z0-9_-]+", folder):
+            self._json({"err": "tên folder lạ"}, 400); return
+        course = os.path.realpath(os.path.join(os.path.abspath(CWD), "my-course"))
+        target = os.path.realpath(os.path.join(course, folder))
+        if not target.startswith(course + os.sep) or not os.path.isdir(target):
+            self._json({"err": "không thấy folder bài"}, 404); return
+        def _apply(target=target, folder=folder, course=course):
+            # không xoá hẳn — move vào my-course/.trash/ để khôi phục
+            # được (bấm nhầm Đồng ý vẫn cứu lại bài); tên kèm timestamp
+            # + hex ngắn tránh đụng khi xoá lại folder cùng tên
+            trash = os.path.join(course, ".trash")
+            os.makedirs(trash, exist_ok=True)
+            dst = os.path.join(trash, folder + "-" +
+                               time.strftime("%Y%m%d-%H%M%S") + "-" +
+                               secrets.token_hex(3))
+            shutil.move(target, dst)
+            # GC thùng rác: không dọn thì video.mp4 trong bài xoá tích
+            # luỹ vĩnh viễn. Giữ 20 bản mới nhất; cũ hơn 30 ngày xoá
+            # hẳn (đã qua consent + 30 ngày khôi phục là đủ).
+            try:
+                ents = sorted(
+                    (os.path.join(trash, d) for d in os.listdir(trash)),
+                    key=os.path.getmtime)
+                now = time.time()
+                for i, e in enumerate(ents):
+                    if len(ents) - i > 20 \
+                            or now - os.path.getmtime(e) > 30 * 86400:
+                        shutil.rmtree(e, ignore_errors=True)
+            except OSError:
+                pass
+            mf = os.path.join(course, "manifest.json")
+            try:
+                m = json.load(open(mf, encoding="utf-8"))
+                m["lessons"] = [b for b in m.get("lessons", [])
+                                if b.get("folder") != folder]
+                save_json(mf, m)   # atomic — crash giữa ghi không corrupt
+            except Exception:
+                pass
+        # xoá bài là hành động phá nhưng hoàn tác được — qua card xác
+        # nhận của học viên, bài nằm lại trong my-course/.trash/
+        rid = gate_local(f"Xoá bài học {folder}? (vào thùng rác — khôi phục được)", _apply)
+        self._gate_resp(rid, "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để xoá (bài giữ trong thùng rác)")
+
+    def _h_save_page(self, data):
+        # clone-view.html lưu bản đã chỉnh — chỉ cho ghi file .html
+        # trong my-course/, chặn path ra ngoài
+        rel = str(data.get("file", "")).strip().lstrip("/")
+        html = str(data.get("html", ""))
+        course = os.path.realpath(os.path.join(os.path.abspath(CWD), "my-course"))
+        target = os.path.realpath(os.path.join(os.path.abspath(CWD), rel))
+        if not rel.startswith("my-course/") or ".." in rel or \
+           not target.startswith(course + os.sep) or \
+           not re.search(r"\.html?$", target, re.I):
+            self._json({"err": "chỉ lưu file .html trong my-course/"}, 400); return
+        if not html:
+            self._json({"err": "trang trống"}, 400); return
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        # backup bản trước khi ghi đè — học viên sửa hỏng còn về được
+        if os.path.exists(target):
+            try:
+                shutil.copy2(target, target + ".bak")
+            except OSError:
+                pass
+        with open(target, "w", encoding="utf-8") as f:
+            f.write(html)
+        self._json({"ok": True})
+
+    def _h_permissions(self, data):
+        # Đổi quyền folder = đổi sandbox profile spawn kế → bắt buộc
+        # qua card xác nhận (agent tự cấp "/" = tự cởi còng). Batch
+        # {"paths": [...]} = MỘT card — onboarding thêm nhiều folder
+        # không spam card (mỗi card riêng = không card nào được đọc).
+        access = str(data.get("access", "read"))
+        if access not in ("read", "read-write"):
+            self._json({"err": "access phải là read hoặc read-write"}, 400); return
+        raw = data.get("paths") if isinstance(data.get("paths"), list) \
+            else [data.get("path")]
+        if len(raw) > 20:
+            self._json({"err": "quá nhiều folder một lần"}, 400); return
+        paths, bad = [], []
+        for rp in raw:
+            p = os.path.expanduser(str(rp or "").strip())
+            if not p or not os.path.isdir(p):
+                bad.append(str(rp or ""))
+                continue
+            if path_sensitive(p):
+                self._json({"err": "folder chứa dữ liệu nhạy cảm — "
+                                   "không cấp quyền được: " + p}, 400); return
+            if access == "read-write" and not rw_grant_ok(p, CWD):
+                self._json({"err": "không cấp ghi trong folder mã nguồn "
+                                   "của trợ lý — ghi được là code chạy "
+                                   "ngoài sandbox: " + p}, 400); return
+            paths.append(p)
+        if not paths:
+            self._json({"err": "không thấy folder này trên máy"}, 404); return
+        note = str(data.get("note", ""))[:120]
+        def _apply(paths=paths, access=access, note=note):
+            # Re-validate LÚC APPLY (audit-3 CAO-2): giữa request và
+            # bấm Đồng ý agent có thể rmdir + ln -s folder nhạy cảm —
+            # request-time check đã qua nhưng đích mới phải bị bắt ở
+            # đây. (Lớp chặn cuối vẫn là gen-sandbox._grant_ok lúc
+            # build profile mỗi spawn — đây là lớp báo lỗi thấy được.)
+            ok, refused = [], []
+            for p in paths:
+                if (not os.path.isdir(p) or path_sensitive(p)
+                        or (access == "read-write"
+                            and not rw_grant_ok(p, CWD))):
+                    refused.append(p)
+                else:
+                    ok.append(p)
+            if ok:
                 q = load_json(PERM_FP, {"folders": []})
+                # file hỏng/thiếu key → qua fallback hết — không crash
                 q["folders"] = [f for f in (q.get("folders") or [])
-                                if os.path.expanduser(str(f.get("path", ""))) != p]
+                                if os.path.expanduser(str(f.get("path", "")))
+                                not in ok]
+                for p in ok:
+                    q["folders"].append({"path": p, "access": access,
+                                         "note": note})
                 save_json(PERM_FP, q)
-                gen_sandbox_profile()   # thu hồi cũng phải regen
-            rid = gate_local(f"Gỡ quyền folder {p}?", _apply)
-            self._gate_resp(rid, "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để có hiệu lực")
-        elif path == "/api/connections":
-            # Upsert một app vào registry kết nối — thay tại chỗ để giữ
-            # thứ tự hiển thị trong panel Cài đặt
-            app = data.get("app")
-            if not isinstance(app, dict) or not app.get("id"):
-                self._json({"err": "thiếu app.id"}, 400); return
-            if "probe" in app and not validate_probe(app["probe"]):
-                self._json({"err": "kiểu kiểm tra kết nối không hợp lệ"}, 400); return
-            # open_url là link nút "Mở trang" trong portal — javascript:/
-            # data: chạy được script trong origin portal → chỉ nhận http(s)
-            ou = str(app.get("open_url") or "")
-            if ou and not re.match(r"^https?://", ou, re.I):
-                self._json({"err": "open_url chỉ nhận link http(s)"}, 400); return
-            k = load_json(CONN_FP, {"apps": []})
-            old_ou = next((str(a.get("open_url") or "")
-                           for a in (k.get("apps") or [])
-                           if a.get("id") == app["id"]), "")
-            if ou and ou != old_ou:
-                # open_url MỚI hoặc ĐỔI → nút "Mở trang" quen-thuộc trỏ
-                # site lạ (phishing) → card cho học viên thấy đích đến
-                # trước khi tin (audit v6). Upsert status/name hay giữ
-                # nguyên open_url thì chạy thẳng — portal cập nhật thường
-                # xuyên, không thể card mỗi lần.
-                def _apply(app=app):
-                    kk = load_json(CONN_FP, {"apps": []})
-                    kk["apps"] = kk.get("apps") or []
-                    for i, a in enumerate(kk["apps"]):
-                        if a.get("id") == app["id"]:
-                            kk["apps"][i] = app
-                            break
-                    else:
-                        kk["apps"].append(app)
-                    save_json(CONN_FP, kk)
-                rid = gate_local(
-                    f"Đặt link \"Mở trang\" của {app['id']} → {ou}?", _apply)
-                self._gate_resp(rid, "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để đặt link")
-                return
-            k["apps"] = k.get("apps") or []
-            for i, a in enumerate(k["apps"]):
-                if a.get("id") == app["id"]:
-                    k["apps"][i] = app
-                    break
-            else:
-                k["apps"].append(app)
-            save_json(CONN_FP, k)
-            self._json({"ok": True})
-        elif path == "/api/remove-connection":
-            # Gỡ app khỏi registry — agent tự gọi là mất nút kết nối âm
-            # thầm → gate (audit v6). Không UI nào gọi endpoint này nên
-            # card không thêm ma sát.
-            aid = str(data.get("id", ""))
-            def _apply(aid=aid):
-                k = load_json(CONN_FP, {"apps": []})
-                k["apps"] = [a for a in (k.get("apps") or [])
-                             if a.get("id") != aid]
-                save_json(CONN_FP, k)
-            rid = gate_local(f"Gỡ kết nối {aid}?", _apply)
-            self._gate_resp(rid, "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để gỡ")
-        elif path == "/api/secrets":
-            # Form "Cài" trong panel Cài đặt: học viên dán app password WP /
-            # mã OA… → ghi vào .devin/secrets.local.json (đã gitignore).
-            # Chỉ GHI — không endpoint nào đọc secret ra ngoài.
-            # Ghi credential là đặc quyền → consent gate (audit v6): agent
-            # tự gọi với url mới = xoá creds thật (wipe-khi-đổi-url), còn
-            # url + pass đến host lạ = kênh exfil.
-            app = str(data.get("app", ""))
-            fields = data.get("fields")
-            if not re.match(r"^[a-z0-9-]+$", app) or not isinstance(fields, dict):
-                self._json({"err": "thiếu app hoặc fields"}, 400); return
-            clean = {str(k)[:40]: str(v).strip()[:500]
-                     for k, v in list(fields.items())[:10]
-                     if isinstance(v, str) and v.strip()}
-            if not clean:
-                self._json({"err": "chưa nhập gì"}, 400); return
-            fp = os.path.join(os.path.abspath(CWD), ".devin", "secrets.local.json")
-            # Card báo trước cả wipe (đọc creds cũ chỉ để so) — học viên
-            # thấy "sẽ xoá thông tin cũ" TRƯỚC khi bấm Đồng ý.
-            old0 = load_json(fp, {}).get(app) or {}
-            wipe = any(k in clean and clean[k] != old0.get(k)
-                       for k in ("url", "host", "endpoint"))
-            def _apply(app=app, clean=clean):
-                creds = load_json(fp, {})
-                old = creds.get(app) or {}
-                # Đổi endpoint (url/host/endpoint) thì phải nhập lại TOÀN
-                # BỘ thông tin — giữ user+password cũ qua host mới = probe
-                # sau đó gửi creds thật tới host attacker (exfil).
-                for k in ("url", "host", "endpoint"):
-                    if k in clean and clean[k] != old.get(k):
-                        creds[app] = clean
+                gen_sandbox_profile()   # quyền mới áp ngay spawn não kế tiếp
+            if refused:
+                broadcast({"t": "err",
+                           "msg": "bỏ qua folder không còn hợp lệ: "
+                                  + ", ".join(refused)[:160]})
+        disp = paths[0] if len(paths) == 1 \
+            else f"{len(paths)} folder ({', '.join(paths)[:120]})"
+        rid = gate_local(f"Thêm quyền {access} cho {disp}?", _apply)
+        self._gate_resp(rid,
+            "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để có hiệu lực",
+            {"skipped": bad} if bad else None)
+
+    def _h_remove_permission(self, data):
+        p = os.path.expanduser(str(data.get("path", "")).strip())
+        def _apply(p=p):
+            q = load_json(PERM_FP, {"folders": []})
+            q["folders"] = [f for f in (q.get("folders") or [])
+                            if os.path.expanduser(str(f.get("path", ""))) != p]
+            save_json(PERM_FP, q)
+            gen_sandbox_profile()   # thu hồi cũng phải regen
+        rid = gate_local(f"Gỡ quyền folder {p}?", _apply)
+        self._gate_resp(rid, "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để có hiệu lực")
+
+    def _h_connections(self, data):
+        # Upsert một app vào registry kết nối — thay tại chỗ để giữ
+        # thứ tự hiển thị trong panel Cài đặt
+        app = data.get("app")
+        if not isinstance(app, dict) or not app.get("id"):
+            self._json({"err": "thiếu app.id"}, 400); return
+        if "probe" in app and not validate_probe(app["probe"]):
+            self._json({"err": "kiểu kiểm tra kết nối không hợp lệ"}, 400); return
+        # open_url là link nút "Mở trang" trong portal — javascript:/
+        # data: chạy được script trong origin portal → chỉ nhận http(s)
+        ou = str(app.get("open_url") or "")
+        if ou and not re.match(r"^https?://", ou, re.I):
+            self._json({"err": "open_url chỉ nhận link http(s)"}, 400); return
+        k = load_json(CONN_FP, {"apps": []})
+        old_ou = next((str(a.get("open_url") or "")
+                       for a in (k.get("apps") or [])
+                       if a.get("id") == app["id"]), "")
+        if ou and ou != old_ou:
+            # open_url MỚI hoặc ĐỔI → nút "Mở trang" quen-thuộc trỏ
+            # site lạ (phishing) → card cho học viên thấy đích đến
+            # trước khi tin (audit v6). Upsert status/name hay giữ
+            # nguyên open_url thì chạy thẳng — portal cập nhật thường
+            # xuyên, không thể card mỗi lần.
+            def _apply(app=app):
+                kk = load_json(CONN_FP, {"apps": []})
+                kk["apps"] = kk.get("apps") or []
+                for i, a in enumerate(kk["apps"]):
+                    if a.get("id") == app["id"]:
+                        kk["apps"][i] = app
                         break
                 else:
-                    creds[app] = {**old, **clean}
-                os.makedirs(os.path.dirname(fp), exist_ok=True)
-                save_json(fp, creds)
-                try:
-                    # credential của học viên — quyền như bridge.token
-                    os.chmod(fp, 0o600)
-                except OSError:
-                    pass                 # Windows không có chmod — bỏ qua
-            title = (f"Lưu thông tin đăng nhập cho {app} — đổi địa chỉ "
-                     f"site sẽ XOÁ thông tin cũ?" if wipe
-                     else f"Lưu thông tin đăng nhập cho {app}?")
-            rid = gate_local(title, _apply)
-            self._gate_resp(rid, "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để lưu")
-        elif path == "/api/setup":
-            # Onboarding lần đầu: ngôn ngữ + tên → config.json + skill pack đúng ngôn ngữ
-            lang = str(data.get("language", ""))
-            name = str(data.get("learner_name", "")).strip()[:80]
-            if lang not in ("vi", "en"):
-                self._json({"err": "language phải là vi hoặc en"}, 400); return
-            def _apply(lang=lang, name=name):
-                os.makedirs(MC_DIR, exist_ok=True)
-                save_json(CONFIG_FP, {"language": lang, "learner_name": name})
-                # Đồng bộ tên + recipes (công thức nhanh) vào manifest khoá học —
-                # recipes đi kèm pack ngôn ngữ nên sidebar đúng lệnh, đúng tiếng
-                mf = os.path.join(MC_DIR, "manifest.json")
-                try:
-                    m = json.load(open(mf, encoding="utf-8"))
-                    if name:
-                        m["learner_name"] = name
-                    rec = load_json(os.path.join(SKILL_PACKS, "recipes",
-                                                 lang + ".json"), {})
-                    if rec.get("recipes"):
-                        m["recipes"] = rec["recipes"]
-                    save_json(mf, m)
-                except Exception:
-                    pass
-                # Cài bộ skill theo ngôn ngữ: pack đè lên .devin/skills/ nhưng
-                # skill học viên TỰ TẠO (không có trong pack) phải giữ lại —
-                # dir cũ backup sang skills.bak rồi merge phần riêng về.
-                pack = os.path.join(SKILL_PACKS, lang)
-                if os.path.isdir(pack):
-                    bak = SKILLS_DIR + ".bak"
-                    if os.path.isdir(SKILLS_DIR):
-                        if os.path.isdir(bak):
-                            shutil.rmtree(bak)
-                        os.replace(SKILLS_DIR, bak)
-                    shutil.copytree(pack, SKILLS_DIR)
-                    if os.path.isdir(bak):
-                        for n in os.listdir(bak):
-                            src = os.path.join(bak, n)
-                            dst = os.path.join(SKILLS_DIR, n)
-                            if os.path.isdir(src) and not os.path.exists(dst):
-                                shutil.copytree(src, dst)
-            # Setup đã chạy rồi (config có language) mà bị gọi lại → agent
-            # có thể đang cố đè skills/config — qua card xác nhận. Lần đầu
-            # thật (onboarding) thì chạy luôn, không cần card.
-            if load_json(CONFIG_FP, {}).get("language"):
-                rid = gate_local(
-                    "Chạy lại thiết lập ban đầu — sẽ cài đè bộ skill?", _apply)
-                self._gate_resp(rid, "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để chạy lại")
-                return
-            _apply()
-            self._json({"ok": True})
-        elif path == "/api/check-connection":
-            aid = str(data.get("id", ""))
-            k = load_json(CONN_FP, {"apps": []})
-            app = next((a for a in (k.get("apps") or [])
-                        if a.get("id") == aid), None)
-            if not app:
-                self._json({"err": "không thấy app"}, 404); return
-            res = run_probe(app.get("probe"))
-            app["status"] = "connected" if res["ok"] else "not-connected"
-            app["check_message"] = res["msg"]
-            save_json(CONN_FP, k)
-            self._json(res)
-        elif path == "/api/bot":
-            action = str(data.get("action", ""))
-            b = load_json(BOTS_FP, {"active": None, "bots": []})
-            bots = b.setdefault("bots", [])
-            if action == "create":
-                name = str(data.get("name", "")).strip()[:60]
-                role = str(data.get("role", "")).strip()[:40]
-                ins = str(data.get("instructions", "")).strip()
-                if not name:
-                    self._json({"err": "thiếu tên bot"}, 400); return
-                if len(ins) > 500:
-                    self._json({"err": "lời dặn quá 500 chữ — viết ngắn lại giúp"}, 400); return
-                # không cap thì agent loop tạo hàng nghìn bot → bots.json
-                # phình (cấu trúc không-trần duy nhất còn lại)
-                if len(bots) >= 50:
-                    self._json({"err": "tối đa 50 trợ lý — xoá bớt trợ lý cũ trước"}, 400); return
-                bid = slug_id(name + "-" + role)
-                base, n = bid, 2
-                while any(x.get("id") == bid for x in bots):
-                    bid = f"{base}-{n}"; n += 1
-                bot = {"id": bid, "name": name, "role": role,
-                       "avatar": str(data.get("avatar", ""))[:8],
-                       "skills": [s for s in
-                                  (str(s)[:40] for s in
-                                   (data.get("skills") if isinstance(data.get("skills"), list) else []))
-                                  if SKILL_NAME_RE.fullmatch(s)],
-                       "needs": [str(s)[:40] for s in
-                                 (data.get("needs") if isinstance(data.get("needs"), list) else [])],
-                       # recipes cap: trước nhận list tuỳ ý không trần →
-                       # bot độc nhồi payload / phình bots.json (M2).
-                       "recipes": [{"command": str(r.get("command", ""))[:60],
-                                    "label": str(r.get("label", ""))[:60]}
-                                   for r in (data.get("recipes")
-                                             if isinstance(data.get("recipes"), list)
-                                             else [])[:20]
-                                   if isinstance(r, dict)],
-                       "instructions": ins,
-                       "triggers": []}
-                bots.append(bot)
-                save_json(BOTS_FP, b)
-                self._json({"ok": True, "bot": bot})
-            elif action == "activate":
-                # activate/deactivate = ghi bots.json (file mà sandbox cố
-                # ý deny-write — bridge là cửa duy nhất) + viết lại bot.md
-                # (instruction của não) + cài skill. Y hệt các write đặc
-                # quyền khác → consent gate, nếu không agent tự đổi/xoá
-                # persona của chính mình âm thầm.
-                bid = data.get("id")
-                if bid not in (None, "") and not any(
-                        x.get("id") == bid for x in bots):
-                    self._json({"err": "không thấy bot này"}, 404); return
-                bot0 = next((x for x in bots if x.get("id") == bid), None) or {}
-                name = bot0.get("name") or "Trợ lý chung"
-                # card phải preview lời dặn — instructions ≤500 chữ là
-                # payload chạy vào mọi session, chỉ hiện tên thì agent
-                # tạo bot độc rồi xin activate lách review (audit-3 M2)
-                ins_prev = str(bot0.get("instructions") or "").strip()[:80]
-                def _apply(bid=bid):
-                    # đọc lại từ đĩa — bot có thể đổi giữa lúc chờ bấm
-                    bb = load_json(BOTS_FP, {"active": None, "bots": []})
-                    if bid in (None, ""):
-                        bb["active"] = None      # về trợ lý chung
-                        deactivate_bot()
-                        save_json(BOTS_FP, bb)
-                        return
-                    bot = next((x for x in (bb.get("bots") or [])
-                                if x.get("id") == bid), None)
-                    if not bot:
-                        broadcast({"t": "err", "msg": "không thấy bot này nữa"})
-                        return
-                    missing = activate_bot(bot)
-                    bb["active"] = bot["id"]
-                    save_json(BOTS_FP, bb)
-                    if missing:
-                        broadcast({"t": "err",
-                                   "msg": "đã đổi trợ lý nhưng chưa cài được: "
-                                          + ", ".join(missing)
-                                          + " — nhờ trợ lý trong chat cài thêm"})
-                rid = gate_local(
-                    f"Đặt {name} làm trợ lý đang làm việc?"
-                    + (f" Lời dặn: \"{ins_prev}…\"" if ins_prev else ""),
-                    _apply)
-                self._gate_resp(rid, "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để đổi trợ lý")
-            elif action == "delete":
-                # xoá bot là vĩnh viễn (không có thùng rác) → gate y như
-                # delete-lesson dù thứ kia còn khôi phục được
-                bid = str(data.get("id", ""))
-                bot = next((x for x in bots if x.get("id") == bid), None)
-                if not bot:
-                    self._json({"err": "không thấy bot này"}, 404); return
-                def _apply(bid=bid):
-                    bb = load_json(BOTS_FP, {"active": None, "bots": []})
-                    bb["bots"] = [x for x in (bb.get("bots") or [])
-                                  if x.get("id") != bid]
-                    if bb.get("active") == bid:
-                        bb["active"] = None
-                        deactivate_bot()   # không để bot.md mồ côi
-                    save_json(BOTS_FP, bb)
-                rid = gate_local(
-                    f"Xoá trợ lý {bot.get('name') or bid}?", _apply)
-                self._gate_resp(rid, "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để xoá")
-            elif action == "rename":
-                bid = str(data.get("id", ""))
-                bot = next((x for x in bots if x.get("id") == bid), None)
-                if not bot:
-                    self._json({"err": "không thấy bot này"}, 404); return
-                if data.get("name"):
-                    bot["name"] = str(data["name"]).strip()[:60]
-                if data.get("avatar") is not None:
-                    bot["avatar"] = str(data["avatar"])[:8]
-                save_json(BOTS_FP, b)
-                if b.get("active") == bid:
-                    write_bot_md(bot)   # bot.md theo tên mới
-                self._json({"ok": True, "bot": bot})
-            else:
-                self._json({"err": "action phải là create/activate/delete/rename"}, 400)
-        elif path == "/api/bot-import":
-            prev, err = stage_bot_bundle(str(data.get("file", "")))
-            if err:
-                self._json({"err": err}, 400); return
-            self._json({"ok": True, "preview": prev})
-        elif path == "/api/bot-import-confirm":
-            # Cài skill + bot từ file ngoài = nạp instruction + recipe cho
-            # não — không gate thì agent tự stage + confirm được im lặng
-            sid = str(data.get("stage", ""))
-            st = IMPORT_STAGES.get(sid)
-            if not st:
-                self._json({"err": "hết hạn rồi — nhập lại file nhé"}, 400); return
-            def _apply(sid=sid):
-                err = confirm_bot_bundle(sid)
-                if err:
-                    broadcast({"t": "err", "msg": err})
-            bname = str(st["bot"].get("name") or "?")[:60]
+                    kk["apps"].append(app)
+                save_json(CONN_FP, kk)
             rid = gate_local(
-                f"Cài trợ lý \"{bname}\" từ file chia sẻ?", _apply)
-            self._gate_resp(rid, "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để cài")
-        elif path == "/api/emit-event":
-            # Đồng nghiệp bridge nội bộ (ext-bridge → inj_suspect, launcher
-            # → env_scrub…) append event thống kê vào store để beacon đếm.
-            # Whitelist type — giới hạn thiệt hại khi agent tự gọi (chỉ
-            # inflate được đếm trên dashboard, không đổi state).
-            t = str(data.get("t") or "")
-            if t not in ("inj_suspect", "perm:auto", "env_scrub",
-                         "pack_applied", "update_applied"):
-                self._json({"err": "event type không được phép"}, 400)
-                return
-            ev = {k: data[k] for k in ("t", "action", "patterns",
-                                       "dropped", "title", "pattern",
-                                       "msg")
-                  if k in data}
-            broadcast(ev)
-            self._json({"ok": True})
+                f"Đặt link \"Mở trang\" của {app['id']} → {ou}?", _apply)
+            self._gate_resp(rid, "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để đặt link")
+            return
+        k["apps"] = k.get("apps") or []
+        for i, a in enumerate(k["apps"]):
+            if a.get("id") == app["id"]:
+                k["apps"][i] = app
+                break
         else:
-            self._json({"err": "not found"}, 404)
+            k["apps"].append(app)
+        save_json(CONN_FP, k)
+        self._json({"ok": True})
+
+    def _h_remove_connection(self, data):
+        # Gỡ app khỏi registry — agent tự gọi là mất nút kết nối âm
+        # thầm → gate (audit v6). Không UI nào gọi endpoint này nên
+        # card không thêm ma sát.
+        aid = str(data.get("id", ""))
+        def _apply(aid=aid):
+            k = load_json(CONN_FP, {"apps": []})
+            k["apps"] = [a for a in (k.get("apps") or [])
+                         if a.get("id") != aid]
+            save_json(CONN_FP, k)
+        rid = gate_local(f"Gỡ kết nối {aid}?", _apply)
+        self._gate_resp(rid, "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để gỡ")
+
+    def _h_secrets(self, data):
+        # Form "Cài" trong panel Cài đặt: học viên dán app password WP /
+        # mã OA… → ghi vào .devin/secrets.local.json (đã gitignore).
+        # Chỉ GHI — không endpoint nào đọc secret ra ngoài.
+        # Ghi credential là đặc quyền → consent gate (audit v6): agent
+        # tự gọi với url mới = xoá creds thật (wipe-khi-đổi-url), còn
+        # url + pass đến host lạ = kênh exfil.
+        app = str(data.get("app", ""))
+        fields = data.get("fields")
+        if not re.match(r"^[a-z0-9-]+$", app) or not isinstance(fields, dict):
+            self._json({"err": "thiếu app hoặc fields"}, 400); return
+        clean = {str(k)[:40]: str(v).strip()[:500]
+                 for k, v in list(fields.items())[:10]
+                 if isinstance(v, str) and v.strip()}
+        if not clean:
+            self._json({"err": "chưa nhập gì"}, 400); return
+        fp = os.path.join(os.path.abspath(CWD), ".devin", "secrets.local.json")
+        # Card báo trước cả wipe (đọc creds cũ chỉ để so) — học viên
+        # thấy "sẽ xoá thông tin cũ" TRƯỚC khi bấm Đồng ý.
+        old0 = load_json(fp, {}).get(app) or {}
+        wipe = any(k in clean and clean[k] != old0.get(k)
+                   for k in ("url", "host", "endpoint"))
+        def _apply(app=app, clean=clean):
+            creds = load_json(fp, {})
+            old = creds.get(app) or {}
+            # Đổi endpoint (url/host/endpoint) thì phải nhập lại TOÀN
+            # BỘ thông tin — giữ user+password cũ qua host mới = probe
+            # sau đó gửi creds thật tới host attacker (exfil).
+            for k in ("url", "host", "endpoint"):
+                if k in clean and clean[k] != old.get(k):
+                    creds[app] = clean
+                    break
+            else:
+                creds[app] = {**old, **clean}
+            os.makedirs(os.path.dirname(fp), exist_ok=True)
+            save_json(fp, creds)
+            try:
+                # credential của học viên — quyền như bridge.token
+                os.chmod(fp, 0o600)
+            except OSError:
+                pass                 # Windows không có chmod — bỏ qua
+        title = (f"Lưu thông tin đăng nhập cho {app} — đổi địa chỉ "
+                 f"site sẽ XOÁ thông tin cũ?" if wipe
+                 else f"Lưu thông tin đăng nhập cho {app}?")
+        rid = gate_local(title, _apply)
+        self._gate_resp(rid, "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để lưu")
+
+    def _h_setup(self, data):
+        # Onboarding lần đầu: ngôn ngữ + tên → config.json + skill pack đúng ngôn ngữ
+        lang = str(data.get("language", ""))
+        name = str(data.get("learner_name", "")).strip()[:80]
+        if lang not in ("vi", "en"):
+            self._json({"err": "language phải là vi hoặc en"}, 400); return
+        def _apply(lang=lang, name=name):
+            os.makedirs(MC_DIR, exist_ok=True)
+            save_json(CONFIG_FP, {"language": lang, "learner_name": name})
+            # Đồng bộ tên + recipes (công thức nhanh) vào manifest khoá học —
+            # recipes đi kèm pack ngôn ngữ nên sidebar đúng lệnh, đúng tiếng
+            mf = os.path.join(MC_DIR, "manifest.json")
+            try:
+                m = json.load(open(mf, encoding="utf-8"))
+                if name:
+                    m["learner_name"] = name
+                rec = load_json(os.path.join(SKILL_PACKS, "recipes",
+                                             lang + ".json"), {})
+                if rec.get("recipes"):
+                    m["recipes"] = rec["recipes"]
+                save_json(mf, m)
+            except Exception:
+                pass
+            # Cài bộ skill theo ngôn ngữ: pack đè lên .devin/skills/ nhưng
+            # skill học viên TỰ TẠO (không có trong pack) phải giữ lại —
+            # dir cũ backup sang skills.bak rồi merge phần riêng về.
+            pack = os.path.join(SKILL_PACKS, lang)
+            if os.path.isdir(pack):
+                bak = SKILLS_DIR + ".bak"
+                if os.path.isdir(SKILLS_DIR):
+                    if os.path.isdir(bak):
+                        shutil.rmtree(bak)
+                    os.replace(SKILLS_DIR, bak)
+                shutil.copytree(pack, SKILLS_DIR)
+                if os.path.isdir(bak):
+                    for n in os.listdir(bak):
+                        src = os.path.join(bak, n)
+                        dst = os.path.join(SKILLS_DIR, n)
+                        if os.path.isdir(src) and not os.path.exists(dst):
+                            shutil.copytree(src, dst)
+        # Setup đã chạy rồi (config có language) mà bị gọi lại → agent
+        # có thể đang cố đè skills/config — qua card xác nhận. Lần đầu
+        # thật (onboarding) thì chạy luôn, không cần card.
+        if load_json(CONFIG_FP, {}).get("language"):
+            rid = gate_local(
+                "Chạy lại thiết lập ban đầu — sẽ cài đè bộ skill?", _apply)
+            self._gate_resp(rid, "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để chạy lại")
+            return
+        _apply()
+        self._json({"ok": True})
+
+    def _h_check_connection(self, data):
+        aid = str(data.get("id", ""))
+        k = load_json(CONN_FP, {"apps": []})
+        app = next((a for a in (k.get("apps") or [])
+                    if a.get("id") == aid), None)
+        if not app:
+            self._json({"err": "không thấy app"}, 404); return
+        res = run_probe(app.get("probe"))
+        app["status"] = "connected" if res["ok"] else "not-connected"
+        app["check_message"] = res["msg"]
+        save_json(CONN_FP, k)
+        self._json(res)
+
+    def _h_bot(self, data):
+        action = str(data.get("action", ""))
+        b = load_json(BOTS_FP, {"active": None, "bots": []})
+        bots = b.setdefault("bots", [])
+        if action == "create":
+            name = str(data.get("name", "")).strip()[:60]
+            role = str(data.get("role", "")).strip()[:40]
+            ins = str(data.get("instructions", "")).strip()
+            if not name:
+                self._json({"err": "thiếu tên bot"}, 400); return
+            if len(ins) > 500:
+                self._json({"err": "lời dặn quá 500 chữ — viết ngắn lại giúp"}, 400); return
+            # không cap thì agent loop tạo hàng nghìn bot → bots.json
+            # phình (cấu trúc không-trần duy nhất còn lại)
+            if len(bots) >= 50:
+                self._json({"err": "tối đa 50 trợ lý — xoá bớt trợ lý cũ trước"}, 400); return
+            bid = slug_id(name + "-" + role)
+            base, n = bid, 2
+            while any(x.get("id") == bid for x in bots):
+                bid = f"{base}-{n}"; n += 1
+            bot = {"id": bid, "name": name, "role": role,
+                   "avatar": str(data.get("avatar", ""))[:8],
+                   "skills": [s for s in
+                              (str(s)[:40] for s in
+                               (data.get("skills") if isinstance(data.get("skills"), list) else []))
+                              if SKILL_NAME_RE.fullmatch(s)],
+                   "needs": [str(s)[:40] for s in
+                             (data.get("needs") if isinstance(data.get("needs"), list) else [])],
+                   # recipes cap: trước nhận list tuỳ ý không trần →
+                   # bot độc nhồi payload / phình bots.json (M2).
+                   "recipes": [{"command": str(r.get("command", ""))[:60],
+                                "label": str(r.get("label", ""))[:60]}
+                               for r in (data.get("recipes")
+                                         if isinstance(data.get("recipes"), list)
+                                         else [])[:20]
+                               if isinstance(r, dict)],
+                   "instructions": ins,
+                   "triggers": []}
+            bots.append(bot)
+            save_json(BOTS_FP, b)
+            self._json({"ok": True, "bot": bot})
+        elif action == "activate":
+            # activate/deactivate = ghi bots.json (file mà sandbox cố
+            # ý deny-write — bridge là cửa duy nhất) + viết lại bot.md
+            # (instruction của não) + cài skill. Y hệt các write đặc
+            # quyền khác → consent gate, nếu không agent tự đổi/xoá
+            # persona của chính mình âm thầm.
+            bid = data.get("id")
+            if bid not in (None, "") and not any(
+                    x.get("id") == bid for x in bots):
+                self._json({"err": "không thấy bot này"}, 404); return
+            bot0 = next((x for x in bots if x.get("id") == bid), None) or {}
+            name = bot0.get("name") or "Trợ lý chung"
+            # card phải preview lời dặn — instructions ≤500 chữ là
+            # payload chạy vào mọi session, chỉ hiện tên thì agent
+            # tạo bot độc rồi xin activate lách review (audit-3 M2)
+            ins_prev = str(bot0.get("instructions") or "").strip()[:80]
+            def _apply(bid=bid):
+                # đọc lại từ đĩa — bot có thể đổi giữa lúc chờ bấm
+                bb = load_json(BOTS_FP, {"active": None, "bots": []})
+                if bid in (None, ""):
+                    bb["active"] = None      # về trợ lý chung
+                    deactivate_bot()
+                    save_json(BOTS_FP, bb)
+                    return
+                bot = next((x for x in (bb.get("bots") or [])
+                            if x.get("id") == bid), None)
+                if not bot:
+                    broadcast({"t": "err", "msg": "không thấy bot này nữa"})
+                    return
+                missing = activate_bot(bot)
+                bb["active"] = bot["id"]
+                save_json(BOTS_FP, bb)
+                if missing:
+                    broadcast({"t": "err",
+                               "msg": "đã đổi trợ lý nhưng chưa cài được: "
+                                      + ", ".join(missing)
+                                      + " — nhờ trợ lý trong chat cài thêm"})
+            rid = gate_local(
+                f"Đặt {name} làm trợ lý đang làm việc?"
+                + (f" Lời dặn: \"{ins_prev}…\"" if ins_prev else ""),
+                _apply)
+            self._gate_resp(rid, "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để đổi trợ lý")
+        elif action == "delete":
+            # xoá bot là vĩnh viễn (không có thùng rác) → gate y như
+            # delete-lesson dù thứ kia còn khôi phục được
+            bid = str(data.get("id", ""))
+            bot = next((x for x in bots if x.get("id") == bid), None)
+            if not bot:
+                self._json({"err": "không thấy bot này"}, 404); return
+            def _apply(bid=bid):
+                bb = load_json(BOTS_FP, {"active": None, "bots": []})
+                bb["bots"] = [x for x in (bb.get("bots") or [])
+                              if x.get("id") != bid]
+                if bb.get("active") == bid:
+                    bb["active"] = None
+                    deactivate_bot()   # không để bot.md mồ côi
+                save_json(BOTS_FP, bb)
+            rid = gate_local(
+                f"Xoá trợ lý {bot.get('name') or bid}?", _apply)
+            self._gate_resp(rid, "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để xoá")
+        elif action == "rename":
+            bid = str(data.get("id", ""))
+            bot = next((x for x in bots if x.get("id") == bid), None)
+            if not bot:
+                self._json({"err": "không thấy bot này"}, 404); return
+            if data.get("name"):
+                bot["name"] = str(data["name"]).strip()[:60]
+            if data.get("avatar") is not None:
+                bot["avatar"] = str(data["avatar"])[:8]
+            save_json(BOTS_FP, b)
+            if b.get("active") == bid:
+                write_bot_md(bot)   # bot.md theo tên mới
+            self._json({"ok": True, "bot": bot})
+        else:
+            self._json({"err": "action phải là create/activate/delete/rename"}, 400)
+
+    def _h_bot_import(self, data):
+        prev, err = stage_bot_bundle(str(data.get("file", "")))
+        if err:
+            self._json({"err": err}, 400); return
+        self._json({"ok": True, "preview": prev})
+
+    def _h_bot_import_confirm(self, data):
+        # Cài skill + bot từ file ngoài = nạp instruction + recipe cho
+        # não — không gate thì agent tự stage + confirm được im lặng
+        sid = str(data.get("stage", ""))
+        st = IMPORT_STAGES.get(sid)
+        if not st:
+            self._json({"err": "hết hạn rồi — nhập lại file nhé"}, 400); return
+        def _apply(sid=sid):
+            err = confirm_bot_bundle(sid)
+            if err:
+                broadcast({"t": "err", "msg": err})
+        bname = str(st["bot"].get("name") or "?")[:60]
+        rid = gate_local(
+            f"Cài trợ lý \"{bname}\" từ file chia sẻ?", _apply)
+        self._gate_resp(rid, "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để cài")
+
+    def _h_emit_event(self, data):
+        # Đồng nghiệp bridge nội bộ (ext-bridge → inj_suspect, launcher
+        # → env_scrub…) append event thống kê vào store để beacon đếm.
+        # Whitelist type — giới hạn thiệt hại khi agent tự gọi (chỉ
+        # inflate được đếm trên dashboard, không đổi state).
+        t = str(data.get("t") or "")
+        if t not in ("inj_suspect", "perm:auto", "env_scrub",
+                     "pack_applied", "update_applied"):
+            self._json({"err": "event type không được phép"}, 400)
+            return
+        ev = {k: data[k] for k in ("t", "action", "patterns",
+                                   "dropped", "title", "pattern",
+                                   "msg")
+              if k in data}
+        broadcast(ev)
+        self._json({"ok": True})
 
     def _json(self, obj, code=200):
         b = json.dumps(obj, ensure_ascii=False).encode("utf-8")

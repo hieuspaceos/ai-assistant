@@ -1,7 +1,7 @@
 ---
 title: "Vá findings audit chat-bridge đợt 3 — consent downgrade qua nút Không, TOCTOU symlink grant folder, tách path policy dùng chung"
 description: "Audit đợt 3 chấm phòng thủ cao (deny-list hai chiều, consent one-shot atomic, native dialog proof-of-human, wipe-on-url-change, probe validate hai đầu) nhưng tìm 2 HIGH: (1) bấm Không/Esc trên dialog native hạ card xuống đường Origin-forgeable → agent tự duyệt ngay sau khi học viên từ chối; (2) grant folder qua /api/permissions chỉ validate lúc request → đổi folder thành symlink trước spawn là gen-sandbox emit quyền cho ĐÍCH symlink (LaunchAgents → persistence ngoài Seatbelt). Kèm medium: dialog flood khi evict không kill proc, interpreter có hậu tố version lọt BRAIN_CMD_DENY, bot create không preview instructions, auto-approve ưu tiên allow_always. Plan vá theo thứ tự: tách path_guard.py dùng chung cho chat-bridge + gen-sandbox → vá 2 HIGH → medium → tests/docs; refactor route table do_POST là phase cuối tuỳ chọn, commit riêng."
-status: done (phase 01–05 đã implement + test xanh; phase 06 route-table refactor để sau — commit riêng theo đúng plan)
+status: done (phase 01–05 commit 16f4968; phase 06 route-table refactor commit riêng — tất cả test xanh)
 priority: P0
 effort: L
 branch: main
