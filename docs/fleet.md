@@ -31,11 +31,14 @@ khoá:
 
 1. Máy mới → `POST /api/pair` (machine.id + hostname + license, header
    `X-Beacon-Key: beacon_secret`) → hiện **pending** trên dashboard.
-2. Admin bấm Duyệt → collector cấp `machine_key` riêng → máy ghi
-   `.devin/machine.key` (0600).
+2. Admin bấm Duyệt → collector ghi `pending_key`; máy nhận
+   `machine_key` ở lần pair sau → ghi `.devin/machine.key` (0600).
 3. Beacon sau đó dùng `machine_key` — **revoke từng máy** (nghỉ việc,
-   mất máy) mà không ảnh hưởng fleet. Máy bị revoke → 403 `revoked` →
-   xoá key local → re-pair hiện pending lần nữa (admin thấy, quyết).
+   mất máy) mà không ảnh hưởng fleet. Máy bị revoke → 403 `revoked`
+   và cứ thế báo revoked mỗi lần pair (KHÔNG tự về pending — máy
+   revoked cũng ẩn khỏi list Pending vì list lọc `revoked=0`).
+   Un-revoke = admin `POST /api/pair-approve` qua API → máy nhận key
+   mới ở pair kế.
 4. `machine.id` (hex 32) sinh lần đầu, KHÔNG rotate — định danh đếm ghế.
 5. **Re-pair máy đã duyệt** (mất `machine.key`): KHÔNG trả lại key chỉ
    vì biết `beacon_secret` — máy về pending với cờ `repair`, admin
@@ -46,7 +49,7 @@ Vì sao không dùng thẳng beacon_secret làm khoá beacon: một máy lộ
 secret → kẻ trong LAN giả mạo được mọi máy. Với pairing, revoke một
 máy chỉ mất máy đó.
 
-## Hai lớp khoá — giữ riêng
+## Mô hình khoá — tách theo vai trò
 
 | Khoá | Ai cầm | Mở được gì |
 |---|---|---|
@@ -186,7 +189,7 @@ trong `test-fleet.py` khoá set này):
 |---|---|---|
 | `POST /api/pair` | beacon_secret | xin vào fleet → pending/approved+key/revoked |
 | `POST /api/beacon` | machine_key | upsert snapshot + counts, trả `{update,pack}` |
-| `POST /api/pair-approve` | admin_key | cấp machine_key |
+| `POST /api/pair-approve` | admin_key | ghi `pending_key` — máy nhận `machine_key` ở lần pair sau (cấp mới lẫn cấp lại một đường) |
 | `POST /api/pair-revoke` | admin_key | thu hồi máy (giữ key để trả revoked rõ ràng) |
 | `GET /api/pending` | admin_key | máy chờ duyệt + máy `repair=1` chờ cấp lại key |
 | `GET /api/fleet` | admin_key | bảng máy + usage hôm nay + license_status + `conns` (app connections, chip tổng hợp) |

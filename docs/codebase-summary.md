@@ -33,8 +33,8 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 | `test-parity.py` | Diff tập endpoint `/api/*` giữa chat-bridge `.py` ↔ `.ps1` — bắt drift |
 | `test-packs.py` | Diff `.devin/skills/` ↔ `skill-packs/` + kiểm recipes trỏ đúng skill — bắt "quên đồng bộ pack" |
 | `test-gates.py` | Mọi endpoint POST `/api/*` phải khai `GATED` (handler gọi `gate_local`/`New-Gate`) hoặc `OPEN_OK` — bắt "write đặc quyền quên consent gate"; `.py` enumerate `POST_ROUTES` dict rồi quét source method đích (`.ps1` vẫn regex-parse) |
-| `beacon.py` / `.ps1` | Máy nhân viên → collector: pair (pending → machine_key) rồi snapshot 15' (đếm lượt/version/license — không nội dung); pending poll 60s, fail backoff 300s×3 |
-| `collector.py` | Trung tâm fleet (3 tier cùng code): pairing + approve/revoke, license check, dashboard, store `releases/` + `packs/` phát xuống, mirror upstream 6h |
+| `beacon.py` / `.ps1` | Máy nhân viên → collector: pair (pending → approve ghi `pending_key` → pair sau nhận `machine_key`) rồi snapshot 15' (đếm lượt/version/license — không nội dung); pending poll 60s, fail backoff 300s×3 |
+| `collector.py` | Trung tâm fleet (3 tier cùng code): pairing + approve/revoke + repair (re-pair máy approved → cờ `repair`, cấp lại key qua `pending_key` — migration v2), license check, dashboard, store `releases/` + `packs/` phát xuống, mirror upstream 6h. Khoá 3 tầng: `beacon_secret`/`admin_key` per-org, `telemetry.key` chỉ org-ping, `vendor_read_key` rollup-only + `release_key` upload release |
 | `worker/` | **Port của collector.py** sang Cloudflare Workers + D1 + R2 — tier vendor-hosted ĐANG CHẠY tại `troly.hieuspace.com/fleet/`; `wrangler.toml` (route/cron/binding), `src/index.js`, `schema.sql`; thêm tầng tài khoản admin 2-role (admins/sessions/audit trong D1) |
 | `update.py` | Máy kéo release: manifest no-redirect → sha256 + ed25519 (`ed25519.py` vendored, `vendor-pubkey`) → stage `.devin/update-stage/` → launcher apply + rollback |
 | `apply-pack.py` | Áp config-pack cty vào `.devin/` — lint exec_allowlist, permissions/exec_allowlist chỉ máy mới, rules.local.md |

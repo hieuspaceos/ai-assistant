@@ -77,7 +77,13 @@ content or file contents.
   customer VPS / vendor-hosted) or `worker/` (Cloudflare Workers +
   D1 + R2, live at `troly.hieuspace.com/fleet/`). Pairing: shared
   `beacon_secret` → pending → admin approves → per-machine
-  `machine_key` (revocable per employee).
+  `machine_key` delivered at next pair (revocable; re-pairing an
+  approved machine only flags it for key re-issue — knowing
+  `beacon_secret` alone never hands out another machine's key).
+  Scoped keys per layer: org `admin_key`, `telemetry.key` (outbound
+  org-pings only — it ships in every customer config so it's assumed
+  leaked), `vendor_read_key` (rollup-only) and `release_key` (release
+  uploads), the latter two never shipped to customers.
 - **Dashboard** — `collector-web/index.html`: login by account or
   admin key. Two admin roles on the hosted tier: **master** (vendor —
   creates orgs, issues licenses, manages accounts, rotates org
@@ -129,7 +135,7 @@ ai-assistant/
 ├── tools/launcher.py          # supervisor inside the packaged binary — builds ~/TroLyAI, spawns all processes
 ├── tools/chat-terminal.ps1    # ttyd launcher, light theme + large font (Terminal mode)
 ├── tools/beacon.py/.ps1       # fleet beacon — push-only snapshot 15' → collector (fleet machines only)
-├── tools/collector.py         # fleet collector: pairing/approve/revoke, license check, dashboard, release+pack store
+├── tools/collector.py         # fleet collector: pairing/approve/revoke/repair, license check, dashboard, release+pack store
 ├── tools/update.py            # pull signed release: no-redirect → sha256 → ed25519 → stage → apply at boot + rollback
 ├── tools/apply-pack.py        # apply org pack (skills/workflows/rules) — lint exec_allowlist, never overrides consent
 ├── tools/make-license.py      # vendor: sign license.json (HMAC org|seats|expiry|issued)

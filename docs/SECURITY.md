@@ -423,7 +423,7 @@ Residual còn lại sau audit lại:
 - HOME unset (kèm pwd lookup fail) → mọi entry `~/` bị lọc isabs →
   `path_sensitive` fail-open — cực hiếm, ghi nhận.
 
-## Audit đợt 4 — collector.py + extension (đã vá phần không-gated)
+## Audit đợt 4 — collector.py + extension (đã vá toàn bộ)
 
 Vá — `tools/collector.py` (vẫn single-file — deployment contract):
 

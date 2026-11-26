@@ -3,6 +3,49 @@
 Các quyết định kiến trúc và **tại sao** — để sau này không gỡ ngược lại
 vì quên lý do. Mới nhất lên đầu.
 
+## 2026 — Audit đợt 4: tách 3 tầng key, repair flow, `*` rollup-only
+
+**`telemetry.key` là outbound-only, không phải key admin.** Vì: nó nằm
+trong `collector.json` mọi khách — giả định "sẽ lộ" thay vì "giữ kín".
+Trước đây cùng key đó mở `_admin_org` = `"*"` (god-mode xuyên org) —
+kẻ đọc config khách chiếm luôn dashboard vendor. Giờ inbound chỉ
+`POST /api/org-ping` (ghi rollup — worst case là spam dòng ping, đã
+prune 90 ngày). Key đọc vendor tách thành `vendor_read_key` — chỉ đặt
+trên collector của vendor, KHÔNG ship trong config khách.
+
+**`"*"` = rollup-only, KHÔNG machine-level.** Vì: `/api/fleet`,
+`/api/pending`, `/api/fleet/<mid>` trả hostname/learner/snapshot —
+PII cấp máy, khác hẳn "org-level" mà docstring vendor key từng hứa.
+Whitelist exact-match (`/api/org-pings`, `/api/license`, `/api/packs`)
+thay vì để `org == "*"` rơi qua mọi branch — các nhánh `org == "*"`
+trong query fleet/pending giờ là dead code cố ý (giữ cho chặt: thêm
+endpoint mới mà quên gate thì mặc định 403, không fail-open).
+
+**Mọi approve ghi `pending_key`; `machine_key` chỉ set lúc pair phát.**
+Vì: bản vá đầu ghi `machine_key` trực tiếp cho máy mới, chỉ repair mới
+dùng `pending_key` — hệ quả là máy approved pair lần kế rơi nhánh
+"re-pair" và không bao giờ nhận được key đầu tiên (phải duyệt 2 lần).
+Một đường duy nhất — `pending_key` là "key đang chờ phát" — xoá luôn
+sự phân biệt cấp-mới/cấp-lại: hai flow một code path, rotate key tự có
+(key cũ chết đúng lúc key mới được nhận — không downtime). Đổi lại:
+trong khoảng chờ máy pair, key cũ vẫn sống — revoke ngay nếu nghi
+bị lộ, đừng chờ repair.
+
+**`release_key` riêng khỏi admin_key org.** Vì: release là artifact
+vendor đã ký — admin org A không có lý do đẩy release xuống máy org B
+(mà cũng không nên đẩy xuống org A — nội dung phải đi qua ký của
+vendor trước). Không set `release_key` = upload tắt hẳn, release chỉ
+lên qua `mirror_loop` hoặc copy tay — đúng cho collector khách, vốn
+không bao giờ tự phát release.
+
+**Bài học lặp lại từ audit-3 + audit-4: vá đường tấn công rất dễ phá
+happy path.** Cả hai đợt audit-lại đều bắt regression do chính vá gây
+ra (first-approve chết; revoke kẹt cờ; `SELECT org` thiếu cột;
+`onerror`+`onclose` cùng handler đếm x2; regex `[A-Za-z0-9._-]+` vô
+tình xoá check `.`/`..` gốc). Quy ước: test phải đi qua ĐÚNG vòng đời
+(pair → approve → pair → key → beacon), không được encode hành vi
+vá vào expected mà không đọc lại luồng người dùng.
+
 ## 2026 — Audit đợt 3: path_guard dùng chung, 2 vòng audit-lại tự bắt regression
 
 **Policy đường dẫn sống trong `tools/path_guard.py`, không nhân bản.**

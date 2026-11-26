@@ -169,8 +169,12 @@ extension = cánh tay trên trình duyệt · serve.py = file tĩnh.
   (trạng thái process, version, app connections, số đếm usage — không
   nội dung chat/file) tới collector qua HTTPS.
 - Vòng đời: `POST /api/pair` bằng `beacon_secret` → chờ admin duyệt →
-  nhận `machine_key` riêng → beacon bằng key đó; bị revoke thì xoá key
-  local + re-pair về pending.
+  key được ghi vào `pending_key` lúc approve → máy nhận `machine_key`
+  ở lần pair sau → beacon bằng key đó. Re-pair máy đã approved KHÔNG
+  trả key (chỉ biết `beacon_secret` không đủ lấy key máy người khác)
+  — set cờ `repair`, về pending, admin duyệt lại → key mới phát, key
+  cũ chết (rotate miễn phí). Bị revoke thì pair trả `revoked` —
+  un-revoke = approve lại qua API.
 - Inbox ngược chỉ mang hint: `{"update": manifest}` → `update.py` kéo
   release ký; `{"pack": version}` → `apply-pack.py`. Không có kênh
   lệnh tuỳ ý xuống máy — kiến trúc cố ý.
@@ -181,6 +185,11 @@ extension = cánh tay trên trình duyệt · serve.py = file tĩnh.
   Workers + D1 + R2 — hosted, dashboard `collector-web/index.html`).
 - Nhận pair/beacon, quản machine_key, verify license HMAC, mirror +
   phát releases ký ed25519, phát packs per-org, audit.
+- Mô hình khoá 3 tầng: `beacon_secret`/`admin_key` per-org (IT cty),
+  `telemetry.key` outbound-only (chỉ `POST /api/org-ping` — nằm trong
+  config khách nên giả định lộ), `vendor_read_key` read-rollup-only +
+  `release_key` cho upload release — hai key vendor không ship trong
+  config khách.
 - Hosted tier có tài khoản admin 2 tầng (master / cty-admin).
 - Chi tiết đầy đủ: `docs/fleet.md` + `docs/distribution.md`.
 

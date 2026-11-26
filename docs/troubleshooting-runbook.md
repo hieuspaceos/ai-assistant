@@ -167,7 +167,8 @@ Log: `.logs/{portal,chat-bridge,ext-bridge,ttyd}.log` dưới root.
 | Extension cài nhưng chấm đỏ | Chưa nhận mã kết nối | Mở portal một lần — set-token tự đẩy qua externally_connectable |
 | Máy không hiện dashboard | Beacon chưa được approve / sai fleet.json | Vào dashboard collector → tab Pending → duyệt; check `.devin/fleet.json` URL + secret |
 | `pair` báo 401 | `beacon_secret` sai org | Cấp lại fleet.json đúng secret của org đó |
-| Beacon 403 revoked | Máy bị revoke trên dashboard | Xoá `.devin/machine.key` → pair lại → duyệt lại |
+| Beacon 403 revoked | Máy bị revoke trên dashboard | Máy revoked KHÔNG hiện lại ở Pending (list lọc `revoked=0`) — un-revoke bằng API: `curl -X POST -H "X-Admin-Key: <admin_key>" -d '{"machine_id":"<mid>"}' http://collector:8790/api/pair-approve` → máy nhận key mới ở lần pair sau |
+| Pending hiện máy đã duyệt (badge "cấp lại key") | Máy re-pair khi đã approved → cờ `repair` (mất/xoá machine.key) | Flow cố ý — admin approve lại → key mới phát qua pair, key cũ chết. Máy lạ tự re-pair nhiều lần mà IT không xoá key → nghi `beacon_secret` lộ → rotate-secret |
 | winget không có (máy cũ) | Windows build cũ / LTSC | Cài ttyd tay từ github.com/tsl0922/ttyd/releases vào PATH |
 | `ExecutionPolicy` chặn script | Policy mặc định của domain | Chạy `powershell -ExecutionPolicy Bypass -File install.ps1` |
 | Proxy cty chặn beacon | Beacon đi HTTP thẳng | Whitelist domain collector trong proxy; tier c dùng HTTPS qua 443 |

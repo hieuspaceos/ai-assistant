@@ -30,6 +30,33 @@ phải có mục riêng — `tools/build-release.sh` fail nếu thiếu.
 - Upload release giờ chỉ master (trước đây admin_key org cũng đẩy được).
 
 ### Sửa
+- **Audit đợt 4 — collector.py + extension** (plan
+  `plans/261126-1255-audit-4-fix`, 3 vòng audit-lại):
+  - Tách vendor key god-mode thành 3 tầng: `telemetry.key` chỉ còn
+    `POST /api/org-ping`; `vendor_read_key` (chỉ collector vendor) =
+    read-rollup-only — `/api/fleet`, `/api/pending`, `/api/fleet/<mid>`
+    403 (machine-level PII), mọi write 403; `release_key` riêng cho
+    `POST /api/releases*` (admin_key org mất quyền đẩy release).
+  - Re-pair máy approved không còn trả `machine_key` chỉ vì biết
+    `beacon_secret`: set `repair=1` + pending; mọi approve ghi key vào
+    `pending_key`, máy chỉ nhận key qua pair (migration v2) — rotate
+    miễn phí, key cũ chết khi key mới phát.
+  - Chống crash: `porg in ORGS` + pack_version int (traversal PoC),
+    `_body`/`_as_dict` non-dict cả nested, org-ping payload cắt JSON
+    → DoS dashboard, manifest `latest.json` upload + atomic write,
+    RLock merge counts, `trust_proxy`+XFF, license org-match,
+    prune `org_pings` 90 ngày.
+  - Extension: ref `data-tlai` → `refMap` isolated world (trang không
+    gắn ref giả được), snapshot bỏ `el.value`, `dom` strip CSRF token,
+    `Object.hasOwn` + `{ok:false}`, `{...params, action}`, debugger
+    idle-detach ~2 phút, `expectUrl` + `url` trong response, token
+    restore sau 3×401, `externally_connectable` siết `:8080`.
+  - Regression tự gây đã vá: first-approve không phát key (approve
+    ghi `machine_key` trực tiếp → mọi máy phải duyệt 2 lần); revoke
+    kẹt cờ repair; `badTokenFails` đếm x2 (onerror+onclose cùng
+    handler).
+  - Còn mở: `worker/src/index.js` chưa port repair flow (re-pair vẫn
+    trả key cũ) — port D1 riêng, đợt sau.
 - `.devin/bridge.token` giờ rotate mỗi lần start (launcher.py,
   start.sh, start.bat) — trước đây persist mãi làm gốc tin cậy duy
   nhất của mặt phẳng local. Session extension đang sống chết cùng

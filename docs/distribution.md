@@ -85,11 +85,15 @@ Máy áp qua `apply-pack.py` (beacon gọi khi inbox có `pack`):
 bash tools/build-release.sh 1.0.3        # cổng đầy đủ → releases/1.0.3/
 # đẩy origin (file tĩnh)
 scp releases/1.0.3/* vps:site/releases/
-# hoặc đẩy thẳng vào collector của một cty:
-curl -X POST -H "X-Admin-Key: …" --data-binary @troly-1.0.3.zip \
+# hoặc đẩy thẳng vào collector của một cty — cần "release_key" trong
+# collector.json của collector đó (KHÔNG phải admin_key của org —
+# release_key là của vendor, admin org không được đẩy release):
+curl -X POST -H "X-Admin-Key: <release_key>" --data-binary @troly-1.0.3.zip \
      http://collector:8790/api/releases/troly-1.0.3.zip
-curl -X POST -H "X-Admin-Key: …" -H "Content-Type: application/json" \
+curl -X POST -H "X-Admin-Key: <release_key>" -H "Content-Type: application/json" \
      -d @manifest.json http://collector:8790/api/releases
+# collector KHÔNG có release_key → upload tắt hẳn (401) — release chỉ
+# lên qua mirror_loop từ upstream hoặc copy tay vào DATA/releases/
 # trên hosted tier (worker): upload release chỉ master — dùng session
 # Bearer của tài khoản master, không phải admin_key của org khách
 ```

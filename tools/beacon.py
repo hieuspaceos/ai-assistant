@@ -19,12 +19,15 @@ Vòng đời pairing (mô hình GoClaw — shared secret cả org chỉ là vé 
 cửa, không phải chìa khoá):
   1. Chưa có .devin/machine.key → POST /api/pair kèm beacon_secret
      → máy hiện "pending" trên dashboard cty.
-  2. Admin duyệt → collector cấp machine_key riêng → beacon ghi
-     .devin/machine.key (0600).
+  2. Admin duyệt → collector ghi pending_key → pair sau trả
+     machine_key riêng → beacon ghi .devin/machine.key (0600).
   3. Mọi beacon sau dùng machine_key làm X-Beacon-Key → revoke từng
      máy được (nhân viên nghỉ việc / mất máy) mà không đổi gì cả org.
-  4. Bị revoke → máy quay lại bước 1 (hiện pending lần nữa — admin
-     thấy và quyết).
+  4. Bị revoke → bỏ key local rồi cứ pair theo nhịp — collector trả
+     "revoked" mãi; chỉ thoát khi admin approve lại (un-revoke →
+     pending_key → pair sau nhận key mới). Còn mất/xoá machine.key
+     mà không bị revoke → pair trả pending kèm cờ "repair" cho tới
+     khi admin duyệt lại — beacon_secret không đủ lấy lại key.
 
   python3 tools/beacon.py [DATA_DIR]     # thường do launcher/start gọi
 """

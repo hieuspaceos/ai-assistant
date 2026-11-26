@@ -65,6 +65,14 @@ pill "Extension bản cũ" khi lệch.
 | `wait` | `tabId?, ms` | chờ (tối đa 5s) |
 | `reload` | — | nạp lại extension sau khi sửa code |
 
+Hai param xuyên suốt (mọi action): `expectUrl` — bail `{ok:false}` nếu
+tab không còn ở URL khớp prefix (snapshot lúc trang A, tab navigate
+sang B → không bấm bừa); và mọi response từ content script kèm `url`
+hiện tại của tab để agent tự kiểm chứng. Ref `e1/s1`… là Map trong
+isolated world — trang gắn `data-tlai` giả không đổi được mục tiêu;
+ref chết sau mỗi `snapshot` mới. Debugger của nhóm t* tự detach sau
+~2 phút không lệnh (banner "đang gỡ lỗi" không treo mãi).
+
 **Nhóm t* — input THẬT qua CDP** (app chặn event giả như Zalo #richInput,
 grid Google Sheets):
 
