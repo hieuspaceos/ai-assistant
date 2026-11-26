@@ -7,6 +7,8 @@ const WS_URL = 'ws://127.0.0.1:7684/ext';
 let ws = null;
 let reconnectTimer = null;
 let extToken = null;   // "mã kết nối" — ext-bridge chỉ nhận WS kèm ?token=
+let badTokenFails = 0; // close-chưa-mở liên tiếp — token RAM có thể là
+                       // rác do trang lạ đẩy → sau N lần nạp lại storage
 
 function setBadge(state) {
   // Chữ nhỏ trên icon: ON = đã nối · ! = đang chờ mã kết nối · trống = chưa nối
@@ -21,15 +23,44 @@ function connect() {
   const tok = extToken;   // chụp tại thời điểm nối — extToken có thể đổi sau
   ws = new WebSocket(WS_URL + '?token=' + encodeURIComponent(tok)
         + '&v=' + encodeURIComponent(chrome.runtime.getManifest().version));
+  const sock = ws;        // capture — handler đọc biến global `ws` lúc
+                          // fire sẽ trúng socket MỚI, không phải cái này
   ws.onopen = () => {
+    sock._opened = true;
+    badTokenFails = 0;    // mở được = token đúng
     setBadge('on');
     // Chỉ lưu mã sau khi WS mở — ext-bridge trả 401 (không 101) khi mã sai,
     // nên mã rác do trang localhost lạ đẩy vào không bao giờ được persist.
     chrome.storage.local.set({ bridge_token: tok });
   };
-  ws.onclose = ws.onerror = () => {
+  // onerror để trống: WebSocket luôn fire close NGAY SAU error — gán
+  // cùng handler vào cả hai sẽ chạy nó 2 lần (badTokenFails đếm x2,
+  // badge/null xử lý hai lần). Mọi dọn dẹp nằm trong onclose.
+  ws.onerror = () => {};
+  ws.onclose = () => {
+    const stale = ws !== sock;
+    // socket CŨ đóng sau khi ws đã trỏ socket mới (set-token close
+    // rồi connect) — không được xoá tham chiếu/badge của socket mới,
+    // không hẹn reconnect (socket mới tự lo vòng đời nó)
+    if (stale) return;
     setBadge('off');
     ws = null;
+    if (!sock._opened) {
+      // close mà chưa từng mở = token bị từ chối (401) hoặc bridge chết.
+      // Token RAM có thể là rác do trang localhost lạ đẩy qua
+      // onMessageExternal — sau 3 lần thì nạp lại token đúng từ storage
+      // (storage chỉ ghi sau onopen thành công → luôn là mã thật). Bridge
+      // chết thì storage === extToken → skip, vô hại.
+      badTokenFails++;
+      if (badTokenFails >= 3) {
+        badTokenFails = 0;
+        chrome.storage.local.get('bridge_token', d => {
+          if (d.bridge_token && d.bridge_token !== extToken) {
+            extToken = d.bridge_token;
+          }
+        });
+      }
+    }
     if (!reconnectTimer) {
       reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, 3000);
     }
@@ -71,7 +102,23 @@ chrome.runtime.onMessage.addListener((m) => {
 
 // Service worker hay ngủ — alarm giữ nó thức và kết nối lại
 chrome.alarms.create('keepalive', { periodInMinutes: 0.5 });
-chrome.alarms.onAlarm.addListener(() => { if (!ws) connect(); });
+chrome.alarms.onAlarm.addListener(() => {
+  if (!ws) connect();
+  // Debugger idle quá lâu → tự detach, gỡ banner "đang gỡ lỗi" — trước
+  // đây attach rồi treo mãi tới khi agent nhớ gọi tdetach.
+  const now = Date.now();
+  for (const [id, ts] of Object.entries(dbgLast)) {
+    if (now - ts > 120_000) {
+      // detach trả Promise — tab đã đóng/debugger chưa attach → reject;
+      // nuốt bằng .catch (try/catch sync không bắt được async rejection)
+      chrome.debugger.detach({ tabId: +id }).catch(() => {});
+      delete dbgLast[id];
+    }
+  }
+});
+chrome.debugger.onDetach.addListener(src => {
+  if (src.tabId != null) delete dbgLast[src.tabId];
+});
 chrome.runtime.onStartup.addListener(boot);
 chrome.runtime.onInstalled.addListener(boot);
 function boot() {
@@ -114,14 +161,19 @@ function markFresh(id) {
 // Một số app (Zalo, Google Sheets grid, FB) check event.isTrusted —
 // sự kiện synthetic từ content script bị bỏ qua. Input.* của CDP thì
 // như chuột/bàn phím thật. Khi attach, Chrome hiện banner "đang gỡ lỗi" —
-// hết việc nên detach.
+// hết việc nên detach (tự sau 2 phút idle qua alarm sweep ở trên).
+const dbgLast = {};   // tabId -> ts lệnh debugger cuối — cập nhật mỗi
+                      // dbgCmd nên chuỗi tinsert dài không bị detach giữa
+                      // chừng
 
 function dbgCmd(tabId, method, params) {
+  dbgLast[tabId] = Date.now();
   return chrome.debugger.sendCommand({ tabId }, method, params || {});
 }
 
 async function dbgEnsure(tabId) {
   try {
+    dbgLast[tabId] = Date.now();
     await chrome.debugger.attach({ tabId }, '1.3');
   } catch (e) {
     if (!/already attached/i.test(String(e && e.message || e))) throw e;
@@ -176,19 +228,36 @@ async function inTab(tabId, action, params) {
       if (!pong || !pong.ok) throw new Error('content script cũ');
       markFresh(id);
     }
-    const r = await sendToTab(id, { action, ...params });
-    return r || { ok: true };
+    // {...params, action} — action luôn thắng: key 'action' trong params
+    // (nguồn lệnh thứ hai sau này) không đè được allowlist
+    const r = await sendToTab(id, { ...params, action });
+    // Kèm url hiện tại — tab có thể đã navigate kể từ snapshot, agent
+    // tự kiểm chứng mình đang bấm trên trang nào
+    if (r) try { r.url = (await chrome.tabs.get(id)).url; } catch (e) {}
+    // r undefined = listener throw → BÁO LỖI, không nuốt thành ok:true
+    return r || { ok: false, err: 'content script không trả lời' };
   } catch (e) {
     // thử nạp content script rồi gọi lại
     await ensureContent(id);
     markFresh(id);
-    const r = await sendToTab(id, { action, ...params });
-    return r || { ok: true };
+    const r = await sendToTab(id, { ...params, action });
+    if (r) try { r.url = (await chrome.tabs.get(id)).url; } catch (e2) {}
+    return r || { ok: false, err: 'content script không trả lời' };
   }
 }
 
 async function handle(action, p) {
   try {
+    // expectUrl: tab phải còn đúng trang (prefix match) mới được tác
+    // động — snapshot lúc trang A rồi tab navigate sang B → bail thay
+    // vì bấm bừa. Check ở đây một chỗ phủ cả t* lẫn x,y thuần.
+    if (p && p.expectUrl) {
+      const id0 = p.tabId || await activeTabId();
+      const t0 = await chrome.tabs.get(id0).catch(() => null);
+      if (!t0 || !(t0.url || '').startsWith(p.expectUrl))
+        return { ok: false, err: 'tab không còn đúng trang',
+                 url: t0 && t0.url };
+    }
     switch (action) {
       case 'tabs': {
         const tabs = await chrome.tabs.query({});
@@ -317,6 +386,7 @@ async function handle(action, p) {
       case 'tdetach': {
         const id = p.tabId || await activeTabId();
         try { await chrome.debugger.detach({ tabId: id }); } catch (e) {}
+        delete dbgLast[id];
         return { ok: true };
       }
       case 'snapshot': case 'click': case 'type': case 'query':

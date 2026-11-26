@@ -8,6 +8,11 @@ if (window.__troLyAI_handler) {
 }
 
 const ATTR = 'data-tlai';
+// ref -> Element, sống trong isolated world của content script —
+// page JS không đọc/ghi được nên trang KHÔNG gắn được ref giả lên nút
+// mồi (trước: byRef querySelector data-tlai → trang tự chọn mục tiêu
+// click). Attr trên DOM vẫn gắn — chỉ để debug/định vị bằng mắt.
+const refMap = new Map();
 
 function scrollableEls() {
   // Chỉ quét container có khả năng cuộn — leaf (span/a/img...) không bao
@@ -25,12 +30,12 @@ function visible(el) {
 }
 
 function labelOf(el) {
-  // KHÔNG đọc .value của ô password — mật khẩu đang gõ sẽ lọt vào
-  // snapshot gửi về agent (actQuery đã chặn; đây là lỗ hổng còn lại).
+  // KHÔNG đọc .value — giá trị đang gõ (số thẻ, OTP, bản nháp tin) là
+  // dữ liệu người dùng, không phải label định vị; ô không-label hiện
+  // "input(text)" đã đủ để agent trỏ tới.
   const t = (el.getAttribute('aria-label') ||
              el.getAttribute('placeholder') ||
              el.innerText ||
-             (el.matches('input[type="password"]') ? '' : el.value) ||
              el.name || el.title || '');
   return String(t).replace(/\s+/g, ' ').trim().slice(0, 80);
 }
@@ -49,6 +54,7 @@ function snapshot() {
               '[role="textbox"],[role="tab"],[role="menuitem"],[role="checkbox"],' +
               '[role="radio"],[role="combobox"],[contenteditable="true"],' +
               'h1,h2,h3,summary,label';
+  refMap.clear();   // ref cũ chết theo snapshot cũ — không để bấm nhầm
   const out = [];
   let i = 0;
   for (const el of document.querySelectorAll(SEL)) {
@@ -56,6 +62,7 @@ function snapshot() {
     if (!visible(el)) continue;
     const ref = 'e' + (++i);
     el.setAttribute(ATTR, ref);
+    refMap.set(ref, el);
     const tag = el.tagName.toLowerCase();
     const role = el.getAttribute('role');
     const type = el.getAttribute('type');
@@ -73,7 +80,11 @@ function snapshot() {
 }
 
 function byRef(ref) {
-  return document.querySelector(`[${ATTR}="${ref}"]`);
+  // Tra trong refMap (isolated world) — KHÔNG querySelector theo attr:
+  // trang gắn data-tlai giả lên phần tử mồi không làm gì được nữa.
+  // Phần tử bị re-render gỡ khỏi DOM (isConnected=false) → coi như mất.
+  const el = refMap.get(ref);
+  return el && el.isConnected ? el : null;
 }
 
 function actClick(p) {
@@ -217,9 +228,10 @@ const ACTIONS = {
       let el = document.querySelector(p.sel);
       if (!el || el.scrollHeight <= el.clientHeight) {
         // Ref sN (hoặc [data-tlai=sN]) bị trang render lại làm mất/trượt
-        // → giải lại theo thứ tự vùng cuộn hiện tại.
+        // → tra refMap trước (giữ đúng element qua re-render), rồi mới
+        // đoán theo thứ tự vùng cuộn hiện tại.
         const m = /(s\d+)/.exec(p.sel);
-        if (m) el = scrollableEls()[+m[1].slice(1) - 1] || null;
+        if (m) el = byRef(m[1]) || scrollableEls()[+m[1].slice(1) - 1] || null;
       }
       if (!el) return { ok: false, err: 'không thấy vùng cuộn ' + p.sel + ' — gọi scrollables lấy ref mới' };
       if (el.scrollHeight <= el.clientHeight)
@@ -302,6 +314,15 @@ const ACTIONS = {
     if (!root) return { ok: false, err: 'không thấy vùng ' + p.sel };
     const c = root.cloneNode(true);
     c.querySelectorAll('script,noscript').forEach(n => n.remove());
+    // Clone chỉ cần layout/style — value của input là dữ liệu người
+    // dùng đang gõ; hidden input thường là CSRF token của framework
+    // (Django authenticity_token, Rails csrf-param…), meta name=csrf-
+    // token/… cũng là secret phiên — không được lọt vào transcript.
+    c.querySelectorAll('input').forEach(n => n.removeAttribute('value'));
+    c.querySelectorAll('meta[name]').forEach(n => {
+      if (/csrf|token|nonce|secret/i.test(n.getAttribute('name') || ''))
+        n.removeAttribute('content');
+    });
     const html = c.outerHTML;
     const cap = p.max || 300000;
     return { ok: true, html: html.slice(0, cap), truncated: html.length > cap };
@@ -412,6 +433,7 @@ const ACTIONS = {
   scrollables: () => {
     const out = scrollableEls().slice(0, 20).map((el, i) => {
       el.setAttribute(ATTR, 's' + (i + 1));
+      refMap.set('s' + (i + 1), el);
       return `s${i + 1} ${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}.${String(el.className).slice(0, 60)} h=${el.clientHeight} scroll=${el.scrollHeight}`;
     });
     return { ok: true, items: out };
@@ -420,9 +442,18 @@ const ACTIONS = {
 };
 
 window.__troLyAI_handler = (msg, _s, sendResponse) => {
-  const fn = ACTIONS[msg.action];
+  // hasOwn — "__proto__"/"constructor" trúng inherited props (fn truthy
+  // nhưng không gọi được → crash → sendMessage resolve undefined)
+  const fn = Object.hasOwn(ACTIONS, msg.action)
+    ? ACTIONS[msg.action] : null;
   if (!fn) { sendResponse({ ok: false, err: 'action lạ' }); return; }
-  Promise.resolve(fn(msg)).then(sendResponse);
+  try {
+    Promise.resolve(fn(msg)).then(sendResponse,
+      e => sendResponse({ ok: false, err: String(e && e.message || e) }));
+  } catch (e) {
+    // fn throw sync → tự báo lỗi thay vì để sendMessage resolve undefined
+    sendResponse({ ok: false, err: String(e && e.message || e) });
+  }
   return true; // async response
 };
 chrome.runtime.onMessage.addListener(window.__troLyAI_handler);
