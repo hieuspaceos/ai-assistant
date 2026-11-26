@@ -26,13 +26,13 @@
 .story__chrome i.w-close::after { transform: rotate(-45deg); }
 
 /* 4-beat stepper */
-.story__steps { display: flex; gap: var(--space-md); justify-content: center; padding: var(--space-sm) var(--space-md) 0; }
+.story__steps { display: flex; flex-wrap: wrap; gap: var(--space-sm) var(--space-md); justify-content: center; padding: var(--space-sm) var(--space-md) 0; }
 .story__steps span { display: flex; align-items: center; gap: var(--space-2xs); font-size: var(--text-xs); font-weight: 600; color: var(--color-muted); transition: color var(--dur-short); }
-.story__steps span::before { content: ""; width: 0.45rem; height: 0.45rem; border-radius: 50%; border: 1.5px solid var(--color-rule-2); transition: background var(--dur-short), border-color var(--dur-short); }
+.story__steps svg { width: 0.9rem; height: 0.9rem; flex: none; opacity: 0.45; transition: opacity var(--dur-short); }
 .story__steps span.is-active { color: var(--color-accent-2); }
-.story__steps span.is-active::before { background: var(--color-accent); border-color: var(--color-accent); }
+.story__steps span.is-active svg { opacity: 1; }
 .story__steps span.is-done { color: var(--color-ink-2); }
-.story__steps span.is-done::before { background: var(--color-accent-soft); border-color: var(--color-accent); }
+.story__steps span.is-done svg { opacity: 0.8; }
 
 /* stage */
 .story__stage { position: relative; height: 27rem; }
