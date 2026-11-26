@@ -85,8 +85,8 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 | Đường | Vai trò |
 |---|---|
 | `skills/<tên>/SKILL.md` | Skill đang active — onboarding copy từ skill-packs |
-| `skill-packs/vi/` | 21 skill tiếng Việt (/phong-van /hoc-bai /doc-zalo /tao-cong-cu …) |
-| `skill-packs/en/` | 21 skill English tương ứng (/interview /tutor /read-zalo /make-tool …) |
+| `skill-packs/vi/` | 21 skill tiếng Việt (/phong-van /huong-dan /doc-zalo /tao-cong-cu …) |
+| `skill-packs/en/` | 21 skill English tương ứng (/interview /guide /read-zalo /make-tool …) |
 | `skill-packs/recipes/` | `<lang>.json` — recipes sidebar theo ngôn ngữ, `/api/setup` ghi vào manifest |
 | `agents/slide-builder.md` | Subagent dựng `slides.html` — GIỮ LẠI cho sau này, luồng phỏng vấn không gọi |
 | `agents/video-builder.md` | Subagent `video-script.md` + `video.mp4` — GIỮ LẠI, luồng không gọi |

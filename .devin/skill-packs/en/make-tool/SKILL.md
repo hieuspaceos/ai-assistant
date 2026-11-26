@@ -78,7 +78,7 @@ AT MOST 2 questions first: which files/app does this work on? what does
    `{"command": "/<name>", "meaning": "<one-line meaning>"}`.
 7. **Tell the learner** (short, plain words): the tool's name, where to
    type `/command`, and which portal item holds the guide. Add: *"if you
-   forget later, reopen the guide or type `/tutor` and I'll walk you
+   forget later, reopen the guide or type `/guide` and I'll walk you
    through it."*
 
 ## Don't

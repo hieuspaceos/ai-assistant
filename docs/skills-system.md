@@ -55,7 +55,7 @@ Phần thân = hướng dẫn theo phong cách "checklist + bẫy đã gặp":
 |---|---|---|
 | phong-van | interview | Phỏng vấn → công cụ cá nhân (skill + walkthrough + guide) |
 | tao-cong-cu | make-tool | Gói việc lặp lại → skill /command + walkthrough.json + guide.md |
-| hoc-bai | tutor | Chế độ gia sư dẫn theo guide từng bước |
+| huong-dan | guide | Chế độ gia sư dẫn dùng công cụ theo guide |
 | mo-web | open-web | Lái trình duyệt thật qua extension |
 | doc-zalo | read-zalo | Đọc/trả lời Zalo Web |
 | doc-outlook | read-outlook | Đọc Outlook Web |

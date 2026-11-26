@@ -57,7 +57,7 @@ query string (Cloudflare caches by URL).
    click. `guide.md` stays there as the printable recap.
 8. Learn = do: run the walkthrough once with real work → next time
    just type the `/command` → when stuck, ask in the chat tab
-   (`/hoc-bai` = tutor mode, step by step).
+   (`/huong-dan` = guide mode, step by step).
 
 ## Swapping the assistant's "brain" (brain.json)
 
@@ -190,8 +190,8 @@ ai-assistant/
 ├── .devin/
 │   ├── skills/                # active skills — copied from skill-packs by onboarding
 │   ├── skill-packs/
-│   │   ├── vi/                # Vietnamese skills (/phong-van /hoc-bai /doc-zalo /clone-trang …)
-│   │   ├── en/                # English skills (/interview /tutor /read-zalo /clone-page …)
+│   │   ├── vi/                # Vietnamese skills (/phong-van /huong-dan /doc-zalo /clone-trang …)
+│   │   ├── en/                # English skills (/interview /guide /read-zalo /clone-page …)
 │   │   └── recipes/           # <lang>.json — sidebar recipes written to manifest on setup
 │   └── agents/
 │       ├── slide-builder.md   # subagent that builds slides.html — kept for later, not called by default

@@ -65,7 +65,7 @@ Nháp thiết kế gốc:
     connector → **tool-00 "Kết nối"** tự sinh (cả vi lẫn en)
 11. **Skill sinh ra tự kiểm tra `connections.json`** ✅ — mọi skill mới đều check
     connections trước + dẫn qua bài 0
-12. **`hoc-bai` cập nhật** — chưa cần (UI portal chưa đổi layout video)
+12. **`huong-dan` cập nhật** — chưa cần (UI portal chưa đổi layout video)
 
 ## Phase 4 — Đóng gói & kiểm chứng máy đích 🟡 (code xong, chờ test Windows)
 

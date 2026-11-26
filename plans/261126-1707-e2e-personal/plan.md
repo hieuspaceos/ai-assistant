@@ -1,6 +1,10 @@
 # Plan — E2E trên Brave thật, đóng vai dân văn phòng không biết code
 
-Ngày: 2026-11-26. Mục tiêu: dùng sản phẩm **y như user thật** — qua GUI
+Ngày: 2026-11-26. **Sửa đợt 5 (11-27):** đổi theo kiến trúc mới —
+sản phẩm = bộ CÔNG CỤ (không còn khoá học/bài học); phỏng vấn sinh
+skill + walkthrough.json + guide.md (không slide/video/exercise);
+folder `workspace/tool-XX-*`; Phase F viết lại thành test walkthrough;
+lái UI bằng CDP port 9223. Mục tiêu: dùng sản phẩm **y như user thật** — qua GUI
 trên Brave, không chạm terminal — chấm UX/UI từng tính năng, ghi điểm
 không hợp lý, **bug/UX nào fail thì fix luôn trong quá trình test**.
 
@@ -34,9 +38,10 @@ Khi chấm UX, so với thứ Lan đã quen:
   test). Không gõ lệnh thay cho UI — `curl`/đọc file chỉ để *kiểm
   chứng ngầm* state sau khi UI báo xong.
 - Chụp màn hình mọi điểm bối rối/lỗi → `plans/261126-1707-e2e-personal/shots/`.
-- Các bước extension chưa cài (onboarding, cài ext) dùng computer-use
-  để lái GUI Brave; sau khi extension nối, dùng chính ext-bridge
-  (screenshot/click) — vừa test vừa chứng minh vòng lặp tự lái.
+- **Lái UI qua CDP** (`--remote-debugging-port=9223` + websocket
+  evaluate) — đã chứng minh ổn định hơn `orca computer` cho web UI.
+  Chỉ dialog native (osascript) còn cần System Events. Sau khi
+  extension nối có thể dùng ext-bridge xen kẽ.
 - Phần API/security đã cover bởi suite tự động (`tools/test-bridges.py`
   65+ case — auth token, respond one-shot, secrets gate, zip-slip,
   sandbox…; `test-gates.py`, `test-packs.py` — đã PASS) thì **không
@@ -149,7 +154,7 @@ Khi chấm UX, so với thứ Lan đã quen:
 ## Phase C — Portal home & chat lần đầu (`web/index.html`, `chat.html`)
 
 - [ ] **C1.** Dashboard lúc chưa kết nối gì: mỗi thẻ app hiện gì? Có
-      nút "Nối ngay" không, hay Lan phải tự đoán? Bài học/workflows/
+      nút "Nối ngay" không, hay Lan phải tự đoán? Công cụ/workflows/
       recipes hiển thị gì — nhãn có hiểu được không? (U2, U3)
 - [ ] **C2.** Gửi tin đầu tiên ("chào bạn") → não trả lời. Chờ lâu có
       "đang trả lời…" không? Não chết → báo gì? (U5)
@@ -245,8 +250,9 @@ toàn; báo cáo "kết luận trước"; không thuật ngữ; output nói rõ 
 | `gom-file` | "dọn giùm folder này lộn xộn quá" | hỏi trước + nói sẽ xếp thế nào; có hoàn tác; không mất file |
 | `loc-khach` | "tách file khách theo tỉnh cho sales" | mỗi tỉnh 1 file; tỉnh sai chính tả gom đúng; thiếu tỉnh → file riêng + báo rõ |
 | `tom-tat-file` | "file này ghi gì vậy" | tóm tắt kết luận trước, ngắn gọn |
-| `phong-van` | chạy lại phỏng vấn | sinh bài học đề xuất đúng vào manifest |
-| `hoc-bai` | "dạy em bài 1" | vào chế độ gia sư, dẫn từng bước kiên nhẫn |
+| `phong-van` | chạy lại phỏng vấn | sinh CÔNG CỤ mới = skill + `walkthrough.json` + `guide.md` vào `workspace/tool-XX-*`; KHÔNG còn slides/video/exercise; manifest có `has_walkthrough` |
+| `tao-cong-cu` | "gói việc này thành công cụ cho em" | trực tiếp (không qua phỏng vấn) → cùng output; guide theo đúng từ vựng bước, tự-soát không từ cấm |
+| `hoc-bai` | "dạy em công cụ lọc khách" | vào chế độ gia sư, dẫn theo guide làm thật cùng |
 | `gom-skill` | "gói công thức này gửi cho bạn em" | tạo zip đúng; báo nằm ở đâu |
 
 ### Case mép chung — áp cho mọi skill đụng file
@@ -281,17 +287,39 @@ Chạy bộ này trên ít nhất `lam-excel`, `nen-anh`, `gom-file`:
 - [ ] `dang-bai`/`zalo-oa` khi Lan bảo "gửi luôn đi cho nhanh" → vẫn
       phải xác nhận qua card/nút, không lấy lời chat làm lệnh gửi.
 
-## Phase F — Bài học trên portal (Lan tự học)
+## Phase F — Công cụ trên portal + Walkthrough (flagship mới)
 
-- [ ] **F1.** Mở `lesson-01` từ portal → trang bài: slide mở được
-      trong Brave? Video play? File mẫu mở/tải được?
-- [ ] **F2.** Bài tập: hướng dẫn đủ từng bước cho người mới? Có đường
-      "hỏi trợ lý" khi kẹt không?
-- [ ] **F3.** Xoá bài học qua UI → xác nhận → vào `.trash`; portal
-      không còn item chết; khôi phục được.
-- [ ] **F4.** Bài `has_video` nhưng mp4 lỗi/mất → UI đổ êm (ẩn tab
-      video / báo "video đang làm") hay lỗi player? `has_slides`
-      nhưng thiếu file → tương tự.
+Bài học/slide/video chết → portal giờ là **bộ công cụ**: mỗi mục =
+walkthrough tương tác (màn dẫn từng-bước, làm được luôn) + guide.md
+bản đọc. Đây là tính năng mới nhất — test kỹ nhất.
+
+- [ ] **F1. Sidebar "Công cụ"**: các mục hiện bằng tên Lan hiểu?
+      Bài guide-only chỉ có tab Hướng dẫn (Slide/Bài tập ẩn hẳn)?
+      Bài seed cũ (tool-01/02 có slides) vẫn đủ tab — backward compat?
+- [ ] **F2. Wizard guide** (guide có `### Bước`): render "Bước N/M",
+      nút Tiếp/Quay lại, "Xem hết" toggle 2 chiều được?
+- [ ] **F3. Nút "▶ Dùng ngay"**: chỉ hiện trên công cụ có
+      `walkthrough.json`; bấm → modal mở + spotlight overlay?
+- [ ] **F4. Walkthrough từng loại step** (15 kinds):
+      `say` text+Tiếp; `prompt` ô nhập prefill → Gửi đi thẳng vào
+      chat thật (verify agent nhận); `input`/`choice` lưu var →
+      `{{var}}` chèn đúng prompt sau; `wait-perm`/`wait-run` TỰ qua
+      bước khi duyệt/done; `open` nút "Mở trong Finder" reveal thật;
+      `check` 2 nút Đúng/Chưa thấy; `done` màn chốt; `optional` →
+      nút Bỏ qua; `cond` skip đúng (probe conn/var/path); `spotlight`
+      khoét sáng đúng element + bấm target qua bước.
+- [ ] **F5. Walkthrough end-to-end trên công cụ THẬT vừa sinh**
+      (không phải file test tay): Lan bấm "Dùng ngay" → đi hết flow →
+      việc thật xong? Step "Trả lời trợ lý" optional gánh được câu
+      hỏi lẻ của agent giữa run (agent hay hỏi xác nhận/hỏi lẻ)?
+- [ ] **F6. Thoát giữa chừng & resume**: đóng modal/mở lại → tiến
+      trình giữ (localStorage)? Chạy lại từ đầu được?
+- [ ] **F7. Xoá công cụ qua UI** → xác nhận → `.trash`; sidebar mất
+      item; khôi phục được.
+- [ ] **F8. Manifest lệch flag**: `has_walkthrough:true` nhưng file
+      mất → nút Dùng ngay ẩn êm? walkthrough.json JSON hỏng →
+      portal trắng hay báo êm? (validate bằng
+      `tools/test-walkthrough.py`)
 
 ## Phase G — Workflows trên portal
 
@@ -360,7 +388,7 @@ phase trên, tổng hợp riêng.
       thiếu.
 - [ ] **W3. Chuỗi lỗi**: mọi lỗi nói chuyện người + bước tiếp theo,
       không "Error 500", không stack trace, không "invalid input".
-- [ ] **W4. Ba khái niệm dễ lẫn**: "Bài học" / "Công thức nhanh"
+- [ ] **W4. Ba khái niệm dễ lẫn**: "Công cụ" / "Công thức nhanh"
       (recipes) / "Quy trình" (workflows) — Lan phân biệt được không?
       `recipeHint` "Gõ các lệnh này trong tab Hỏi trợ lý" — Lan hiểu
       phải gõ `/ten-lenh` không? (U1, U11)
@@ -376,7 +404,9 @@ phase trên, tổng hợp riêng.
 
 ## Phase J — Chốt
 
-- [ ] **J1.** Chạy lại toàn bộ `tools/test-*.py` sau mọi fix → xanh.
+- [ ] **J1.** Chạy lại toàn bộ `tools/test-*.py` (gồm
+      `test-walkthrough.py` validate mọi walkthrough.json trong
+      install) sau mọi fix → xanh.
 - [ ] **J2.** `git status`: chỉ diff có chủ đích (permissions.json
       seed fix + file sửa trong đợt); không secrets lọt.
 - [ ] **J3.** `report.md`: mỗi feature PASS/FAIL + UX score; top

@@ -74,7 +74,7 @@ này làm trên file/app nào? đầu ra mong muốn là gì?
    `{"command": "/<ten>", "meaning": "<ý nghĩa một dòng>"}`.
 7. **Báo học viên** (câu ngắn, lời thường): công cụ tên gì, gõ `/command`
    ở đâu, guide nằm ở mục nào trên portal. Kèm: *"lần sau quên thì mở
-   lại guide, hoặc gõ `/hoc-bai` để mình dẫn từng bước"*.
+   lại guide, hoặc gõ `/huong-dan` để mình dẫn từng bước"*.
 
 ## Không làm
 

@@ -142,7 +142,7 @@ chưa kết nối thì dẫn học viên qua bài 0 trước.
 
 Với MỖI mục đã chốt (đánh số tool-01, tool-02...), sinh đúng HAI thứ:
 một công cụ (skill riêng / skill có sẵn / nhờ tự do) + một `guide.md`
-tutorial từng-bước trong `workspace/tool-XX-<slug>/`.
+guideial từng-bước trong `workspace/tool-XX-<slug>/`.
 
 **Quy trình sinh chi tiết nằm trong `/tao-cong-cu`** — đọc
 `.devin/skills/tao-cong-cu/SKILL.md` và làm theo đúng quy trình đó cho
@@ -209,7 +209,7 @@ Cuối cùng, nhắn cho học viên (giọng vui, ngắn):
 - Công cụ của bạn xong rồi — X mục, đúng các việc bạn kể.
 - Mở trang web khoá học (refresh portal) để xem: mỗi mục có hướng dẫn
   từng bước — bấm vào là làm theo được ngay.
-- Kẹt chỗ nào quay lại chat hỏi mình — hoặc gõ `/hoc-bai` để mình dẫn
+- Kẹt chỗ nào quay lại chat hỏi mình — hoặc gõ `/huong-dan` để mình dẫn
   từng bước ngay trong chat.
 
 ## Nếu học viên quay lại sau (đã có manifest)

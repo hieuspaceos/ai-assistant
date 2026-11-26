@@ -10,9 +10,9 @@ giờ mở terminal. Đọc kỹ các quy tắc dưới đây trước khi làm 
 Đọc `workspace/config.json` → trường `language`:
 
 - `"vi"` → trả lời tiếng Việt, dùng skill tiếng Việt (`/phong-van`,
-  `/hoc-bai`, `/doc-zalo`...).
+  `/huong-dan`, `/doc-zalo`...).
 - `"en"` → **reply in English**, use the English skills (`/interview`,
-  `/tutor`, `/read-zalo`...). Mọi câu hỏi, giải thích, báo cáo cho học viên
+  `/guide`, `/read-zalo`...). Mọi câu hỏi, giải thích, báo cáo cho học viên
   đều bằng English.
 - File bị thiếu hoặc không có trường `language` → mặc định tiếng Việt.
 
@@ -187,7 +187,7 @@ Trợ lý giống người giúp việc chỉ được mở những ngăn tủ c
    để portal (`/web/`) hiển thị mục mới + nút "▶ Dùng ngay". KHÔNG sinh
    slide, video, bài tập — học viên là người đi làm, cần dùng ngay chứ
    không học bài.
-3. Học viên muốn được dẫn một bài → `/hoc-bai` để vào chế độ gia sư.
+3. Học viên muốn được dẫn dùng một công cụ → `/huong-dan` vào chế độ gia sư.
 4. Hai subagent `slide-builder` và `video-builder` (cùng template
    `slide-deck.html`/`video-script.md`/`exercise.md`) vẫn giữ trong
    `.devin/agents/` + `templates/` để dùng khi cần — nhưng luồng phỏng

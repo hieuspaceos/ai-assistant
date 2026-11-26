@@ -17,7 +17,7 @@ learner who doesn't code. Tone: friendly teacher, ELI10 per AGENTS.md.
 
 Principle: **the interview's output is usable tools, not lectures**.
 Each generated item is exactly two things: one tool (a `/command` skill
-or a portal workflow) + one `guide.md` step-by-step tutorial (which
+or a portal workflow) + one `guide.md` step-by-step guideial (which
 button to click, what to type). Do NOT create slides, videos, exercises
 or sample files — learners are working adults with no time for a
 curriculum.
@@ -145,7 +145,7 @@ tool-00 first.
 
 For EACH locked item (numbered tool-01, tool-02...), generate exactly
 TWO things: one tool (new skill / existing skill / free-form ask) + one
-`guide.md` step-by-step tutorial in `workspace/tool-XX-<slug>/`.
+`guide.md` step-by-step guideial in `workspace/tool-XX-<slug>/`.
 
 **The detailed procedure lives in `/make-tool`** — read
 `.devin/skills/make-tool/SKILL.md` and follow it for each item (pick the
@@ -214,7 +214,7 @@ Finally, message the learner (cheerful, short):
 - Your tools are ready — X items, matching exactly what you described.
 - Open the course page (refresh the portal): each item has a step-by-step
   guide — click in and follow along right away.
-- Stuck anywhere? Come back and ask me — or type `/tutor` and I'll walk
+- Stuck anywhere? Come back and ask me — or type `/guide` and I'll walk
   you through the steps right here in chat.
 
 ## If the learner returns later (manifest exists)
