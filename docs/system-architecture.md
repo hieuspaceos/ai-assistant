@@ -1,9 +1,11 @@
 # ai-assistant — System Architecture
 
-**Bản chất:** không có backend tập trung. Hệ thống là 4 process local do
-`start.sh`/`start.bat` dựng lên + một MV3 extension trong trình duyệt
-thật của học viên + một agent CLI nói chuẩn ACP làm não (mặc định Devin,
-đổi được qua `brain.json`).
+**Bản chất:** lõi là không có backend tập trung — 4 process local do
+`start.sh`/`start.bat` (hoặc `launcher.py` trong bản đóng gói) dựng
+lên + một MV3 extension trong trình duyệt thật của học viên + một
+agent CLI nói chuẩn ACP làm não (mặc định Devin, đổi được qua
+`brain.json`). Máy thuộc fleet cty chạy thêm một tiến trình **beacon**
+push-only ra collector bên ngoài (mục 7).
 
 ## Architecture Overview
 
@@ -35,6 +37,10 @@ thật của học viên + một agent CLI nói chuẩn ACP làm não (mặc đ�
 |                                                               |
 |   Đĩa: my-course/ (bài học, config, permissions, clone)       |
 +---------------------------------------------------------------+
+          |  (chỉ máy fleet) beacon push-only HTTPS 15'
+          v
+   collector (tools/collector.py self-host | worker/ Cloudflare)
+   → dashboard cty-admin + releases ký + packs — xem docs/fleet.md
 ```
 
 Vai trò: **agent CLI = não** (đổi được — xem mục 6) · portal = mặt hiển
@@ -141,6 +147,30 @@ extension = cánh tay trên trình duyệt · serve.py = file tĩnh.
   cred → spawn thường, degrade về policy-only kèm event cảnh báo.
 - Agent gọi `POST :7684/api/browser` khi skill cần lái trình duyệt; gọi
   `POST :7682/api/save-page` khi viewer lưu trang clone.
+
+### 7. Beacon — `tools/beacon.py` / `.ps1` (chỉ máy fleet)
+
+- Chỉ spawn khi `.devin/fleet.json` tồn tại (`{"collector","org",
+  "beacon_secret"}` — bộ cài `deploy/` đặt sẵn). Máy cá nhân không có
+  file này → không chạy.
+- **Push-only, không mở port**: 15 phút/lần POST snapshot đã lọc
+  (trạng thái process, version, app connections, số đếm usage — không
+  nội dung chat/file) tới collector qua HTTPS.
+- Vòng đời: `POST /api/pair` bằng `beacon_secret` → chờ admin duyệt →
+  nhận `machine_key` riêng → beacon bằng key đó; bị revoke thì xoá key
+  local + re-pair về pending.
+- Inbox ngược chỉ mang hint: `{"update": manifest}` → `update.py` kéo
+  release ký; `{"pack": version}` → `apply-pack.py`. Không có kênh
+  lệnh tuỳ ý xuống máy — kiến trúc cố ý.
+
+### 8. Collector + dashboard (ngoài máy học viên)
+
+- `tools/collector.py` (self-host 3 tier) hoặc `worker/` (Cloudflare
+  Workers + D1 + R2 — hosted, dashboard `collector-web/index.html`).
+- Nhận pair/beacon, quản machine_key, verify license HMAC, mirror +
+  phát releases ký ed25519, phát packs per-org, audit.
+- Hosted tier có tài khoản admin 2 tầng (master / cty-admin).
+- Chi tiết đầy đủ: `docs/fleet.md` + `docs/distribution.md`.
 
 ## Luồng dữ liệu chính
 

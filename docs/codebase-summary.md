@@ -34,7 +34,7 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 | `test-gates.py` | Mọi endpoint POST `/api/*` phải khai `GATED` (handler gọi `gate_local`/`New-Gate`) hoặc `OPEN_OK` — bắt "write đặc quyền quên consent gate" |
 | `beacon.py` / `.ps1` | Máy nhân viên → collector: pair (pending → machine_key) rồi snapshot 15' (đếm lượt/version/license — không nội dung); pending poll 60s, fail backoff 300s×3 |
 | `collector.py` | Trung tâm fleet (3 tier cùng code): pairing + approve/revoke, license check, dashboard, store `releases/` + `packs/` phát xuống, mirror upstream 6h |
-| `worker/` | **Port của collector.py** sang Cloudflare Workers + D1 + R2 — tier vendor-hosted ĐANG CHẠY tại `troly.hieuspace.com/fleet/`; `wrangler.toml` (route/cron/binding), `src/index.js`, `schema.sql` |
+| `worker/` | **Port của collector.py** sang Cloudflare Workers + D1 + R2 — tier vendor-hosted ĐANG CHẠY tại `troly.hieuspace.com/fleet/`; `wrangler.toml` (route/cron/binding), `src/index.js`, `schema.sql`; thêm tầng tài khoản admin 2-role (admins/sessions/audit trong D1) |
 | `update.py` | Máy kéo release: manifest no-redirect → sha256 + ed25519 (`ed25519.py` vendored, `vendor-pubkey`) → stage `.devin/update-stage/` → launcher apply + rollback |
 | `apply-pack.py` | Áp config-pack cty vào `.devin/` — lint exec_allowlist, permissions/exec_allowlist chỉ máy mới, rules.local.md |
 | `make-license.py` | Vendor: cấp license.json ký HMAC theo org/seats/expiry |
@@ -44,7 +44,8 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 | `content_guard.py` | Lớp ranh giới: wrap UNTRUSTED (sanitize marker + NFKC fold + id hash), detect_injection advisory, scrub_env allowlist spawn, exec_allowed glob |
 | `backup.py` | Snapshot `.devin/`+`my-course/` trước update/pack-apply — giữ 5 bản |
 | `build-ext.sh` | Zip `extension/` → `dist/troly-ext-<ver>.zip` upload Web Store — lint giữ `key` (EXT_ID), connectable localhost-only |
-| `test-fleet.py` | GATE plan 1: collector thật, đủ vòng đời pair→approve→beacon→revoke |
+| `test-fleet.py` | GATE plan 1: collector thật, đủ vòng đời pair→approve→beacon→revoke + parity endpoint-set collector↔worker (`WORKER_ONLY` khai rõ) |
+| `test-worker.py` | Integration worker: `wrangler dev` + D1 local — bootstrap lock, login/session, orgs+license HMAC, cross-org 403/404, rotate-secret, audit, last-master lock |
 | `test-distribution.py` | GATE plan 2: ký→verify→stage→apply pack→rollback hermetic |
 | `test-content-guard.py` | GATE plan 6: wrap byte-shape, sanitize, fold+detect, allowlist, scrub, live /api/emit-event |
 
@@ -129,7 +130,9 @@ Kế hoạch nhiều phase đã/thực thi — mỗi folder `YYMMDD-HHMM-<tên>/
   `collector-web/index.html`; `fleet-<org>.json` per-org.
 - `worker/` — port collector.py → Cloudflare Workers+D1+R2, ĐANG LIVE
   tại `troly.hieuspace.com/fleet/` (tier vendor-hosted); secrets qua
-  `wrangler secret` (backup `collector.json` gitignored).
+  `wrangler secret` (backup `collector.json` gitignored); tài khoản
+  admin 2 tầng master/cty-admin + orgs/audit trong D1 — tạo org qua
+  dashboard không cần `wrangler secret put`.
 - `tools/update.py` — kéo release ký ed25519 (pubkey trong `vendor-pubkey`,
   override `TROLY_VENDOR_PUBKEY` cho test), sha256 + verify + stage + rollback
   qua `tools/backup.py`; `tools/make-license.py` cấp license.
@@ -146,5 +149,5 @@ Kế hoạch nhiều phase đã/thực thi — mỗi folder `YYMMDD-HHMM-<tên>/
   vendor-infra.md. `site/` — landing + privacy (Chrome Store).
 - Docs: docs/fleet.md, docs/distribution.md, docs/SECURITY.md,
   docs/case-study-ima.md (skeleton), docs/troubleshooting-runbook.md.
-- Test: test-fleet, test-distribution, test-content-guard, test-packs,
-  test-gates, test-parity, test-bridges.
+- Test: test-fleet, test-worker, test-distribution, test-content-guard,
+  test-packs, test-gates, test-parity, test-bridges.

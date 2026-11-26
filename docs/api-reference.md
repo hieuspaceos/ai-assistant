@@ -1,6 +1,8 @@
 # ai-assistant — API Reference
 
-Ba endpoint group, tất cả bind `127.0.0.1`, JSON thuần.
+Ba endpoint group trên máy học viên, tất cả bind `127.0.0.1`, JSON
+thuần. API của collector/worker (fleet — bind public, model khoá
+khác) nằm ở `docs/fleet.md`, không lặp lại ở đây.
 
 ## Auth — bắt buộc từ v1.0
 

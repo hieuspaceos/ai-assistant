@@ -27,8 +27,9 @@ Zip một folder gồm:
 - **Bộ cài**: toàn bộ repo `ai-assistant/` (bỏ `.git`).
 - **`deploy/company/license.json`** — do vendor cấp (make-license.py),
   ghi org + số ghế + hạn.
-- **`deploy/company/fleet.json`** — `{"url": "<collector-url>",
-  "beacon_secret": "<mã org>"}` — vendor hoặc IT cty cấp.
+- **`deploy/company/fleet.json`** — `{"collector": "<collector-url>",
+  "org": "<ORG>", "beacon_secret": "<mã org>"}` — vendor hoặc IT cty
+  cấp (hosted tier: dashboard trả sẵn file này khi tạo org).
 - Link extension trên Chrome Web Store (unlisted) hoặc policy
   force-install (xem `force-install.md`).
 
@@ -52,6 +53,9 @@ Chọn 1 trong 3 tier — cùng một `tools/collector.py`:
 Cài (tier a/b): `python3 tools/collector.py --port 8790 --data DATA/`
 + cấu hình `DATA/config.json` `{"org","beacon_secret","admin_key"}`.
 Sau đó mở `http://<collector>/` (nhập admin_key) để xem dashboard.
+Tier c không cần cài gì — vendor tạo org trên dashboard
+`troly.hieuspace.com/fleet/` và bàn giao `fleet.json` + tài khoản
+cty-admin (login bằng account, admin_key cũ vẫn nhận qua "Dán key").
 
 ## 3. Từng máy nhân viên (~5 phút/máy)
 

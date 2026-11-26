@@ -3,6 +3,41 @@
 Các quyết định kiến trúc và **tại sao** — để sau này không gỡ ngược lại
 vì quên lý do. Mới nhất lên đầu.
 
+## 2026 — Admin 2 tầng: pack CỐ Ý không ký, rotate-secret, bridge.token rotate
+
+**Pack KHÔNG ký ed25519 như release — trust bất đối xứng là chủ đích.**
+Vì: hai artifact phục vụ hai vai trò khác nhau. Release do VENDOR phát
+cho mọi org → ký bằng key offline, collector bị chiếm cũng không phát
+được release giả. Pack do CTY-ADMIN phát cho org mình — họ vốn không
+được cầm vendor key, nên ký vendor cho pack là không thể (trừ khi
+master ký hộ từng pack = nghẽn vận hành). Blast radius khi collector
+bị chiếm bị khoanh theo org: `packs/latest-<org>.json` chỉ máy org đó
+kéo về (`packHint` lấy org từ row đã xác thực bằng machine_key, không
+tin body tự khai), và máy con áp `exec-allowlist` của pack nên payload
+độc vẫn bị siết hành vi. Giảm thiểu thật sự nằm ở `rotate-secret` —
+khi nghi secret/collector lộ thì master xoay khoá org (kể cả đá toàn
+bộ máy về pending buộc re-pair). Nếu sau này cần chặt hơn: cấp cho
+mỗi org một signing key riêng (org-admin giữ) thay vì dùng chung
+vendor key — KHÔNG dùng vendor key cho pack.
+
+**`rotate-secret` chỉ đụng khoá org, KHÔNG đụng session tài khoản.**
+Vì: hai hệ thống credential độc lập — `admin_key`/`beacon_secret` là
+khoá ORG (kênh cũ + máy con pair), còn session gắn với tài khoản người
+(bảng `admins`). Secret lộ → rotate chặt kênh bị lộ; tài khoản lộ →
+đổi pass/khoá account (đã xoá session ở `/api/password` + admin-update).
+Gộp hai hành động sẽ làm rotate định kỳ (hygiene) vô tình đá admin
+đang làm việc. `kill_machines` là opt-in riêng vì đó là hành động phá
+vận hành — máy phải có fleet.json mới + được duyệt lại.
+
+**`bridge.token` rotate mỗi lần start thay vì persist mãi.** Vì: token
+là gốc tin cậy duy nhất mặt phẳng local (mọi bridge xác thực bằng nó);
+file 0600 nhưng same-user process vẫn đọc được — persist mãi nghĩa là
+một lần lộ = lộ vĩnh viễn. Rotate gần-miễn-phí vì mọi consumer đọc
+file lúc boot (chat/ext-bridge) hoặc lazy mỗi cycle (beacon); thứ duy
+nhất gãy là session extension đang sống — vốn đã reset cùng restart.
+Ranh giới same-user vẫn chấp nhận (giống Chrome DevTools port) —
+rotate chỉ rút ngắn cửa sổ tấn công, không dời ranh giới.
+
 ## 2026 — Audit v9: vá audit — clone-view XSS, term-gate.cmd RCE, card ACP tự duyệt
 
 **`.cmd` KHÔNG BAO GIỜ được đọc argv/input không tin cậy — dùng `.ps1`.**

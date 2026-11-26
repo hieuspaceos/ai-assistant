@@ -48,11 +48,39 @@ máy chỉ mất máy đó.
 |---|---|---|
 | `beacon_secret` → `machine_key` | máy NV | POST pair + beacon (ghi state chính mình) |
 | `admin_key` | IT cty | GET dashboard + `/api/fleet*` + duyệt/revoke máy |
+| **session token** (Bearer 7 ngày) | admin đã login | giống `admin_key`, kèm role + org scope (hosted tier) |
 | `license_secret` | vendor + collector config | verify chữ ký license (không nằm trên máy NV) |
-| vendor key (`telemetry.key`) | vendor | nhận `/api/org-ping`, đọc `/api/org-pings` |
+| vendor key (`telemetry.key`) | vendor | nhận `/api/org-ping`, đọc `/api/org-pings`, bootstrap master đầu |
 
 `admin_key` map về org trong `collector.json` → IT cty A không đọc
 được fleet cty B khi collector host nhiều org.
+
+### Tài khoản admin (collector Workers — hosted tier)
+
+Tier hosted (`worker/` trên Cloudflare) nâng `admin_key`/`vendor_key`
+thành **tài khoản thật** trong D1: bảng `admins` (user/pass hash
+PBKDF2, role `master`|`admin`, org), `sessions` (Bearer 7 ngày),
+`orgs` (ghi đè ORGS_JSON), `audit` (ai-duyệt-gì).
+
+- **master** (vendor): tab Công ty trên dashboard tạo org → nhận về
+  `fleet.json` + `admin_key` + tài khoản cty-admin đầu tiên để bàn
+  giao; cấp license (`orgs/<org>/license` ký đúng format
+  make-license.py); tab Tài khoản quản mọi admin; tab Nhật ký xem audit.
+- **cty-admin**: chỉ thấy máy/audit org mình; tab Pack đẩy pack cho
+  org mình; duyệt/revoke máy.
+- `POST /api/bootstrap` (cần vendor_key, chạy được đúng 1 lần) tạo
+  master đầu tiên — sau đó endpoint tự khoá.
+- X-Admin-Key / link `?key=` vẫn hoạt động — collector.py self-host
+  không có bảng accounts nên dashboard giữ cửa "Dán key". `POST
+  /api/releases*` giờ chỉ master.
+- Đổi pass / disable / reset pass đều **xoá hết session** của account
+  đó → thay đổi có hiệu lực ngay. Khoá **master cuối cùng** bị chặn
+  (400) — không thể tự lockout.
+- `POST /api/orgs/<org>/rotate-secret` (master): sinh `beacon_secret` +
+  `admin_key` mới — key cũ chết ngay, session tài khoản vẫn sống. Opt-in
+  `kill_machines: true` đá toàn bộ máy về pending buộc re-pair (dùng
+  khi secret lộ). Org còn trong ORGS_JSON (env-only) được migrate sang
+  D1 luôn. Nút "Xoay khoá" trên tab Công ty.
 
 ## Collector — `tools/collector.py`
 
@@ -141,6 +169,9 @@ thứ hai). `/api/license` đếm máy active 30 ngày vs `seats` →
 
 ## API tóm tắt
 
+Endpoint chung cả hai bản (`collector.py` ↔ `worker/` — parity check
+trong `test-fleet.py` khoá set này):
+
 | Method + path | Khoá | Việc |
 |---|---|---|
 | `POST /api/pair` | beacon_secret | xin vào fleet → pending/approved+key/revoked |
@@ -148,19 +179,35 @@ thứ hai). `/api/license` đếm máy active 30 ngày vs `seats` →
 | `POST /api/pair-approve` | admin_key | cấp machine_key |
 | `POST /api/pair-revoke` | admin_key | thu hồi máy (giữ key để trả revoked rõ ràng) |
 | `GET /api/pending` | admin_key | máy chờ duyệt |
-| `GET /api/fleet` | admin_key | bảng máy + usage hôm nay + license_status |
+| `GET /api/fleet` | admin_key | bảng máy + usage hôm nay + license_status + `conns` (app connections, chip tổng hợp) |
 | `GET /api/fleet/<id>` | admin_key | snapshot đầy đủ + usage 14 ngày |
 | `GET /api/license` | admin_key | seats vs active30 + status |
 | `POST /api/org-ping` | vendor key | nhận rollup org-level |
 | `GET /api/org-pings` | vendor key | meta-dashboard vendor |
-| `GET /` + static | — | dashboard (data vẫn đòi admin key) |
+| `GET /` + static | — | dashboard (data vẫn đòi admin key/session) |
 | `GET /api/releases/latest` | machine_key | manifest release mới nhất |
 | `GET /releases/<file>` | machine_key | tải zip release đã ký |
 | `GET /packs/<org>/<ver>.json` | machine_key | tải pack — CHỈ cùng org |
-| `POST /api/releases/<file>` | admin_key | upload zip (bước 1) |
-| `POST /api/releases` | admin_key | upload manifest (bước 2) |
+| `POST /api/releases/<file>` | admin (master ở hosted) | upload zip (bước 1) |
+| `POST /api/releases` | admin (master ở hosted) | upload manifest (bước 2) |
 | `GET /api/packs` | admin_key | pack latest đang phát per org |
 | `POST /api/packs` | admin_key | đẩy pack mới (admin_key scope org) |
+
+Endpoint **chỉ có trên worker** (tài khoản admin 2 tầng — set
+`WORKER_ONLY` trong `test-fleet.py`):
+
+| Method + path | Ai | Việc |
+|---|---|---|
+| `POST /api/bootstrap` | vendor_key | tạo master đầu tiên — tự khoá sau lần đầu |
+| `POST /api/login` | — | user/pass → session Bearer 7 ngày |
+| `POST /api/logout` | session | xoá session |
+| `GET /api/whoami` | session | role + org của caller |
+| `POST /api/password` | session | đổi pass mình (xoá hết session) |
+| `GET`/`POST /api/orgs` | master | list / tạo org (trả secrets + tài khoản cty-admin đầu) |
+| `POST /api/orgs/<org>/license` | master | ký license.json (HMAC khớp make-license.py) |
+| `POST /api/orgs/<org>/rotate-secret` | master | sinh beacon_secret + admin_key mới; opt-in `kill_machines` đá máy về pending |
+| `GET`/`POST`/`PATCH`/`DELETE /api/admins[/<id>]` | master | CRUD tài khoản admin, disable/reset pass — khoá master cuối cùng bị chặn |
+| `GET /api/audit` | session | nhật ký ai-duyệt-gì (cty-admin: chỉ org mình) |
 
 ## File máy NV liên quan
 
@@ -172,6 +219,14 @@ Tất cả là machine state → đã gitignore, KHÔNG đi vào release.
 
 `python3 tools/test-fleet.py` — static contract (snapshot keys parity
 .py/.ps1, chuỗi ký license khớp hai phía, adm-render.js dùng chung,
-launcher/start spawn đúng điều kiện) + integration dựng collector thật:
-pair sai key 401 → pending → approve → beacon 200 → license ok/invalid
-→ usage gộp → revoke → 403 revoked.
+launcher/start spawn đúng điều kiện, **endpoint set collector.py ↔
+worker** với `WORKER_ONLY` khai tường minh) + integration dựng
+collector thật: pair sai key 401 → pending → approve → beacon 200 →
+license ok/invalid → usage gộp → revoke → 403 revoked.
+
+`python3 tools/test-worker.py` — integration cho hosted tier: spawn
+`wrangler dev` + D1 local (cần `worker/.dev.vars`), phủ toàn bộ vòng
+đời 2 tầng: bootstrap self-lock, legacy X-Admin-Key, login session,
+tạo org, license HMAC khớp `make-license.py`, phân quyền cross-org
+403/404, audit actor, rotate-secret + `kill_machines`, chặn khoá
+master cuối, redact pass chứa quote. Chạy trong CI (`build.yml`).

@@ -14,6 +14,11 @@ python3 tools/test-packs.py     # skill active ↔ packs ↔ recipes
 python3 tools/test-gates.py     # endpoint POST phải khai GATED/OPEN_OK
 ```
 
+Sau khi đụng phần fleet: `test-fleet.py` (collector thật + parity
+collector↔worker), `test-distribution.py` (ký→verify→apply→rollback),
+và `test-worker.py` (wrangler dev + D1 local — cần `worker/.dev.vars`;
+chạy trong CI).
+
 Bất kỳ test nào đỏ → KHÔNG release. `test-parity` đỏ thường là quên port
 endpoint sang bản bridge kia; `test-packs` đỏ là skill mới/sửa chưa đồng
 bộ vào `skill-packs/`; `test-gates` đỏ là thêm endpoint POST mới mà chưa
@@ -26,7 +31,7 @@ khai vào `GATED`/`OPEN_OK` trong `tools/test-gates.py` — bắt buộc quyết
 # 1. sửa VERSION (vd 1.0.1) → commit → tag cùng số
 git tag v1.0.1 && git push --tags
 # 2. CI (.github/workflows/build.yml) tự chạy:
-#    test (3 script trên, fail → không build) → build troly (macOS) +
+#    test (các script mục 0 + test-worker qua wrangler, fail → không build) → build troly (macOS) +
 #    TroLyAI.exe (Windows) → attach vào Release của tag
 ```
 
@@ -61,9 +66,11 @@ Mọi call bridge khác đều cần `?token=$TOKEN` hoặc header
 không — URL phải có `?t=` (portal tự nhớ vào localStorage). Mở tay
 `localhost:8080` trần → không có mã → mọi API 401.
 
-**Đổi khoá (rotation):** `rm .devin/bridge.token` + chạy lại `start` →
-mã mới; portal/extension cũ hết hạn — extension tự pair lại khi mở
-portal, hoặc dán mã mới trong trang options của nó.
+**Đổi khoá (rotation):** token tự rotate mỗi lần `start` chạy mà không
+có instance đang sống (health-check trước — đang chạy thì tái dùng
+token cũ, không ghi đè). Muốn ép rotate tay: `rm .devin/bridge.token`
++ chạy lại `start`; portal/extension cũ hết hạn — extension tự pair
+lại khi mở portal, hoặc dán mã mới trong trang options của nó.
 
 Log: `.logs/{portal,chat-bridge,ext-bridge,ttyd}.log` dưới root.
 

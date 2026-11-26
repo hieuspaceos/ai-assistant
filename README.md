@@ -64,6 +64,32 @@ starts ACP mode (chat), `terminal` = the command for Terminal mode.
 - Missing or crashed brain: chat reports a clear error instead of
   hanging, and retries the launch on the next send.
 
+## For companies — fleet management & updates
+
+The same binary runs standalone for individuals, but a company placing
+`fleet.json` + `license.json` into `.devin/` turns every employee
+machine into a **fleet member**: a push-only beacon
+(`tools/beacon.py` / `beacon.ps1`) reports a sanitized snapshot every
+15 minutes to a **collector** — counts and status only, never chat
+content or file contents.
+
+- **Collector** — `tools/collector.py` (self-host, 3 tiers: LAN /
+  customer VPS / vendor-hosted) or `worker/` (Cloudflare Workers +
+  D1 + R2, live at `troly.hieuspace.com/fleet/`). Pairing: shared
+  `beacon_secret` → pending → admin approves → per-machine
+  `machine_key` (revocable per employee).
+- **Dashboard** — `collector-web/index.html`: login by account or
+  admin key. Two admin roles on the hosted tier: **master** (vendor —
+  creates orgs, issues licenses, manages accounts, rotates org
+  secrets) and **company admin** (sees/approves only own org's
+  machines, pushes packs).
+- **Distribution** — releases signed ed25519 (private key offline)
+  flow vendor → collector → machines with stage + rollback; per-org
+  **packs** (skills/workflows/rules) push company customization to
+  every machine without touching code.
+
+Details: `docs/fleet.md`, `docs/distribution.md`, `docs/SECURITY.md`.
+
 ## Cloning a web page into the learner's own page
 
 The `/clone-trang` skill (en: `/clone-page`): paste a link to a page
@@ -101,7 +127,19 @@ ai-assistant/
 ├── tools/gen-sandbox.py       # generates .devin/agent.sb from permissions.json — macOS enforcement
 ├── tools/launcher.py          # supervisor inside the packaged binary — builds ~/TroLyAI, spawns all processes
 ├── tools/chat-terminal.ps1    # ttyd launcher, light theme + large font (Terminal mode)
-├── tools/test-*.py            # stdlib smoke tests: bridge endpoints, .py↔.ps1 parity, skill-pack sync
+├── tools/beacon.py/.ps1       # fleet beacon — push-only snapshot 15' → collector (fleet machines only)
+├── tools/collector.py         # fleet collector: pairing/approve/revoke, license check, dashboard, release+pack store
+├── tools/update.py            # pull signed release: no-redirect → sha256 → ed25519 → stage → apply at boot + rollback
+├── tools/apply-pack.py        # apply org pack (skills/workflows/rules) — lint exec_allowlist, never overrides consent
+├── tools/make-license.py      # vendor: sign license.json (HMAC org|seats|expiry|issued)
+├── tools/sign-release.py + ed25519.py  # vendor: sign release offline (private key never in repo)
+├── tools/backup.py            # snapshot .devin/ + my-course/ before update/pack-apply
+├── tools/content_guard.py     # UNTRUSTED-content wrapper, injection detect, env allowlist scrub
+├── tools/test-*.py            # stdlib smoke tests: bridge endpoints, .py↔.ps1 parity, fleet lifecycle, worker 2-tier, packs sync
+├── worker/                    # port of collector.py → Cloudflare Workers + D1 + R2 (hosted tier, /fleet/)
+├── collector-web/             # fleet dashboard: login (account or admin key) + role-based tabs
+├── deploy/                    # company install kit: install.ps1/sh, DEPLOY.md, force-install.md, vendor-infra.md
+├── packs/                     # per-org config packs (skills/workflows/rules — the "same codebase" differentiator)
 ├── intro/slides.html          # static intro deck (Lesson 0)
 ├── site/                      # landing page troly.hieuspace.com (deployed via the gh-pages branch + CNAME)
 ├── plans/                     # multi-phase work plans (executed and in-flight)
@@ -163,7 +201,9 @@ ai-assistant/
 
 **Updates:** the portal checks GitHub Releases on open — a new version
 shows a banner linking to the download; the new `troly` file overwrites
-code only, never touches `~/TroLyAI` (my-course, brain, secrets). The
+code only, never touches `~/TroLyAI` (my-course, brain, secrets). Fleet
+machines update over the collector channel instead: ed25519-signed
+zips staged by `update.py` and applied at next boot with rollback. The
 extension reports "outdated" in the top-right pill → update the app,
 then remove + Load unpacked again; real auto-update only exists once
 the extension ships to the Web Store.

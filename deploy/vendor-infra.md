@@ -14,7 +14,8 @@ troly.hieuspace.com
 │                      ed25519 — update.py của máy/collector kéo từ đây
 └── /fleet/          → hosted collector = Cloudflare Worker
                        (worker/src/index.js — port của collector.py)
-    ├── /            → dashboard (admin_key per-org)
+    ├── /            → dashboard (login account 2-role master/cty-admin,
+    │                  vẫn nhận admin_key qua "Dán key"/?key=)
     ├── /api/pair    → máy xin vào
     ├── /api/beacon  → snapshot 15'
     └── /api/org-ping→ meta-telemetry cho vendor (1/ngày/collector)
@@ -48,13 +49,22 @@ VPS nào cả):
 Ops:
 ```sh
 cd worker && wrangler deploy                 # sau khi sửa index.js
-wrangler secret put ORGS_JSON                # thêm/đổi org
+wrangler secret put ORGS_JSON                # seed/fallback — org trong D1 ưu tiên hơn
 wrangler d1 execute troly-fleet-db --remote --command "..."
 wrangler r2 object delete troly-fleet-assets/<key>
 ```
-Thêm org mới cho khách: sửa `ORGS_JSON` (thêm
-`"<ORG>": {beacon_secret, license_secret, admin_key}`) →
-`wrangler secret put ORGS_JSON` — không cần deploy lại.
+
+Thêm org mới cho khách: **qua dashboard** (login master → tab Công ty →
+tạo org → nhận `fleet.json` + `admin_key` + tài khoản cty-admin bàn
+giao) hoặc `POST /api/orgs` — org ghi vào D1, không cần deploy/đổi
+secret. Đường cũ `wrangler secret put ORGS_JSON` chỉ còn vai trò
+seed/khôi phục. Xoay `beacon_secret`/`admin_key` của org:
+`POST /api/orgs/<org>/rotate-secret` hoặc nút "Xoay khoá" trên
+dashboard (có tuỳ chọn `kill_machines` đá máy về pending).
+
+Tài khoản admin: `POST /api/bootstrap` (cần VENDOR_KEY) tạo master đầu
+— chạy đúng 1 lần rồi tự khoá; sau đó master tạo/ khoá admin qua tab
+Tài khoản. Khoá master cuối cùng bị chặn.
 
 Còn lại chưa làm: `/releases/` trên Pages (kênh update cho máy CÁ
 NHÂN — máy fleet lấy release qua collector R2, không qua đây) — vẫn

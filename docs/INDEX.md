@@ -13,6 +13,7 @@ Chỉ là bản đồ điều hướng. Hành vi thật nằm trong source, skil
 | Làm việc với skill | `skills-system.md` → `.devin/skills/*/SKILL.md` |
 | Pipeline clone web | `clone-pipeline.md` |
 | Deploy / cài cho học viên | `../SETUP.md` → `troubleshooting-runbook.md` |
+| Triển khai cty / fleet | `fleet.md` → `distribution.md` → `../deploy/DEPLOY.md` |
 | Bảo mật / quyền truy cập | `SECURITY.md` |
 | Biết dự án đi đâu | `project-roadmap.md` |
 

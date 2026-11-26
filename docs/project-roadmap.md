@@ -12,6 +12,10 @@ việc hoặc đổi ưu tiên.
 - Extension + ext-bridge (~25 action, nhóm t* qua CDP)
 - Clone pipeline đầu-cuối (đo → khảo sát → token → dựng → so → giao)
 - Viewer sửa tại chỗ + `.bak` + `/trang-moi` nhân bản template
+- Fleet: beacon→collector→dashboard 3 tier; hosted `worker/` live tại
+  `troly.hieuspace.com/fleet/` với admin 2 tầng (master/cty-admin),
+  release ký ed25519 + pack per-org — test `test-fleet`/`test-worker`
+  chạy trong CI
 
 ## Gần — công nghệ đã có, chỉ thiếu nối
 

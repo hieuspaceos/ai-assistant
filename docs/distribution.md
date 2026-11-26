@@ -5,7 +5,7 @@ Hai kênh đi XUỐNG máy nhân viên (đều pull, không push vào máy):
 | Kênh | Mang gì | Tin cậy bằng |
 |---|---|---|
 | **Release** | code: tools/, web/, extension/, skill-packs, docs | chữ ký **ed25519** — private key offline phía vendor |
-| **Pack** | khác biệt của cty: skills, bots, connections, workflows, rules.local.md, permissions_template, exec_allowlist | org scope của collector + lint phía máy |
+| **Pack** | khác biệt của cty: skills, bots, connections, workflows, rules.local.md, permissions_template, exec_allowlist | org scope của collector + lint phía máy — cố ý không ký (xem `decision-log.md`) |
 
 "Một code base duy nhất — khác biệt giữa các cty nằm trong `packs/`" —
 không fork repo.
@@ -90,6 +90,8 @@ curl -X POST -H "X-Admin-Key: …" --data-binary @troly-1.0.3.zip \
      http://collector:8790/api/releases/troly-1.0.3.zip
 curl -X POST -H "X-Admin-Key: …" -H "Content-Type: application/json" \
      -d @manifest.json http://collector:8790/api/releases
+# trên hosted tier (worker): upload release chỉ master — dùng session
+# Bearer của tài khoản master, không phải admin_key của org khách
 ```
 
 Pack: `python3 tools/sync-fork.sh` (interim, hút từ fork) hoặc viết tay

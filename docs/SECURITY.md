@@ -6,10 +6,12 @@ là lớp bảo vệ cuối. Mọi server là loopback; mọi quyền vượt `m
 
 ## Mô hình khoá — `.devin/bridge.token`
 
-Một "chìa khoá nhà" dùng chung cho mọi bridge. `start.sh`/`start.bat`
-sinh một lần (bridge fallback sinh atomic `O_EXCL` nếu thiếu), `chmod
-600`, đã gitignore, và `serve.py` vốn chặn dotfiles nên không lộ qua
-:8080.
+Một "chìa khoá nhà" dùng chung cho mọi bridge, **rotate mỗi lần
+start**: launcher `health-check trước` — instance đang sống thì đọc
+token cũ mở lại portal (không ghi đè, tránh phá bridge đang chạy);
+chỉ start mới mới sinh token (bridge fallback sinh atomic `O_EXCL`
+nếu thiếu), `chmod 600`, đã gitignore, và `serve.py` vốn chặn dotfiles
+nên không lộ qua :8080.
 
 **Hai cách trình khoá** (tương đương): header `X-Bridge-Token: <mã>`
 hoặc query `?token=<mã>`; so constant-time cả hai phía —
@@ -101,10 +103,11 @@ là **mã từ bên ngoài** — chỉ nhập từ người tin. Lớp phòng th
 
 ## Rotation
 
-Xoá `.devin/bridge.token` + chạy lại file start = khoá mới; mọi phía
-cũ (portal tab đang mở, extension) mất hiệu lực — extension cần pair
-lại (mở portal có `?t=` mới là auto-pair chạy lại, hoặc dán mã mới
-trong options).
+Rotation là tự động — mỗi lần chạy file `start` sinh token mới (khi
+không có instance đang sống); mọi phía cũ (portal tab đang mở,
+extension) mất hiệu lực — extension tự pair lại khi portal mở bằng
+`?t=` mới, hoặc dán mã mới trong options. Xoá tay
+`.devin/bridge.token` cũng ép rotate ở lần start sau.
 
 ## Trust boundaries
 
@@ -147,6 +150,17 @@ các bridge KHÔNG áp dụng. Biên mới + mitigation:
 | Collector bị flood | Rate limit/IP + body cap 1MB + 64 thread slot (y bridge) |
 | Vendor-hosted = vendor giữ metadata khách | Chỉ org-level rollup qua `org-ping` (opt-out `COLLECTOR_NO_TELEMETRY=1`); cần điều khoản DPA/PDPD trong hợp đồng — xem `docs/fleet.md` |
 
+Trên **hosted tier** (`worker/`), lớp tài khoản thay cho shared key:
+
+| Mối đe | Mitigation |
+|---|---|
+| Brute-force login | PBKDF2 (mật khẩu không lưu rõ) + rate-limit `POST /api/login` per IP |
+| Session bị trộm | Bearer token 7 ngày trong bảng `sessions` — đổi pass/disable/reset pass **xoá hết session** → thu hồi có hiệu lực ngay; session không gia hạn tự động |
+| Tự khoá mất quyền quản trị | Bootstrap `/api/bootstrap` chỉ chạy đúng 1 lần (tự khoá sau master đầu); khoá **master cuối cùng** bị chặn 400 — không lockout được |
+| `beacon_secret`/`admin_key` lộ | `POST /api/orgs/<org>/rotate-secret` (master) sinh cặp mới, key cũ chết ngay; `kill_machines` opt-in đá toàn bộ máy về pending buộc re-pair |
+| ai-duyệt-gì mờ ám | Bảng `audit` ghi actor thật (account hay key nào) trên mọi hành động — audit detail redact password/secret trước khi lưu |
+| Worker ↔ collector.py lệch hành vi | `test-worker.py` (wrangler dev + D1 local, trong CI) + parity endpoint-set trong `test-fleet.py` |
+
 ## Phân phối — release ký + config-pack (biên tin cậy thứ hai)
 
 Kênh "xuống máy" (code + luật cty) nếu bị chơi hậu quả nặng hơn kênh
@@ -165,9 +179,11 @@ Kênh "xuống máy" (code + luật cty) nếu bị chơi hậu quả nặng hơ
 | Mirror upstream kéo nhầm | Mirror chỉ sao chép file+mạch sha256; máy NV vẫn verify sig — mirror xấu chỉ gây stale, không cấy được payload |
 
 Residual đã biết: pack **không ký** — kênh pack tin vào admin_key +
-org scoping của collector. Kẻ có admin_key đẩy được pack độc (nhưng
-lint + "không đè consent" giới hạn được phần lớn mặt tấn công; nếu
-khách yêu cầu ký pack thì thêm field `pack_sig` cùng vendor key sau).
+org scoping của collector. Kẻ có admin_key đẩy được pack độc, nhưng
+blast radius khoanh trong org đó, lint `exec_allowlist` + "không đè
+consent" giới hạn mặt tấn công, và `rotate-secret` là van xả khi key
+lộ. Đây là quyết định chủ đích (org-admin phải phát pack được mà
+không cầm vendor key) — ghi kỹ trong `docs/decision-log.md`.
 
 ## permissions.json — ngăn tủ được phép
 
