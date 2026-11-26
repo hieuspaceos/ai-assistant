@@ -90,16 +90,54 @@ manifest, bots, permissions, connections, bot.md) — seed lessons vẫn
 sh deploy/install.sh          # → ~/TroLyAI, brew install ttyd
 ```
 
+### Cài không ngồi máy (GPO / Intune / MDM)
+
+Hai installer đều có chế độ im lặng — không hỏi gì:
+
+```powershell
+# Windows — GPO startup script hoặc Intune win32 app (chạy dưới SYSTEM):
+powershell -ExecutionPolicy Bypass -File deploy\install.ps1 -Quiet -ForUser ngoc.nguyen
+# -Quiet: không Read-Host; -ForUser: shortcut + ACL đặt cho đúng chủ máy
+#        (không -ForUser thì shortcut rơi vào Public Desktop)
+# -NoSandbox: bỏ tạo troly-agent — KHÔNG khuyến nghị, chỉ khi AD cấm
+#        tạo local user
+```
+
+```sh
+# macOS — MDM (Jamf/Kandji) script:
+sh deploy/install.sh --quiet          # tự tạo LaunchAgent
+sh deploy/install.sh --quiet --no-autostart   # không tự mở khi login
+```
+
+Lưu ý Intune win32 app: đóng gói `.intunewin` từ bộ cài cty,
+`install command` = dòng PowerShell trên, `install behavior` = System,
+rules = file `C:\TroLyAI\start.bat` tồn tại. Extension phải áp
+force-install policy TRƯỚC hoặc ngay sau — xem `force-install.md`.
+
 ### Extension — hai đường
 
 - **Fleet (khuyến nghị)**: force-install qua policy → tự cài + tự
   update, nhân viên không bấm gì. Xem `force-install.md`.
 - **Máy lẻ**: cho nhân viên link Web Store (unlisted) → bấm Cài.
 
+### Não AI cho máy nhân viên — hai đường
+
+- **IT cài sẵn (khuyến nghị cho fleet)**: `deploy/install-brain.ps1`
+  (PowerShell admin) cài Node + `gemini-cli` machine-wide qua winget —
+  chạy cùng đợt `install.ps1`, kể cả trong GPO/Intune. Hoặc đẩy pack
+  có field `brain` → máy **chưa onboard** tự ghi `brain.json` chọn sẵn
+  não (không đè lựa chọn của máy đã chạy).
+- **Nhân viên tự cài**: nút "Cài não này" trong onboarding tự cài
+  (không cần admin — node portable trong `~/TroLyAI/node`).
+
+Dù đường nào, nhân viên vẫn **đăng nhập não lần đầu** bằng tài khoản
+riêng (Google cá nhân cho Gemini) — không có credential cty nào để IT
+quản.
+
 ### Lần chạy đầu
 
 1. Mở "Trợ Lý AI" (shortcut / `start.sh`) → portal mở.
-2. Onboarding: chọn não, đặt tên trợ lý.
+2. Onboarding: chọn não (đã cài sẵn thì tick ngay), đặt tên trợ lý.
 3. Portal tự đẩy mã kết nối cho extension (`set-token`) — extension
    chấm xanh là xong.
 
@@ -118,9 +156,25 @@ sh deploy/install.sh          # → ~/TroLyAI, brew install ttyd
 |---|---|
 | Update code | Release ký ed25519 → collector mirror → máy tự kéo qua beacon, stage + apply khi khởi động lại. Rollback: `troly --rollback` |
 | Workflow/rules mới | Đẩy pack mới lên collector (`POST /api/packs`) → máy tự apply |
-| Nhân viên nghỉ | Revoke máy trên dashboard → máy bị đá khỏi fleet |
+| Nhân viên nghỉ | Revoke máy trên dashboard → máy bị đá khỏi fleet (chi tiết mục 5.1) |
+| Gán tên NV vào máy | Mở drawer máy trên dashboard → ô "gán tên nhân viên" → Lưu. Xuất báo cáo ghế: nút "Xuất CSV" |
 | Sự cố một máy | `web/admin.html` tại máy — lỗi, version, trạng thái |
 | Xem hiệu suất | Dashboard collector — ai online, lượt dùng, lỗi, inj_suspect |
+
+### 5.1. Nhân viên nghỉ việc — thu hồi seat đầy đủ
+
+1. **Revoke máy** trên dashboard (drawer máy → "Thu hồi máy này") —
+   máy bị đá khỏi fleet ngay, beacon sau đó trả `revoked`, máy tự xoá
+   `machine.key` và về pending. Ghế `active30` giảm sau 30 ngày.
+2. **Dữ liệu trên máy**: `my-course/` chứa toàn bộ bài làm của NV —
+   copy ra nếu cty cần giữ, rồi xoá folder `C:\TroLyAI` / `~/TroLyAI`
+   (hoặc re-image máy theo quy trình IT).
+3. **Extension**: gỡ thủ công trong `chrome://extensions`, hoặc nếu
+   cài qua force-install policy thì máy trả về domain chung sẽ tự gỡ
+   khi policy không còn áp cho user/máy đó.
+4. **Tài khoản não**: NV đăng nhập Gemini/Devin bằng tài khoản riêng
+   — không có creds cty nào nằm trên máy để thu hồi. Nếu từng cấp key
+   chung (Phase 05-B), rotate key đó ở phía provider.
 
 ## 6. Viết workflow cho cty
 

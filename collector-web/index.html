@@ -377,6 +377,7 @@
       <button class="btn lang" id="btn-lang" type="button">EN</button>
       <button class="btn" id="btn-pass" type="button" hidden>Đổi mật khẩu</button>
       <button class="btn" id="btn-refresh" type="button">Làm mới</button>
+      <button class="btn" id="btn-export" type="button">Xuất CSV</button>
       <button class="btn" id="btn-logout" type="button">Thoát</button>
     </div>
   </div></div>
@@ -391,6 +392,11 @@
   <div class="dhead">
     <h2 id="dt-title"></h2>
     <button class="btn" id="dt-close" type="button">✕</button>
+  </div>
+  <div style="display:flex;gap:8px;margin:0 0 var(--space-md)">
+    <input id="dt-label" maxlength="80" style="flex:1"
+           placeholder="gán tên nhân viên…">
+    <button class="btn" id="btn-label" type="button">Lưu</button>
   </div>
   <div class="adm-grid">
     <div class="adm-card"><h3 id="t-sys">Hệ thống</h3><div id="adm-sys"></div></div>
@@ -445,6 +451,8 @@ const I18N = {
             bot: 'Bot', conns: 'Kết nối', lic: 'License' },
     flt: 'lọc máy…', connsAll: 'Kết nối theo app',
     connMore: 'ghi chú', connLess: 'ẩn ghi chú',
+    exportCsv: 'Xuất CSV', labelPh: 'gán tên nhân viên…',
+    save: 'Lưu', labelSaved: 'đã lưu',
     seats: '{a}/{s} ghế đang dùng', seatsNone: 'chưa có license',
     allOrg: '(mọi cty)',
     ago: { m: ' phút trước', h: ' giờ trước', d: ' ngày trước' },
@@ -515,6 +523,8 @@ const I18N = {
             bot: 'Bot', conns: 'Apps', lic: 'License' },
     flt: 'filter…', connsAll: 'Connections by app',
     connMore: 'notes', connLess: 'hide notes',
+    exportCsv: 'Export CSV', labelPh: 'assign employee name…',
+    save: 'Save', labelSaved: 'saved',
     seats: '{a}/{s} seats in use', seatsNone: 'no license yet',
     allOrg: '(all orgs)',
     ago: { m: 'm ago', h: 'h ago', d: 'd ago' },
@@ -599,6 +609,9 @@ function chrome() {
   $('#lg-note').innerHTML = esc(t('noteKey'));
   $('#btn-pass').textContent = t('chpass');
   $('#btn-refresh').textContent = t('refresh');
+  $('#btn-export').textContent = t('exportCsv');
+  $('#btn-label').textContent = t('save');
+  $('#dt-label').placeholder = t('labelPh');
   $('#btn-logout').textContent = t('logout');
   $('#btn-revoke').textContent = t('revokeOne');
   $('#usage').querySelector('thead tr').innerHTML =
@@ -730,6 +743,17 @@ $('#tabs').addEventListener('click', e => {
   if (e.target.dataset.tab) switchTab(e.target.dataset.tab);
 });
 $('#btn-refresh').onclick = () => switchTab(curTab);
+$('#btn-export').onclick = async () => {
+  // CSV cần header auth (không mở link trần được) → fetch → blob
+  const r = await fetch('api/seats/export', { headers: authHdr() });
+  if (r.status === 401) { showLogin(); return; }
+  if (!r.ok) return errBox('export: HTTP ' + r.status);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(await r.blob());
+  a.download = 'seats.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
 
 /* ---------- helpers ---------- */
 function ago(ts) {
@@ -878,6 +902,7 @@ async function renderFleet() {
   function paintRows() {
     const show = ms.filter(m => !fleetFilter ||
       (m.hostname || '').toLowerCase().includes(fleetFilter) ||
+      (m.label || '').toLowerCase().includes(fleetFilter) ||
       (m.learner || '').toLowerCase().includes(fleetFilter) ||
       (m.org || '').toLowerCase().includes(fleetFilter));
     $('#rows').innerHTML = show.map(m => {
@@ -889,6 +914,7 @@ async function renderFleet() {
       return `<tr class="click ${live ? '' : 'stale'}" data-mid="${esc(m.machine_id)}">` +
         `<td><span class="dot ${live ? 'on' : 'off'}"></span>` +
         `<b>${esc(m.hostname)}</b>` +
+        (m.label ? ` <span class="tag ok">${esc(m.label)}</span>` : '') +
         (m.learner ? ` <span class="mono">${esc(m.learner)}</span>` : '') + `</td>` +
         (isMaster ? `<td><span class="tag">${esc(m.org)}</span></td>` : '') +
         `<td>${esc(m.brain || '—')}</td>` +
@@ -914,6 +940,7 @@ function openDrawer(mid) {
     curMid = mid;
     $('#dt-title').textContent =
       (d.hostname || mid) + ' — ' + (d.org || '');
+    $('#dt-label').value = d.label || '';
     const snap = d.snapshot || {};
     AdmRender.renderInto({
       sys: $('#adm-sys'), bots: $('#adm-bots'), perms: $('#adm-perms'),
@@ -954,6 +981,16 @@ $('#btn-revoke').onclick = () => {
   api('api/pair-revoke', { method: 'POST',
     body: JSON.stringify({ machine_id: curMid }) })
     .then(() => { closeDrawer(); switchTab('fleet'); });
+};
+$('#btn-label').onclick = () => {
+  if (!curMid) return;
+  api('api/machine/' + encodeURIComponent(curMid) + '/label',
+      { method: 'POST',
+        body: JSON.stringify({ label: $('#dt-label').value }) })
+    .then(() => { $('#btn-label').textContent = t('labelSaved');
+                  setTimeout(() =>
+                    $('#btn-label').textContent = t('save'), 1200); })
+    .catch(e => errBox(String(e)));
 };
 
 /* ============ TAB: CÔNG TY (master) ============ */

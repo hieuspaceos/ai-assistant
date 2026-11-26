@@ -145,6 +145,11 @@ MIGRATIONS = {
         "ALTER TABLE machines ADD COLUMN repair INTEGER DEFAULT 0",
         "ALTER TABLE machines ADD COLUMN pending_key TEXT",
     ],
+    3: [
+        # label — admin gán tên nhân viên vào máy (hostname không đủ
+        # khi fleet >vài chục máy). Admin-key scoped, beacon không ghi.
+        "ALTER TABLE machines ADD COLUMN label TEXT",
+    ],
 }
 
 def db():
@@ -539,6 +544,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 out.append({
                     "machine_id": r["machine_id"], "org": r["org"],
                     "hostname": r["hostname"], "os": r["os"],
+                    "label": r["label"] or "",
                     "learner": r["learner"], "brain": r["brain"],
                     "version": r["version"], "ext": r["ext_version"],
                     "pack_version": r["pack_version"],
@@ -567,6 +573,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._json({
                 "machine_id": mid, "org": r["org"],
                 "hostname": r["hostname"], "os": r["os"],
+                "label": r["label"] or "",
                 "approved": bool(r["approved"]),
                 "revoked": bool(r["revoked"]),
                 "first_seen": r["first_seen"], "last_seen": r["last_seen"],
@@ -629,6 +636,35 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     except Exception:
                         pass
             return self._json({"latest": latest})
+        if path == "/api/seats/export":
+            # CSV đếm ghế — chủ cty in báo cáo gia hạn. Vendor "*" đã bị
+            # chặn ở guard trên (chứa hostname/label = PII máy).
+            rows = q("SELECT machine_id,org,hostname,label,learner,"
+                     "version,pack_version,last_seen,license_status "
+                     "FROM machines WHERE approved=1 AND revoked=0"
+                     + ("" if org == "*" else " AND org=?"),
+                     () if org == "*" else (org,))
+            import csv, io
+            buf = io.StringIO()
+            w = csv.writer(buf)
+            w.writerow(["org", "machine_id", "hostname", "label",
+                        "learner", "version", "pack_version",
+                        "last_seen", "license_status"])
+            for r in rows:
+                w.writerow([r["org"], r["machine_id"], r["hostname"],
+                            r["label"] or "", r["learner"] or "",
+                            r["version"] or "", r["pack_version"] or "",
+                            r["last_seen"] or "",
+                            r["license_status"] or ""])
+            data = buf.getvalue().encode("utf-8-sig")  # Excel mở đúng dấu
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv; charset=utf-8")
+            self.send_header("Content-Disposition",
+                             'attachment; filename="seats.csv"')
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
         return self._json({"err": "not found"}, 404)
 
     def do_POST(self):
@@ -678,6 +714,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
               "pending_key=NULL WHERE machine_id=?", (mid,),
               write=True)
             return self._json({"ok": True})
+        if path.startswith("/api/machine/") and path.endswith("/label"):
+            # admin gán tên nhân viên vào máy — chỉ org scope mình, "*"
+            # (vendor read) không write được
+            org = self._scope()
+            if org is None:
+                return
+            if org == "*":
+                return self._json(
+                    {"err": "vendor key chỉ đọc, không write"}, 403)
+            b = self._body()
+            if b is None:
+                return
+            mid = path[len("/api/machine/"):-len("/label")]
+            r = q("SELECT org FROM machines WHERE machine_id=?", (mid,),
+                  one=True)
+            if not r or r["org"] != org:
+                return self._json({"err": "not found"}, 404)
+            label = str(b.get("label") or "").strip()[:80]
+            q("UPDATE machines SET label=? WHERE machine_id=?",
+              (label, mid), write=True)
+            return self._json({"ok": True, "label": label})
         if path == "/api/org-ping":
             # rollup org-level từ collector khác gửi về vendor — chỉ
             # vendor key mới ghi được, và chỉ lưu payload nguyên trạng

@@ -6,6 +6,13 @@
 > cần Python, không cần các bước dưới.
 > *(macOS: file `troly` · Windows: file `TroLyAI.exe` — lấy đúng file cho máy mình.)*
 >
+> **Lần đầu mở bị máy "chặn"?** Đó là cảnh báo bình thường với app chưa
+> ký số, không phải virus:
+> - Windows: màn hình xanh SmartScreen → bấm **More info** rồi **Run
+>   anyway**.
+> - macOS: báo "cannot be opened" → **chuột phải** vào file `troly` →
+>   **Open** → **Open** thêm lần nữa.
+>
 > **Cập nhật sau này:** portal sẽ tự báo "Có bản mới" — bấm vào là ra
 > trang tải. Tải file mới chạy đè là xong, bài học và cài đặt giữ
 > nguyên. Extension báo "bản cũ" thì xoá và Load unpacked lại.
@@ -32,33 +39,26 @@ hỏi người phụ trách hoặc chụp màn hình gửi họ.
 3. Hoặc nếu có `winget`: mở PowerShell, chạy
    `winget install Microsoft.WindowsTerminal`.
 
-## Bước 2 — Cài "não" cho trợ lý (chọn MỘT trong hai đường)
+## Bước 2 — Cài "não" cho trợ lý
 
-Trợ lý cần một chương trình AI để suy nghĩ — gọi là "não". Chọn đường
-phù hợp với bạn:
+Trợ lý cần một chương trình AI để suy nghĩ — gọi là "não". Lần chạy
+đầu, trang hướng dẫn (onboarding) có sẵn nút **"Cài não này"** — bấm
+một cái là trợ lý tự tải và cài, không cần gõ lệnh, không cần quyền
+admin:
 
-### Đường A — Miễn phí: Gemini CLI (gợi ý cho người mới)
+1. Chọn **Gemini CLI** — miễn phí với tài khoản Google cá nhân, gợi ý
+   cho người mới (đã có tài khoản AI trả phí như Devin thì chọn não đó,
+   cũng cài được bằng một nút).
+2. Bấm **"Cài não này"** → để yên vài phút, trợ lý tự tải và cài.
+3. Xong bấm **"Mở terminal đăng nhập não"** — một cửa sổ dòng lệnh mở
+   ra, trình duyệt bật trang đăng nhập Google, đăng nhập xong quay lại
+   bấm **"kiểm tra lại"** là dùng được.
 
-Dùng được với tài khoản Google cá nhân, không tốn tiền (theo chính
-sách hiện tại của Google — có thể đổi sau này).
-
-1. Cần Node.js trước — mở PowerShell (phím Windows, gõ `powershell`,
-   Enter), dán: `winget install OpenJS.NodeJS` → Enter.
-2. Đóng PowerShell, mở lại, dán: `npm install -g @google/gemini-cli`
-   → Enter.
-3. Gõ `gemini` → Enter — trình duyệt mở trang đăng nhập Google, đăng
-   nhập bằng tài khoản cá nhân là xong.
-4. Vào portal → ⚙ Cài đặt → Bộ não → chọn **Gemini CLI**.
-
-### Đường B — Đã có sẵn tài khoản AI trả phí (Devin, Claude, Codex…)
-
-Ví dụ với Devin:
-
-1. Mở PowerShell, dán `irm https://cli.devin.ai/install.ps1 | iex` → Enter.
-2. Đóng PowerShell, mở lại, gõ `devin` → Enter — đăng nhập tài khoản
-   của bạn.
-3. Não khác (Claude Code, Codex, OpenCode, Goose) cài tương tự theo
-   trang của hãng, rồi chọn trong ⚙ Cài đặt → Bộ não.
+*(Đường tay — chỉ khi cài tự động lỗi: nút **"hướng dẫn tay ↗"** trong
+onboarding mở đúng trang của hãng. Windows: `winget install
+OpenJS.NodeJS` rồi `npm install -g @google/gemini-cli` trong
+PowerShell; macOS làm theo trang hãng. Não khác — Claude Code, Codex,
+OpenCode, Goose — cài tay theo hãng rồi chọn trong ⚙ Cài đặt → Bộ não.)*
 
 ## Bước 3 — Cài thêm cho chế độ "Terminal" (ttyd, không bắt buộc)
 

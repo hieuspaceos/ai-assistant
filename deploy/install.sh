@@ -1,9 +1,20 @@
 #!/bin/sh
 # install.sh — cài Trợ Lý AI lên macOS (không cần root).
 #
-# Chạy: sh install.sh [~/TroLyAI]
+# Chạy: sh install.sh [--quiet] [--no-autostart] [~/TroLyAI]
+#   --quiet        cài im lặng (MDM) — không hỏi, mặc định tạo LaunchAgent
+#   --no-autostart bỏ LaunchAgent (kể cả trong --quiet)
 set -e
-DEST="${1:-$HOME/TroLyAI}"
+QUIET=0; NO_AUTOSTART=0
+for a in "$@"; do
+    case "$a" in
+        --quiet) QUIET=1 ;;
+        --no-autostart) NO_AUTOSTART=1 ;;
+        --*) echo "flag la: $a" >&2; exit 2 ;;
+        *) DEST="$a" ;;
+    esac
+done
+DEST="${DEST:-$HOME/TroLyAI}"
 SRC="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "== Cai Tro Ly AI =="
@@ -67,9 +78,17 @@ for f in license.json fleet.json; do
     fi
 done
 
-# LaunchAgent tuỳ chọn — tự mở khi login
-printf "Tao LaunchAgent tu chay khi dang nhap? [y/N] "
-read -r ans
+# LaunchAgent tuỳ chọn — tự mở khi login. --quiet mặc định CÓ (MDM
+# muốn autostart), --no-autostart tắt; cài tay vẫn hỏi như cũ.
+ans=""
+if [ "$NO_AUTOSTART" -eq 0 ]; then
+    if [ "$QUIET" -eq 1 ]; then
+        ans="y"
+    else
+        printf "Tao LaunchAgent tu chay khi dang nhap? [y/N] "
+        read -r ans
+    fi
+fi
 if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
     PLIST="$HOME/Library/LaunchAgents/com.troly.start.plist"
     cat > "$PLIST" <<EOF

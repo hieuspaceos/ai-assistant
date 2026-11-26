@@ -49,6 +49,21 @@ BRAIN_FP = os.path.join(os.path.abspath(CWD), "brain.json")
 
 TOKEN_FP = os.path.join(os.path.abspath(CWD), ".devin", "bridge.token")
 
+# install-brain.py cài "lén" vào DATA/node (node portable → gemini) và
+# installer của Devin hay đặt ~/.local/bin — prepend PATH để which()/
+# preset detection/spawn thấy não vừa cài mà không cần học viên chỉnh
+# PATH tay. Gọi lại mỗi khi check não: node dir SINH RA sau khi bridge
+# đã boot (vừa cài xong) nên augment một lần lúc import là không đủ.
+def _augment_brain_path():
+    for _d in (os.path.join(os.path.abspath(CWD), "node", "bin"),
+               os.path.join(os.path.abspath(CWD), "node"),
+               os.path.expanduser("~/.local/bin")):
+        if os.path.isdir(_d) and \
+                _d not in os.environ.get("PATH", "").split(os.pathsep):
+            os.environ["PATH"] = _d + os.pathsep \
+                + os.environ.get("PATH", "")
+_augment_brain_path()
+
 def load_token():
     # "chìa khoá nhà" dùng chung cho mọi bridge — start script sinh trước;
     # đây chỉ là fallback atomic (O_EXCL: thằng thua race đọc token của
@@ -109,6 +124,7 @@ BRAIN_PRESETS = [
     {"id": "devin", "label": "Devin",
      "cmd": "devin", "args": ["acp", "--process-model", "in-process"],
      "terminal": "devin", "requires": ["devin"], "cost": "paid",
+     "auto": True,
      "desc": {"vi": "Não mặc định — đi kèm bộ trợ lý này",
               "en": "Default brain — ships with this assistant"},
      "install": {"url": "https://devin.ai",
@@ -117,6 +133,7 @@ BRAIN_PRESETS = [
     {"id": "gemini", "label": "Gemini CLI (Google)",
      "cmd": "gemini", "args": ["--acp"],
      "terminal": "gemini", "requires": ["gemini"], "cost": "free",
+     "auto": True,
      "desc": {"vi": "Miễn phí với tài khoản Google cá nhân — não gợi ý cho người mới",
               "en": "Free with a personal Google account — suggested brain for new users"},
      "install": {"url": "https://github.com/google-gemini/gemini-cli",
@@ -926,6 +943,9 @@ MC_DIR = os.path.join(os.path.abspath(CWD), "my-course")
 PERM_FP = os.path.join(MC_DIR, "permissions.json")
 CONN_FP = os.path.join(MC_DIR, "connections.json")
 CONFIG_FP = os.path.join(MC_DIR, "config.json")
+INSTALL_FP = os.path.join(os.path.abspath(CWD), ".devin",
+                         "install-brain.json")
+INSTALL_PROC = {"proc": None}   # process install-brain đang chạy (1 cái)
 SKILL_PACKS = os.path.join(os.path.abspath(CWD), ".devin", "skill-packs")
 SKILLS_DIR = os.path.join(os.path.abspath(CWD), ".devin", "skills")
 ROLES_DIR = os.path.join(SKILL_PACKS, "roles")
@@ -1360,6 +1380,7 @@ class Handler(BaseHTTPRequestHandler):
         "/api/check-path":    "_g_check_path",
         "/api/count-glob":    "_g_count_glob",
         "/api/bots":          "_g_bots",
+        "/api/install-brain": "_g_install_brain",
     }
     POST_ROUTES = {
         "/api/prompt":        "_h_prompt",
@@ -1378,6 +1399,7 @@ class Handler(BaseHTTPRequestHandler):
         "/api/bot-import":    "_h_bot_import",
         "/api/bot-import-confirm":"_h_bot_import_confirm",
         "/api/emit-event":    "_h_emit_event",
+        "/api/install-brain": "_h_install_brain",
     }
 
     def do_GET(self):
@@ -1435,6 +1457,7 @@ class Handler(BaseHTTPRequestHandler):
                     "extVersion": ext_expected_version()})
 
     def _g_brain(self):
+        _augment_brain_path()   # não vừa cài xong → node dir mới sinh
         cur = load_brain()
         presets = []
         for p in BRAIN_PRESETS:
@@ -1442,6 +1465,7 @@ class Handler(BaseHTTPRequestHandler):
                 "id": p["id"], "label": p["label"],
                 "cost": p.get("cost", "paid"),
                 "desc": p.get("desc", {}),
+                "auto": bool(p.get("auto")),
                 "install": p.get("install"),
                 "cmd_display": " ".join([p["cmd"]] + p["args"]),
                 "installed": all(shutil.which(r)
@@ -1699,6 +1723,7 @@ class Handler(BaseHTTPRequestHandler):
                  "cmd": cmd, "args": args,
                  "terminal": term}
             requires = [cmd]
+        _augment_brain_path()   # vừa cài xong → resolve được não mới
         missing = [r for r in requires if not shutil.which(r)]
         if missing:
             self._json({"err": "chưa cài trên máy: " + ", ".join(missing),
@@ -1717,6 +1742,112 @@ class Handler(BaseHTTPRequestHandler):
             spawn_brain()
         rid = gate_local(title, _apply)
         self._gate_resp(rid, "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để đổi não")
+
+    def _g_install_brain(self):
+        # onboarding poll trạng thái cài não — script tự ghi INSTALL_FP
+        # nên sống được qua restart bridge
+        st = load_json(INSTALL_FP, {})
+        running = INSTALL_PROC["proc"] is not None \
+            and INSTALL_PROC["proc"].poll() is None
+        # proc chết giữa chừng (bridge restart, kill) mà file state kẹt
+        # "running" → onboarding poll mãi. Ép về error để UI cho cài lại.
+        state = "running" if running else st.get("state")
+        if not running and state == "running":
+            state = "error"
+        self._json({"ok": True, "running": running, "state": state,
+                    "id": st.get("id"), "step": st.get("step"),
+                    "log": (st.get("log") or [])[-12:]})
+
+    def _h_install_brain(self, data):
+        # Cài não bằng một nút (tools/install-brain.py) hoặc mở terminal
+        # để đăng nhập não {"login": true}. Máy đã onboard/fleet → qua
+        # thẻ xác nhận vì agent cũng gọi được endpoint này; máy CHƯA
+        # onboard thì chưa có agent nào giả nút bấm → chạy luôn (nút
+        # bấm của học viên chính là consent — y hệt _h_setup lần đầu).
+        bid = str(data.get("id", "")).strip()
+        preset = next((p for p in BRAIN_PRESETS if p["id"] == bid), None)
+        if not preset:
+            self._json({"err": "không có não này"}, 400); return
+        login = bool(data.get("login"))
+        if not login and not preset.get("auto"):
+            self._json({"err": "não này chưa cài tự động được — "
+                               "làm theo trang hướng dẫn của hãng"}, 400)
+            return
+        onboarded = load_json(CONFIG_FP, {}).get("language") or \
+            os.path.isfile(os.path.join(os.path.abspath(CWD), ".devin",
+                                        "fleet.json"))
+        def _apply():
+            if login:
+                self._brain_login(preset)
+            else:
+                self._brain_install(preset)
+        if onboarded:
+            rid = gate_local(
+                (f"Mở terminal đăng nhập não {preset['label']}?" if login
+                 else f"Cài não {preset['label']} lên máy?"), _apply)
+            self._gate_resp(rid, "đã gửi thẻ xác nhận vào chat — "
+                                 "bấm Đồng ý để chạy")
+            return
+        try:
+            _apply()
+        except OSError as e:
+            self._json({"err": str(e)}, 500); return
+        self._json({"ok": True})
+
+    def _brain_install(self, preset):
+        if INSTALL_PROC["proc"] is not None \
+                and INSTALL_PROC["proc"].poll() is None:
+            return                       # đang cài rồi — POST lặp là no-op
+        if getattr(sys, "frozen", False):
+            # binary đóng gói: vai con qua `troly <role>` (launcher)
+            cmd = [sys.executable, "install-brain",
+                   preset["id"], os.path.abspath(CWD)]
+        else:
+            cmd = [sys.executable,
+                   os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "install-brain.py"),
+                   preset["id"], os.path.abspath(CWD)]
+        logdir = os.path.join(os.path.abspath(CWD), ".logs")
+        os.makedirs(logdir, exist_ok=True)
+        log = open(os.path.join(logdir, "install-brain.log"), "ab",
+                   buffering=0)
+        try:
+            INSTALL_PROC["proc"] = subprocess.Popen(
+                cmd, cwd=os.path.abspath(CWD),
+                stdout=log, stderr=subprocess.STDOUT)
+        finally:
+            log.close()   # con đã giữ fd riêng — không lấp fd trong bridge
+
+    def _brain_login(self, preset):
+        """Mở cửa sổ terminal chạy CLI của não — OAuth chỉ hoàn tất
+        được trong terminal thật (browser bật ra, não tự lưu creds)."""
+        term = preset.get("terminal") or preset["cmd"]
+        # PATH của bridge đã gồm DATA/node — resolve ra path tuyệt đối
+        # kẻo terminal mới (không thừa hưởng PATH đã prepend) không tìm
+        # thấy não vừa cài lén
+        _augment_brain_path()
+        term = shutil.which(term) or term
+        sysname = platform.system()
+        # não trong DATA/node là "lén" — shell login của terminal mới KHÔNG
+        # có DATA/node/bin trong PATH mà shim npm cần env node → chích PATH
+        # ngay trong lệnh mở terminal (Windows npm shim tự tìm node.exe
+        # cạnh nó, POSIX shim thì không)
+        termdir = os.path.dirname(term)
+        prefix = f'export PATH="{termdir}:$PATH"; ' if termdir else ""
+        if sysname == "Windows":
+            setp = f'set "PATH={termdir};%PATH%" && ' if termdir else ""
+            subprocess.Popen(["cmd", "/c", "start", "", "cmd", "/k",
+                              setp + f'"{term}"'])
+        elif sysname == "Darwin":
+            # ensure_ascii=False: đường dẫn có chữ Việt (home "Nguyễn")
+            # mà dumps mặc định thành \uXXXX → AppleScript không hiểu
+            cmd = prefix + f'"{term}"; exit'
+            subprocess.Popen(["osascript", "-e",
+                'tell application "Terminal" to do script ' +
+                json.dumps(cmd, ensure_ascii=False)])
+        else:
+            raise OSError("chưa hỗ trợ mở terminal trên Linux — "
+                          "tự mở terminal chạy lệnh não")
 
     def _h_delete_lesson(self, data):
         folder = str(data.get("folder", ""))

@@ -350,7 +350,8 @@ def _stop(*_):
 def main():
     a = sys.argv[1:]
     if a and a[0] in ("serve", "chat-bridge", "ext-bridge", "beacon",
-                      "update", "apply-pack", "backup", "gen-sandbox"):
+                      "update", "apply-pack", "backup", "gen-sandbox",
+                      "install-brain"):
         run_tool(a[0], a[1:])
         return
     if "--register-startup" in a or "--unregister-startup" in a:

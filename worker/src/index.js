@@ -97,6 +97,9 @@ async function ensureV2(env) {
                      + "INTEGER DEFAULT 0");
     if (!names.has("pending_key"))
       await run(env, "ALTER TABLE machines ADD COLUMN pending_key TEXT");
+    // MIGRATIONS[3] của py — admin gán tên nhân viên vào máy
+    if (!names.has("label"))
+      await run(env, "ALTER TABLE machines ADD COLUMN label TEXT");
     _v2done = true;
   } catch {}
 }
@@ -459,6 +462,7 @@ async function doGet(req, env, path, prefix, orgs, url) {
       const apps = ((snap.conns || {}).apps) || [];
       out.push({
         machine_id: r.machine_id, org: r.org, hostname: r.hostname,
+        label: r.label || "",
         os: r.os, learner: r.learner, brain: r.brain,
         version: r.version, ext: r.ext_version,
         pack_version: r.pack_version, last_seen: r.last_seen,
@@ -496,6 +500,7 @@ async function doGet(req, env, path, prefix, orgs, url) {
       + "ORDER BY day DESC LIMIT 14", mid);
     return j({
       machine_id: mid, org: r.org, hostname: r.hostname, os: r.os,
+      label: r.label || "",
       approved: !!r.approved, revoked: !!r.revoked,
       first_seen: r.first_seen, last_seen: r.last_seen,
       license: JSON.parse(r.license_json || "null"),
@@ -557,6 +562,36 @@ async function doGet(req, env, path, prefix, orgs, url) {
       if (r) { try { latest[oname] = await r.json(); } catch {} }
     }
     return j({ latest });
+  }
+  if (path === "/api/seats/export") {
+    // CSV đếm ghế — chủ cty in báo cáo gia hạn (y py collector)
+    await ensureV2(env);
+    const rows = org === "*"
+      ? await allq(env, "SELECT machine_id,org,hostname,label,learner,"
+                        + "version,pack_version,last_seen,license_status "
+                        + "FROM machines WHERE approved=1 AND revoked=0")
+      : await allq(env, "SELECT machine_id,org,hostname,label,learner,"
+                        + "version,pack_version,last_seen,license_status "
+                        + "FROM machines WHERE approved=1 AND revoked=0 "
+                        + "AND org=?", org);
+    const esc = v => {
+      const s = String(v ?? "");
+      return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    let csv = "org,machine_id,hostname,label,learner,version,"
+            + "pack_version,last_seen,license_status\r\n";
+    for (const r of rows) {
+      csv += [r.org, r.machine_id, r.hostname, r.label || "",
+              r.learner || "", r.version || "", r.pack_version || "",
+              r.last_seen || "", r.license_status || ""]
+             .map(esc).join(",") + "\r\n";
+    }
+    return new Response("\uFEFF" + csv, {   // BOM — Excel mở đúng dấu
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": 'attachment; filename="seats.csv"',
+      },
+    });
   }
   return j({ err: "not found" }, 404);
 }
@@ -832,6 +867,22 @@ async function doPost(req, env, path, prefix, orgs, ip) {
               mid);
     await audit(env, actor, "pair-revoke", r.org, mid, "");
     return j({ ok: true });
+  }
+  if (path.startsWith("/api/machine/") && path.endsWith("/label")) {
+    // admin gán tên nhân viên vào máy — scope org y pair-approve
+    const [b, err] = await body(req);
+    if (err) return err;
+    const mid = path.slice("/api/machine/".length, -"/label".length);
+    const r = await one(env,
+      "SELECT org FROM machines WHERE machine_id=?", mid);
+    if (!r || (org !== "*" && r.org !== org))
+      return j({ err: "not found" }, 404);
+    const label = String(b.label || "").trim().slice(0, 80);
+    await ensureV2(env);
+    await run(env, "UPDATE machines SET label=? WHERE machine_id=?",
+              label, mid);
+    await audit(env, actor, "machine-label", r.org, mid, label);
+    return j({ ok: true, label });
   }
   if (path === "/api/org-ping") {
     // collector cty tự host ping về vendor — chỉ master cấp

@@ -162,6 +162,18 @@ def main():
                        {"cmd": "somecli", "terminal": "a&b"})
         check("11c. brain terminal lạ → 400", s == 400, str(s))
 
+        # install-brain: chỉ validation + status — KHÔNG spawn install
+        # thật (tải node + npm -g lên máy test)
+        s, b, _ = http("POST", base + f"/api/install-brain?token={TOKEN}",
+                       {"id": "nope"})
+        check("11d. install-brain id lạ → 400", s == 400, str(s))
+        s, b, _ = http("POST", base + f"/api/install-brain?token={TOKEN}",
+                       {"id": "codex"})
+        check("11e. install-brain não không-auto → 400", s == 400, str(s))
+        s, b, _ = http("GET", base + f"/api/install-brain?token={TOKEN}")
+        check("11f. install-brain status → running=false",
+              s == 200 and b.get("running") is False, str(b))
+
         # ---- ext-bridge ----
         eb = free_port()
         procs.append(spawn("ext-bridge.py", eb, wd))

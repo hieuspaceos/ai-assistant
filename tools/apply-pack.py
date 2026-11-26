@@ -40,7 +40,7 @@ MYC = os.path.join(ROOT, "my-course")
 TOOLS = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, TOOLS)
 from path_guard import path_sensitive, rw_grant_ok   # noqa: E402
-from cmd_deny import pattern_cmd_denied, first_token   # noqa: E402
+from cmd_deny import pattern_cmd_denied, first_token, brain_cmd_denied   # noqa: E402
 FLEET_FP = os.path.join(DEVIN, "fleet.json")
 MKEY_FP = os.path.join(DEVIN, "machine.key")
 INBOX_FP = os.path.join(DEVIN, "fleet-inbox.json")
@@ -188,6 +188,29 @@ def lint(pack):
             raise ValueError(f"mycourse_files path lạ: {fn}")
         if not fn.endswith((".md", ".json", ".jsonl", ".txt")):
             raise ValueError(f"mycourse_files loại không cho: {fn}")
+    # brain — pack chọn sẵn não cho máy mới (ghi brain.json). Validate y
+    # hệt POST /api/brain phía bridge: cmd/terminal là tên lệnh trần,
+    # không interpreter/exec-helper, args giới hạn.
+    br = pack.get("brain")
+    if br is not None:
+        if not isinstance(br, dict):
+            raise ValueError("brain không phải object")
+        # cmd bắt buộc; terminal trống thì bridge/apply rơi về cmd (y
+        # hệt brain load) nên chỉ validate khi CÓ
+        for k in ("cmd", "terminal"):
+            v = str(br.get(k) or "")
+            if not v:
+                if k == "cmd":
+                    raise ValueError("brain.cmd trống")
+                continue
+            if not re.fullmatch(r"[A-Za-z0-9_.-]+", v) \
+                    or brain_cmd_denied(v.lower()):
+                raise ValueError(f"brain.{k} không hợp lệ: {v!r}")
+        args = br.get("args") or []
+        if not isinstance(args, list) or len(args) > 20 \
+                or not all(isinstance(a, str) and len(a) <= 200
+                           for a in args):
+            raise ValueError("brain.args không hợp lệ")
 
 
 def apply(pack):
@@ -267,6 +290,15 @@ def apply(pack):
     if new_machine and pack.get("exec_allowlist"):
         _jwrite(os.path.join(DEVIN, "exec-allowlist.json"),
                 {"patterns": pack["exec_allowlist"]})
+    # brain — pack chọn sẵn não của cty, CHỈ máy mới (não đang dùng của
+    # máy đã onboard là lựa chọn của user — pack không đè)
+    if new_machine and pack.get("brain"):
+        br = pack["brain"]
+        _jwrite(os.path.join(ROOT, "brain.json"), {
+            "id": str(br.get("id") or br["cmd"])[:40],
+            "label": str(br.get("label") or br["cmd"])[:60],
+            "cmd": br["cmd"], "args": list(br.get("args") or []),
+            "terminal": br.get("terminal") or br["cmd"]})
 
 
 def main():

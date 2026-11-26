@@ -62,6 +62,11 @@ starts ACP mode (chat), `terminal` = the command for Terminal mode.
   (`gemini --acp`), **OpenCode**, **Goose** — native ACP; **Codex** and
   **Claude Code** via the `npx -y @agentclientprotocol/codex-acp` /
   `claude-agent-acp` adapters (still need the underlying CLI logged in).
+- Devin and Gemini install **from onboarding itself** — one button
+  (`tools/install-brain.py` via `POST /api/install-brain`): Gemini gets
+  a pinned sha256-verified portable Node into `DATA/node` + `npm i -g`
+  (no admin, nothing system-wide), Devin via the official installer.
+  Then one more button opens a real terminal for the OAuth sign-in.
 - Switch in **onboarding** or the **⚙ Settings panel** (the dropdown
   only lists brains actually installed); other brains get a free-form
   command field in onboarding. The bridge restarts the agent
@@ -93,7 +98,14 @@ content or file contents.
   admin key. Two admin roles on the hosted tier: **master** (vendor —
   creates orgs, issues licenses, manages accounts, rotates org
   secrets) and **company admin** (sees/approves only own org's
-  machines, pushes packs).
+  machines, pushes packs). Machines can carry an editable employee
+  **label** (`POST /api/machine/<id>/label`) and the whole seat list
+  exports to CSV (`GET /api/seats/export`) for renewal reporting.
+- **Unattended rollout** — `deploy/install.ps1 -Quiet [-NoSandbox]
+  [-ForUser]` for GPO/Intune and `deploy/install.sh --quiet
+  [--no-autostart]` for MDM run with zero prompts; the company kit can
+  also provision the brain (`deploy/install-brain.ps1`, or a pack
+  `brain` field that writes `brain.json` on not-yet-onboarded machines).
 - **Distribution** — releases signed ed25519 (private key offline)
   flow vendor → collector → machines with stage + rollback; per-org
   **packs** (skills/workflows/rules) push company customization to

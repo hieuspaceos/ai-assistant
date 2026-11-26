@@ -114,6 +114,10 @@ const T = {
     brainLoading:'Đang tìm não trên máy…',
     brainIn:'đã cài', brainOut:'chưa cài',
     brainInstall:'Cài não này', brainRecheck:'Tôi đã cài xong — kiểm tra lại',
+    brainManual:'hướng dẫn tay ↗',
+    brainInstalling:'Đang cài — cứ để yên, khoảng vài phút…',
+    brainLogin:'Mở terminal đăng nhập não',
+    brainLoginDone:'Cài xong! Bấm nút bên trái để đăng nhập não — một cửa sổ dòng lệnh sẽ mở, đăng nhập xong quay lại đây bấm "kiểm tra lại".',
     brainInstalledNow:'Đã thấy não mới — chọn nó để dùng luôn!',
     brainNow:'Não đang dùng',
     brainCustom:'Não khác (nâng cao)',
@@ -157,6 +161,10 @@ const T = {
     brainLoading:'Looking for brains on this machine…',
     brainIn:'installed', brainOut:'not installed',
     brainInstall:'Install this brain', brainRecheck:'Done installing — check again',
+    brainManual:'manual guide ↗',
+    brainInstalling:'Installing — leave it running, a few minutes…',
+    brainLogin:'Open sign-in terminal',
+    brainLoginDone:'Installed! Press the button on the left to sign the brain in — a terminal window opens; sign in, then come back and press "check again".',
     brainInstalledNow:'New brain detected — pick it to use it!',
     brainNow:'Current brain',
     brainCustom:'Another brain (advanced)',
@@ -327,16 +335,58 @@ function stepBrain(){
         <span class="flag">${p.installed?'🧠':'⚪'}</span>
         <div><b>${p.label}</b><span class="badge${p.installed?'':' off'}">${p.installed?t('brainIn'):t('brainOut')}</span>${costBadge}${recBadge}<small>${(p.desc&&p.desc[lang])||''}</small></div></div>`);
       o.onclick=()=>{ if(!p.installed) return; selBrain=p.id; show(d); };
-      // chưa cài + có trang hướng dẫn → nút "Cài não này" mở đúng trang
-      // hãng (không chạy lệnh hộ — cài CLI cần quyền/UAC), kèm nút kiểm
-      // tra lại để badge lật sang "đã cài" sau khi học viên cài xong
+      // chưa cài: não "auto" có nút tự cài (script bridge làm hết —
+      // tải node portable, không cần admin); não khác mở trang hướng dẫn
+      // của hãng. Nút "kiểm tra lại" lật badge "đã cài" khi xong
       if(!p.installed && p.install){
         const hint=(p.install.hint&&(p.install.hint[lang]||p.install.hint.vi))||'';
         const row=el(`<div style="margin:6px 0 0 26px;display:flex;gap:8px;flex-wrap:wrap">
-          <button class="mini-btn" type="button">${t('brainInstall')} ↗</button>
+          ${p.auto?`<button class="mini-btn" type="button" data-ai>${t('brainInstall')}</button>`:''}
+          <button class="mini-btn" type="button" data-url>${p.auto?t('brainManual'):t('brainInstall')+' ↗'}</button>
           <button class="mini-btn" type="button" data-re>${t('brainRecheck')}</button></div>
-          <small class="note" style="margin:2px 0 8px 26px;display:block">${hint}</small>`);
-        row.querySelector('button').onclick=e=>{ e.stopPropagation(); window.open(p.install.url,'_blank'); };
+          <small class="note" style="margin:2px 0 8px 26px;display:block" data-st>${hint}</small>`);
+        row.querySelector('[data-url]').onclick=e=>{ e.stopPropagation(); window.open(p.install.url,'_blank'); };
+        // não "auto": nút chính tự cài — script bridge tải node portable +
+        // npm i -g, không cần học viên chạm terminal. Poll tiến trình,
+        // xong đổi nút thành "mở terminal đăng nhập" (OAuth cần terminal
+        // thật — browser bật ra từ cửa sổ đó).
+        const ai=row.querySelector('[data-ai]');
+        if(ai){
+          const st=row.querySelector('[data-st]');
+          const poll=()=>{
+            const iv=setInterval(()=>{
+              bfetch(BRIDGE+'/api/install-brain').then(r=>r.json()).then(d=>{
+                st.textContent=(d.log||[]).slice(-1)[0]||t('brainInstalling');
+                if(d.running) return;
+                clearInterval(iv);
+                ai.disabled=false;
+                if(d.state==='done'){
+                  st.textContent=t('brainLoginDone');
+                  ai.textContent=t('brainLogin');
+                  ai.onclick=ev=>{ ev.stopPropagation();
+                    bfetch(BRIDGE+'/api/install-brain',{method:'POST',
+                      headers:{'Content-Type':'application/json'},
+                      body:JSON.stringify({id:p.id,login:true})})
+                      .then(r=>r.json()).then(d3=>{
+                        if(d3.pending) st.textContent=t('pendingNote');
+                      }).catch(()=>{});
+                  };
+                }
+              }).catch(()=>{});
+            },1500);
+          };
+          ai.onclick=e=>{
+            e.stopPropagation(); ai.disabled=true;
+            st.textContent=t('brainInstalling');
+            bfetch(BRIDGE+'/api/install-brain',{method:'POST',
+              headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({id:p.id})}).then(r=>r.json()).then(d=>{
+                if(d.err){ st.textContent=d.err; ai.disabled=false; return; }
+                if(d.pending){ st.textContent=t('pendingNote'); ai.disabled=false; return; }
+                poll();
+              }).catch(()=>{ st.textContent=t('errBridge'); ai.disabled=false; });
+          };
+        }
         row.querySelector('[data-re]').onclick=e=>{ e.stopPropagation();
           bfetch(BRIDGE+'/api/brain').then(r=>r.json()).then(d2=>{
             if((d2.presets||[]).some(x=>x.id===p.id&&x.installed))

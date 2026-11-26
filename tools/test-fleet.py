@@ -290,6 +290,38 @@ try:
     check(code == 200 and r.get("snapshot", {}).get("bridge_up"),
           "detail trả snapshot đầy đủ cho trang chi tiết")
 
+    # label + seats export (1click-b2b 06): admin gán tên NV vào máy,
+    # CSV báo cáo ghế có cột label — vendor read key bị chặn cả hai
+    code, r = http("POST", base + "/api/machine/m-test-1/label",
+                   {"X-Admin-Key": SEC_A}, {"label": "An, marketing"})
+    check(code == 200 and r.get("label") == "An, marketing",
+          f"label máy → 200 (got {code})")
+    code, r = http("GET", base + "/api/fleet/m-test-1",
+                   {"X-Admin-Key": SEC_A})
+    check(r.get("label") == "An, marketing",
+          "detail trả label vừa gán")
+    code, r = http("GET", base + "/api/fleet", {"X-Admin-Key": SEC_A})
+    check(r["machines"][0].get("label") == "An, marketing",
+          "/api/fleet list trả label")
+    code, _ = http("POST", base + "/api/machine/m-test-1/label",
+                   {"X-Admin-Key": SEC_A2}, {"label": "x"})
+    check(code == 404, f"label máy org khác → 404 (got {code})")
+    code, _ = http("POST", base + "/api/machine/m-test-1/label",
+                   {"X-Admin-Key": VREAD}, {"label": "x"})
+    check(code == 403, f"vendor key label → 403 (got {code})")
+    code, _ = http("GET", base + "/api/seats/export",
+                   {"X-Admin-Key": VREAD})
+    check(code == 403, f"vendor key export CSV → 403 (got {code})")
+    req = urllib.request.Request(base + "/api/seats/export",
+                                 headers={"X-Admin-Key": SEC_A})
+    with urllib.request.urlopen(req, timeout=8) as resp:
+        csv_body = resp.read().decode("utf-8-sig")
+        ctype = resp.headers.get("Content-Type", "")
+        check(resp.status == 200 and "text/csv" in ctype
+              and "An, marketing" in csv_body
+              and "m-test-1" in csv_body,
+              "export CSV chứa label + machine_id")
+
     # body top-level sai kiểu → 400 có response (trước: handler crash,
     # connection rớt)
     code, _ = http("POST", base + "/api/beacon",

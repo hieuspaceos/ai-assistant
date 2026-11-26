@@ -32,6 +32,7 @@ GATED = {
     "/api/setup":              "chỉ khi config đã tồn tại (re-run cài đè)",
     "/api/bot":                "activate/delete — ghi bots.json (deny-write) + bot.md; create/rename mở (không kích hoạt gì; instructions preview ở card activate — audit-3 M2)",
     "/api/bot-import-confirm": "mọi lần — cài skill + instruction từ ngoài",
+    "/api/install-brain":     "chỉ khi máy đã onboard/fleet — cài phần mềm lên máy; máy chưa onboard chưa có agent nào giả nút bấm nên chạy luôn (y hệt setup lần đầu)",
 }
 
 # OPEN_OK: đã xét kỹ — không cần gate. Khai endpoint POST mới vào đây

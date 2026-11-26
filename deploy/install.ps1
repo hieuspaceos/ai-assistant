@@ -1,6 +1,13 @@
 ﻿# install.ps1 — cài Trợ Lý AI lên máy Windows (chạy PowerShell ADMIN).
 #
 # Chạy:  powershell -ExecutionPolicy Bypass -File install.ps1 [-Dest C:\TroLyAI]
+#        [-ForUser <user>] [-Quiet] [-NoSandbox]
+#
+#   -Quiet     cài im lặng (GPO/Intune) — không hỏi gì, mặc định làm
+#              mọi bước; chạy dưới SYSTEM thì NÊN kèm -ForUser để đặt
+#              shortcut + ACL cho đúng chủ máy.
+#   -NoSandbox bỏ tạo user sandbox troly-agent (não chạy chung user —
+#              chỉ policy bảo vệ, máy không ép được).
 #
 # Làm gì:
 #   1. Copy bộ trợ lý vào -Dest (mặc định C:\TroLyAI)
@@ -9,7 +16,8 @@
 #   4. Copy license.json + fleet.json từ folder "company" cạnh script (nếu có)
 #   5. Shortcut Desktop "TroLy AI" → start.bat
 #   6. Hướng dẫn bước còn lại (extension + lần chạy đầu)
-param([string]$Dest = "C:\TroLyAI", [string]$ForUser = "")
+param([string]$Dest = "C:\TroLyAI", [string]$ForUser = "",
+      [switch]$Quiet, [switch]$NoSandbox)
 $ErrorActionPreference = "Stop"
 $src = Split-Path -Parent $PSScriptRoot   # folder repo chứa deploy/
 
@@ -95,10 +103,15 @@ if (-not (Get-Command ttyd -ErrorAction SilentlyContinue)) {
     catch { Write-Host "  !! winget loi — cai tay ttyd tu https://github.com/tsl0922/ttyd/releases" }
 } else { Write-Host "  ok — ttyd da co" }
 
-# 3. sandbox user (tuỳ chọn, khuyến nghị)
-$ans = Read-Host "Tao user sandbox troly-agent (giam quyen cho agent)? [Y/n]"
-if ($ans -ne "n" -and $ans -ne "N") {
+# 3. sandbox user (tuỳ chọn, khuyến nghị — Quiet mặc định CÓ trừ khi
+# -NoSandbox; Intune/GPO chạy dưới SYSTEM vẫn tạo user được vì đã admin)
+$ans = if ($Quiet) { "" } else {
+    Read-Host "Tao user sandbox troly-agent (giam quyen cho agent)? [Y/n]"
+}
+if (-not $NoSandbox -and $ans -ne "n" -and $ans -ne "N") {
     & powershell -ExecutionPolicy Bypass -File "$Dest\tools\setup-agent-user.ps1"
+} elseif ($NoSandbox) {
+    Write-Host "  bo qua sandbox user (-NoSandbox) — nao chay chung user, chi policy bao ve"
 }
 
 # 4. license + fleet từ folder company/ cạnh installer
@@ -112,14 +125,18 @@ foreach ($f in @("license.json", "fleet.json")) {
     }
 }
 
-# 5. shortcut Desktop
+# 5. shortcut Desktop — cài tay = Desktop user đang chạy; -Quiet + -ForUser
+# = Desktop user đích; -Quiet không -ForUser (SYSTEM) = Public Desktop
+$desktop = if ($ForUser) { "C:\Users\$ForUser\Desktop" }
+           elseif ($Quiet) { "$env:PUBLIC\Desktop" }
+           else { "$env:USERPROFILE\Desktop" }
 $wsh = New-Object -ComObject WScript.Shell
-$lnk = $wsh.CreateShortcut("$env:USERPROFILE\Desktop\TroLy AI.lnk")
+$lnk = $wsh.CreateShortcut("$desktop\TroLy AI.lnk")
 $lnk.TargetPath = "$Dest\start.bat"
 $lnk.WorkingDirectory = $Dest
 $lnk.Description = "Mo Tro Ly AI"
 $lnk.Save()
-Write-Host "  ok — shortcut Desktop"
+Write-Host "  ok — shortcut Desktop ($desktop)"
 
 Write-Host ""
 Write-Host "== Xong. Con lai: =="

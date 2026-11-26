@@ -16,7 +16,8 @@ def endpoints(fp):
 # .ps1 đã đóng băng (ship-learner ph-5) — endpoint mới chỉ thêm vào .py.
 # Khai TƯỜNG MINH ở đây: warn, không fail. Endpoint trong list này mà lại
 # có trong .ps1 thì tự động ra khỏi warn.
-PY_ONLY_OK = {"/api/bot", "/api/bots", "/api/bot-import", "/api/bot-import-confirm"}
+PY_ONLY_OK = {"/api/bot", "/api/bots", "/api/bot-import",
+              "/api/bot-import-confirm", "/api/install-brain"}
 
 py = endpoints(os.path.join(ROOT, "tools", "chat-bridge.py"))
 ps = endpoints(os.path.join(ROOT, "tools", "chat-bridge.ps1"))

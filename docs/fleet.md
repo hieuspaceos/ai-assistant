@@ -193,7 +193,9 @@ trong `test-fleet.py` khoá set này):
 | `POST /api/pair-revoke` | admin_key | thu hồi máy (giữ key để trả revoked rõ ràng) |
 | `GET /api/pending` | admin_key | máy chờ duyệt + máy `repair=1` chờ cấp lại key |
 | `GET /api/fleet` | admin_key | bảng máy + usage hôm nay + license_status + `conns` (app connections, chip tổng hợp) |
-| `GET /api/fleet/<id>` | admin_key | snapshot đầy đủ + usage 14 ngày |
+| `GET /api/fleet/<id>` | admin_key | snapshot đầy đủ + usage 14 ngày + `label` |
+| `POST /api/machine/<id>/label` | admin_key | gán tên nhân viên vào máy (≤80 chữ; vendor_read_key → 403, máy org khác → 404; worker ghi audit `machine-label`) |
+| `GET /api/seats/export` | admin_key | CSV báo cáo ghế (UTF-8 BOM — Excel mở đúng dấu): org, machine_id, hostname, label, learner, version, pack_version, last_seen, license_status |
 | `GET /api/license` | admin_key | seats vs active30 + status |
 | `POST /api/org-ping` | telemetry.key | nhận rollup org-level |
 | `GET /api/org-pings` | vendor_read_key | meta-dashboard vendor |

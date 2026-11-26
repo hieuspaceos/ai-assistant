@@ -108,6 +108,7 @@ có ảnh base64).
 | `/api/config` | nội dung `config.json` |
 | `/api/check-path` | `?path=<đường dẫn>` → `{ok, isdir}` — onboarding kiểm folder tồn tại trước khi xin quyền; chỉ trả isdir, không metadata |
 | `/api/bots` | `{active, bots, templates}` — bot đã tạo + template nghề từ `skill-packs/roles/` |
+| `/api/install-brain` | `{ok, running, state, id, step, log}` — tiến trình cài não (onboarding poll); state `running`/`done`/`error`; proc chết giữa chừng mà state file kẹt `running` → trả `error` (chỉ `.py`) |
 
 ### POST
 
@@ -128,6 +129,7 @@ có ảnh base64).
 | `/api/bot` | `{action, ...}` | `create`/`activate`/`delete`/`rename` bot; `create` kẹp `instructions` ≤500 chữ + `recipes` chuẩn hoá `{command, meaning}` (≤20×~120) + cap 50 bot; activate/delete → **consent gate** `202` — card activate **preview trích `instructions`** (payload nạp mọi session) chứ không chỉ hiện tên; activate → cài skill thiếu + ghi `my-course/bot.md`; `id:null` → bỏ chọn |
 | `/api/bot-import` | `{file: "<base64 zip>"}` | bung bundle bot vào temp → trả `{preview:{stage,name,avatar,instructions,skills,needs,bundled}}`; chống zip-slip; body cap 8MB |
 | `/api/bot-import-confirm` | `{stage}` | ghi thật: cài skill (không đè) + thêm bot vào `bots.json`; KHÔNG tự activate; stage dùng một lần |
+| `/api/install-brain` | `{id}` hoặc `{id, login:true}` | cài não một nút (`tools/install-brain.py` — preset có `auto:true`, node portable trong `DATA/node`, không cần admin) hoặc mở terminal đăng nhập não (OAuth cần terminal thật, chích PATH `DATA/node` cho não cài lén). **Chỉ `.py`** (ps1 đã đóng băng). Máy đã onboard/fleet → **consent gate** `202 {pending, msg}`; máy chưa onboard → chạy luôn (nút bấm là consent, y hệt `/api/setup` lần đầu); POST lặp lúc đang cài = no-op |
 
 ---
 
