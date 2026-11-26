@@ -17,10 +17,16 @@ results always go to new files.
 ## Check the tool (first time)
 
 ```bash
-python3 -c "import docx"  # Windows: py -c "import docx"
+PY=.venv/bin/python; [ -x "$PY" ] || PY=python3
+# Windows: PY=.venv\Scripts\python or py
+$PY -c "import docx"
 ```
 
-Missing → `pip install -r requirements.txt` (`python-docx` is listed).
+Run every python command in this skill with `$PY`. Missing package →
+`python3 tools/ensure-deps.py` — builds a private `.venv/` in the data
+folder without touching system Python (the launcher also runs it on every
+start). Tell them first: *"I need a small Python package to read Word —
+about 30 seconds."*
 
 ## Main job: batch-fill a template
 

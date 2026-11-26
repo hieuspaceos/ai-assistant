@@ -123,15 +123,15 @@ giờ có ID cố định nên Chrome coi nó là tiện ích mới — vào
 *(Không cài thì trợ lý vẫn làm việc với file và folder bình thường —
 chỉ là không chạm được vào trang web đang mở.)*
 
-## Bước 5.5 — Cài thêm gói Python (không bắt buộc)
+## Bước 5.5 — Gói Python cho skill Excel/Word (tự động)
 
-Cần cho skill Excel/Word (`/lam-excel`, `/lam-word`) và render video:
+Trợ lý tự cài các gói này vào môi trường riêng `.venv/` trong folder
+dữ liệu mỗi lần mở app — bạn không cần làm gì. Chỉ khi skill báo thiếu
+gói (máy offline lúc mở app lần đầu chẳng hạn), chạy tay:
 
 ```
-py -m pip install -r requirements.txt
+python3 tools/ensure-deps.py     # Windows: py tools\ensure-deps.py
 ```
-
-Máy macOS/Linux: `python3 -m pip install -r requirements.txt`.
 
 ## Bước 6 — Mở khoá học
 

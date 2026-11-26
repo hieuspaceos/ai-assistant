@@ -17,12 +17,16 @@ Quy tắc vàng: **KHÔNG ghi đè file gốc** — đọc file gốc, ghi ra fi
 ## Kiểm tra tool (lần đầu)
 
 ```bash
-python3 -c "import openpyxl"  # Windows: py -c "import openpyxl"
+PY=.venv/bin/python; [ -x "$PY" ] || PY=python3
+# Windows: PY=.venv\Scripts\python hoặc py
+$PY -c "import openpyxl"
 ```
 
-Thiếu → `pip install -r requirements.txt` (đã kèm `openpyxl` trong repo).
-Cần cài thì nói trước: *"mình cần cài một gói Python nhỏ để đọc Excel —
-khoảng 30 giây"*.
+Mọi lệnh python trong skill này chạy bằng `$PY`. Thiếu gói →
+`python3 tools/ensure-deps.py` — tạo `.venv/` riêng trong folder, không
+đụng Python hệ thống (launcher cũng tự chạy mỗi lần mở app). Cần cài thì
+nói trước: *"mình cần cài một gói Python nhỏ để đọc Excel — khoảng 30
+giây"*.
 
 ## Các việc hay làm
 

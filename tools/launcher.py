@@ -28,7 +28,7 @@ LOGDIR = os.path.join(DATA, ".logs")
 
 # Phần "code": được đè khi VERSION mới — không chứa dữ liệu học viên
 CODE_DIRS = ["web", "tools", "extension", "templates", "docs",
-             "collector-web",
+             "collector-web", "intro",
              os.path.join(".devin", "skill-packs")]
 CODE_FILES = ["AGENTS.md", "CLAUDE.md", "SETUP.md", "README.md",
               "requirements.txt", "VERSION", "start.sh", "start.bat"]
@@ -351,7 +351,7 @@ def main():
     a = sys.argv[1:]
     if a and a[0] in ("serve", "chat-bridge", "ext-bridge", "beacon",
                       "update", "apply-pack", "backup", "gen-sandbox",
-                      "install-brain"):
+                      "install-brain", "ensure-deps"):
         run_tool(a[0], a[1:])
         return
     if "--register-startup" in a or "--unregister-startup" in a:
@@ -362,6 +362,10 @@ def main():
         return
     # mặc định: `troly` hoặc `troly run`
     updated = bootstrap()
+    # gói Python cho skill Excel/Word — venv riêng trong DATA, fire-and-
+    # forget (Popen không chặn); đã đủ thì script tự về ngay. Chạy cả khi
+    # instance khác đang giữ port: deps có thể thiếu sau update mới.
+    run_tool_silent("ensure-deps", [DATA])
     try:
         # health-check TRƯỚC rotate: instance cũ còn giữ token cũ trong
         # memory — ghi đè file ở đây phá portal (?t=T2 vs bridge giữ T1

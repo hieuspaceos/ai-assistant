@@ -145,6 +145,16 @@ nhà": đọc `.devin/bridge.token` rồi gửi `?token=<mã>` trong URL hoặc
 header `X-Bridge-Token: <mã>`. Có sẵn biến môi trường `$BRIDGE_TOKEN`
 (`$env:BRIDGE_TOKEN` trên PowerShell) thì dùng luôn, không cần đọc file.
 
+## Chạy lệnh Python — luôn qua `.venv` khi có
+
+Folder này có sẵn `.venv/` (trợ lý tự tạo lúc mở app qua
+`tools/ensure-deps.py`) chứa các gói skill cần (openpyxl, python-docx).
+Mọi lệnh python: dùng `.venv/bin/python` (Windows:
+`.venv\Scripts\python`); chỉ khi `.venv` chưa có mới dùng `python3`/`py`
+hệ thống. Thiếu gói → chạy `python3 tools/ensure-deps.py` — KHÔNG
+`pip install` thẳng vào hệ thống (macOS mới chặn, lỗi
+"externally-managed-environment").
+
 ## Phạm vi folder (`my-course/permissions.json`)
 
 Trợ lý giống người giúp việc chỉ được mở những ngăn tủ chủ nhà cho phép —

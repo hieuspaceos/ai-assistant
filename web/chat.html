@@ -176,6 +176,7 @@ const STR = {
     send: 'Gửi', busy: 'Trợ lý đang làm việc', permSuffix: ' — bạn cho phép không?',
     noOpt: 'Không đồng ý', errPfx: 'Ừm, có lỗi nhỏ: ',
     nativeHint: 'Xác nhận trong hộp thoại vừa hiện trên màn hình máy bạn — trợ lý không tự bấm được nút đó.',
+    nativeTimeout: 'Hộp thoại tự đóng sau ~10 phút nếu không trả lời — khi đó việc đang làm sẽ dừng, bạn nhờ lại nhé.',
   },
   en: {
     hints: [{label: 'Start the interview', text: '/interview'},
@@ -187,6 +188,7 @@ const STR = {
     send: 'Send', busy: 'The assistant is working', permSuffix: ' — allow it?',
     noOpt: 'Decline', errPfx: 'Hmm, small hiccup: ',
     nativeHint: 'Confirm in the dialog on your screen — the assistant cannot click that button for you.',
+    nativeTimeout: 'The dialog closes itself after ~10 minutes with no answer — the task then stops, just ask again.',
   },
 };
 let S = STR.vi;
@@ -296,7 +298,7 @@ function addTool(title, status) {
   }
   const d = document.createElement('div');
   d.className = 'tool' + (status !== 'in_progress' ? ' done' : '');
-  d.textContent = (status === 'in_progress' ? 'Đang làm: ' : 'Xong: ') + (title || 'việc nhỏ');
+  d.textContent = (status === 'in_progress' ? 'Đang làm: ' : 'Xong: ') + (title || 'một bước');
   msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight;
 }
 function addPerm(ev) {
@@ -314,6 +316,12 @@ function addPerm(ev) {
     h.className = 'perm-title';
     h.textContent = S.nativeHint;
     d.appendChild(h);
+    const to = document.createElement('div');
+    to.className = 'perm-title';
+    to.style.opacity = '.75';
+    to.style.fontSize = '.92em';
+    to.textContent = S.nativeTimeout;
+    d.appendChild(to);
   }
   const btns = document.createElement('div'); btns.className = 'perm-btns';
   // không có option nào → vẫn phải có nút, không thì agent chờ vô hạn

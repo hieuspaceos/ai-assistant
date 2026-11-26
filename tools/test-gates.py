@@ -44,6 +44,7 @@ OPEN_OK = {
     "/api/check-connection": "chỉ ghi status probe vào connections.json",
     "/api/bot-import":       "stage zip vào temp + trả preview; ghi thật ở -confirm",
     "/api/emit-event":       "append-only, whitelist event type — chỉ inflate được đếm dashboard",
+    "/api/pick-folder":      "mở hộp chọn folder native (dialog macOS) — chỉ trả path user tự chọn; serialized + 1 dialog/lần, không ghi gì",
 }
 
 fail = False

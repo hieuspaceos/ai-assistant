@@ -207,16 +207,41 @@ def scrub_env(src=None, windows=False, extra=None):
 
 # ---------- exec allowlist: khớp glob lệnh ----------
 
+# Mặc định khi chưa có file: lệnh CHỈ ĐỌC/inspect — cắt bớt dialog xin
+# phép dồn dập cho việc vô hại (list folder, đọc file, đếm dòng…). Chỉ
+# gồm lệnh không ghi được: DENY-meta trong exec_allowed chặn redirect/
+# chain; các lệnh có cờ ghi/exec (-i của sed, -o của sort, -exec của
+# find, interpreter…) bị loại ngay từ danh sách — chúng vẫn qua card.
+DEFAULT_ALLOWLIST = [
+    "pwd", "ls", "ls *",
+    "cat *", "head *", "tail *", "wc *", "file *", "stat *",
+    "grep *", "egrep *", "fgrep *",
+    "echo *", "printf *",
+    "which *", "command -v *", "type *",
+    "date", "date *", "uname *", "sw_vers", "sw_vers *",
+    "id", "whoami", "hostname", "uptime", "arch",
+    "df *", "du *", "md5 *", "shasum *", "cksum *", "diff *", "cmp *",
+    "basename *", "dirname *", "realpath *", "readlink *",
+    "test *", "true", "false", "sleep *",
+    "cut *", "uniq *", "tr *", "comm *", "nl *", "column *",
+    "xxd *", "od *", "hexdump *",
+    "unzip -l *", "zipinfo *",
+    "ps *", "getconf *", "locale", "locale *", "iconv *",
+    "defaults read *", "mdls *", "afinfo *", "sips -g *",
+]
+
 def load_allowlist(devin_dir):
     """Đọc .devin/exec-allowlist.json {"patterns": [...]} — file do
-    pack cty (máy mới) hoặc admin đặt; KHÔNG do não tự ghi."""
+    pack cty (máy mới) hoặc admin đặt; KHÔNG do não tự ghi (sandbox
+    deny-write file này). Không có file → DEFAULT_ALLOWLIST."""
     import json, os
     try:
         d = json.load(open(os.path.join(devin_dir, "exec-allowlist.json"),
                            encoding="utf-8"))
-        return [str(p) for p in d.get("patterns") or []][:200]
+        pats = [str(p) for p in d.get("patterns") or []][:200]
+        return pats if pats else list(DEFAULT_ALLOWLIST)
     except Exception:
-        return []
+        return list(DEFAULT_ALLOWLIST)
 
 def exec_allowed(cmd, patterns):
     """Glob match — pattern như 'ls *', 'ls -la', 'cat my-course/**'.

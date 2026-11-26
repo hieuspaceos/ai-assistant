@@ -247,9 +247,12 @@ def build_profile(cwd):
     # literal emit cả raw + realpath: CWD qua symlink (/var→/private/var)
     # thì Seatbelt so canonical — thiếu dạng nào cũng lọt.
     dev = os.path.join(cwd, ".devin")
+    # exec-allowlist.json: não ghi được = tự thêm pattern "cp/mv/rm *"
+    # rồi auto-duyệt lệnh huỷ — chỉ bridge/fleet-pack được đặt list này.
     for f, ops in (("bridge.token", "file-write*"),
                    ("secrets.local.json", "file-read* file-write*"),
-                   ("mcp_config.local.json", "file-read* file-write*")):
+                   ("mcp_config.local.json", "file-read* file-write*"),
+                   ("exec-allowlist.json", "file-write*")):
         for lit in _emit_paths([os.path.join(dev, f)]):
             L.append(f'(deny {ops} (literal "{_esc(lit)}"))')
 

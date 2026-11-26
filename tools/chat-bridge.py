@@ -344,6 +344,7 @@ NATIVE_MAX = 2            # trần hộp thoại native mở đồng thời — 
 # phải nghi thức đủ bước, không chặn tuyệt đối kẻ cố ý. Respond cho card
 # nội bộ bắt buộc Origin trình duyệt — thêm một vòng nữa.
 local_pending = {}        # "local-<hex>" -> {"apply","ts","ev","native","proc"}
+_pick_folder_lock = threading.Lock()   # hộp chọn folder — một cái một lúc
 
 # Proof-of-human cho consent gate (macOS): nút "Đồng ý" thật sự nằm trong
 # hộp thoại native do BRIDGE spawn — agent trong Seatbelt không exec được
@@ -399,6 +400,73 @@ def _allow_match(tc, title):
         if m is not None:
             return m
     return None
+
+# Hộp thoại native hiện TỪNG CÁI — onboarding phát 4-5 card cùng lúc,
+# dialog chồng lên nhau trên màn hình gây rối (F-006). Card được tạo
+# ngay (chat vẫn thấy), chỉ phần osascript xếp hàng.
+_native_dialog_lock = threading.Lock()
+
+# kind → động từ lời thường cho card xin phép/nhãn tool (F-008/F-010)
+_PERM_KIND = {
+    "read": "đọc dữ liệu", "edit": "sửa file", "delete": "xoá file",
+    "move": "di chuyển file", "search": "tìm trong máy",
+    "execute": "chạy một lệnh trên máy", "fetch": "mở một trang web",
+    "think": "suy nghĩ", "other": "làm một việc",
+}
+_PERM_GENERIC = {"", "trợ lý muốn làm một việc", "đang làm việc",
+                 "việc nhỏ", "working", "do something", "work"}
+
+def _title_detail(tc):
+    """Trích file/lệnh đích của toolCall thành đuôi mô tả ngắn."""
+    locs = tc.get("locations")
+    if isinstance(locs, list):
+        names = []
+        for l in locs[:2]:
+            if isinstance(l, dict):
+                n = os.path.basename(
+                    str(l.get("path") or "").rstrip("/\\"))
+                if n:
+                    names.append(n)
+        if names:
+            return " " + ", ".join(names)
+    raw = tc.get("rawInput")
+    if isinstance(raw, dict):
+        for k in ("cmd", "command", "path", "filePath", "file_path",
+                  "url", "query"):
+            v = raw.get(k)
+            if isinstance(v, str) and v.strip():
+                return ": " + " ".join(v.split())[:100]
+    return ""
+
+def _perm_title(tc):
+    """Tiêu đề card/hộp thoại Lan đọc hiểu: title của não nếu nó nói rõ
+    việc; thiếu hoặc chung chung ("làm một việc") thì tự tả từ kind +
+    file/lệnh đích — duyệt mù là không được."""
+    t = str(tc.get("title") or "").strip()
+    if t and t.lower() not in _PERM_GENERIC:
+        return t[:200]
+    verb = _PERM_KIND.get(str(tc.get("kind") or "").lower(),
+                          "làm một việc")
+    return ("Trợ lý muốn " + verb + _title_detail(tc))[:200]
+
+def _tool_title(u):
+    """Nhãn tool trong chat: bản dịch mềm của title não gửi — "Ran `x`"
+    → "Chạy: x" (mất đuôi version rối mắt); title trống/chung chung thì
+    tả từ kind thay vì "việc nhỏ"."""
+    t = str(u.get("title") or "").strip()
+    m = re.match(r"^(?:ran|run)\s+`?(.+?)`?\s*$", t, re.I)
+    if m:
+        cmd = " ".join(m.group(1).split())
+        # "python3.12 -c …" → "python" — tên lệnh đủ rồi, đuôi version
+        # và tham số dài là nhiễu với người không biết code
+        first = cmd.split(" ", 1)[0]
+        t = "Chạy: " + (re.sub(r"[\d.]*$", "", os.path.basename(first))
+                        or first)
+    if not t or t.lower() in _PERM_GENERIC:
+        verb = _PERM_KIND.get(str(u.get("kind") or "").lower(),
+                              "làm một việc")
+        t = verb[0].upper() + verb[1:]
+    return t[:200]
 
 def _kill_proc(rec):
     """Giết osascript của card khi card bị huỷ/evict/clear — không kill
@@ -471,38 +539,42 @@ def _native_confirm(rid):
               ' with title "Trợ Lý AI — xin phép" with icon note '
               'buttons {"Không", "Đồng ý"} default button "Không" '
               'giving up after ' + str(int(PERM_TTL)))
-    try:
-        p = subprocess.Popen(["osascript", "-e", script],
-                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                             text=True)
-    except Exception:
-        p = None
-    if p is None:
-        return _native_fallback(rid)
-    with store_lock:
-        rec = local_pending.get(rid)
-        if rec is None:              # cancel từ chat trước khi spawn xong
+    with _native_dialog_lock:        # hộp thoại hiện từng cái (F-006)
+        with store_lock:
+            if rid not in local_pending:
+                return               # huỷ khi đang xếp sau dialog khác
+        try:
+            p = subprocess.Popen(["osascript", "-e", script],
+                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                 text=True)
+        except Exception:
+            p = None
+        if p is None:
+            return _native_fallback(rid)
+        with store_lock:
+            rec = local_pending.get(rid)
+            if rec is None:          # cancel từ chat trước khi spawn xong
+                try:
+                    p.terminate()
+                except Exception:
+                    pass
+                return
+            rec["proc"] = p
+        try:
+            out, _ = p.communicate(timeout=PERM_TTL + 60)
+            approved = "button returned:Đồng ý" in out
+            # "Không" / hết hạn gave-up = quyết định CÓ NGƯỜI → đóng card,
+            # KHÔNG fallback (y _perm_native_confirm). Chỉ stdout hoàn toàn
+            # rỗng (osascript lỗi/bị terminate từ chat) mới là GUI hỏng.
+            declined = "button returned:Không" in out or "gave up:true" in out
+            gui_failed = p.returncode != 0 and not approved and not declined
+        except Exception:
+            approved = False
+            gui_failed = True
             try:
-                p.terminate()
+                p.kill()
             except Exception:
                 pass
-            return
-        rec["proc"] = p
-    try:
-        out, _ = p.communicate(timeout=PERM_TTL + 60)
-        approved = "button returned:Đồng ý" in out
-        # "Không" / hết hạn gave-up = quyết định CÓ NGƯỜI → đóng card,
-        # KHÔNG fallback (y _perm_native_confirm). Chỉ stdout hoàn toàn
-        # rỗng (osascript lỗi/bị terminate từ chat) mới là GUI hỏng.
-        declined = "button returned:Không" in out or "gave up:true" in out
-        gui_failed = p.returncode != 0 and not approved and not declined
-    except Exception:
-        approved = False
-        gui_failed = True
-        try:
-            p.kill()
-        except Exception:
-            pass
     if gui_failed:
         # dialog spawn ĐƯỢC rồi chết giữa chừng (kill/crash —
         # returncode≠0, stdout rỗng) KHÔNG phải "không có GUI" → hạ về
@@ -554,42 +626,47 @@ def _perm_native_confirm(rid):
               ' with title "Trợ Lý AI — xin phép" with icon note '
               'buttons {"Không", "Đồng ý"} default button "Không" '
               'giving up after ' + str(int(PERM_TTL)))
-    try:
-        p = subprocess.Popen(["osascript", "-e", script],
-                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                             text=True)
-    except Exception:
-        p = None
-    if p is None:
-        return _perm_native_fallback(rid)
-    with store_lock:
-        rec = perm_pending.get(rid)
-        if rec is None:              # cancel từ chat trước khi spawn xong
+    with _native_dialog_lock:        # hộp thoại hiện từng cái (F-006)
+        with store_lock:
+            if rid not in perm_pending:
+                return               # huỷ khi đang xếp sau dialog khác
+        try:
+            p = subprocess.Popen(["osascript", "-e", script],
+                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                 text=True)
+        except Exception:
+            p = None
+        if p is None:
+            return _perm_native_fallback(rid)
+        with store_lock:
+            rec = perm_pending.get(rid)
+            if rec is None:          # cancel từ chat trước khi spawn xong
+                try:
+                    p.terminate()
+                except Exception:
+                    pass
+                return
+            rec["proc"] = p
+        try:
+            out, _ = p.communicate(timeout=PERM_TTL + 60)
+            approved = "button returned:Đồng ý" in out
+            # Bấm "Không" / hết hạn gave-up = quyết định CÓ NGƯỜI → báo
+            # cancel cho não ngay (agent đang chờ JSON-RPC reply —
+            # downgrade card bắt họ bấm "Không" lần nữa trong chat thì
+            # não treo thêm vô ích). Chỉ khi KHÔNG có output nào
+            # (osascript lỗi/bị terminate từ chat) mới coi là GUI hỏng —
+            # trước fallback về card Origin nhưng não forge Origin duyệt
+            # được → giờ xử như từ chối (audit-5 N5); chỉ spawn-fail
+            # (p is None, headless thật) mới fallback.
+            declined = "button returned:Không" in out or "gave up:true" in out
+            gui_failed = p.returncode != 0 and not approved and not declined
+        except Exception:
+            approved = False
+            gui_failed = True
             try:
-                p.terminate()
+                p.kill()
             except Exception:
                 pass
-            return
-        rec["proc"] = p
-    try:
-        out, _ = p.communicate(timeout=PERM_TTL + 60)
-        approved = "button returned:Đồng ý" in out
-        # Bấm "Không" / hết hạn gave-up = quyết định CÓ NGƯỜI → báo cancel
-        # cho não ngay (agent đang chờ JSON-RPC reply — downgrade card bắt
-        # họ bấm "Không" lần nữa trong chat thì não treo thêm vô ích).
-        # Chỉ khi KHÔNG có output nào (osascript lỗi/bị terminate từ chat)
-        # mới coi là GUI hỏng — trước fallback về card Origin nhưng não
-        # forge Origin duyệt được → giờ xử như từ chối (audit-5 N5);
-        # chỉ spawn-fail (p is None, headless thật) mới fallback.
-        declined = "button returned:Không" in out or "gave up:true" in out
-        gui_failed = p.returncode != 0 and not approved and not declined
-    except Exception:
-        approved = False
-        gui_failed = True
-        try:
-            p.kill()
-        except Exception:
-            pass
     if gui_failed:
         # Như _native_confirm: deny thay vì _perm_native_fallback —
         # não không được có đường tự duyệt bằng cách giết dialog (N5).
@@ -671,9 +748,37 @@ def _turn_watchdog(gen):
 run_id = [0]             # id lượt prompt hiện tại — bump ở /api/prompt;
                          # beacon đếm theo LƯỢT thật, dashboard group được
 
+# F-015: quyền folder chỉ đổi sandbox của não khi spawn LẠI — phiên đang
+# chạy giữ profile cũ nên lệnh ghi vẫn bị chặn dù đã cấp (agent phải bảo
+# học viên restart app = đứt flow). Apply xong đánh dấu đây; prompt kế
+# tiếp respawn não trước khi forward → quyền mới ăn ngay, không cần
+# restart. Respawn NGAY khi apply thì giết lượt đang xin quyền — chỉ
+# được khi prompt_lock rảnh (lượt trước xong rồi mới đổi quyền).
+perm_dirty = [False]
+
+# F-012: lượt kết thúc ngay sau tool failed/denied mà agent không nói
+# thêm lời nào → UI dừng ở câu dở ("Mình mở ra đọc nhé:") rồi im — học
+# viên chờ vô vọng không biết việc đã chết. Chèn warn ngay trước "done".
+_turn_fail = [False, False, -1]   # [saw_fail, text_sau_fail, run_id]
+
 def broadcast(ev):
-    global event_base
     ev.setdefault("run_id", run_id[0])
+    if ev["run_id"] != _turn_fail[2]:
+        _turn_fail[0], _turn_fail[1], _turn_fail[2] = \
+            False, False, ev["run_id"]
+    t = ev.get("t")
+    if t == "tool" and ev.get("status") == "failed":
+        _turn_fail[0], _turn_fail[1] = True, False
+    elif t == "text" and _turn_fail[0]:
+        _turn_fail[1] = True
+    elif t == "done" and _turn_fail[0] and not _turn_fail[1]:
+        _append({"t": "warn", "run_id": ev["run_id"],
+                 "msg": "một bước cần làm không được (chưa được duyệt "
+                        "hoặc bị lỗi) — việc chưa xong, bạn nhờ lại nhé"})
+    _append(ev)
+
+def _append(ev):
+    global event_base
     with store_lock:
         event_store.append(ev)
         if ev.get("t") in ("ready", "done", "err"):
@@ -862,9 +967,9 @@ class Acp:
                      "kind": str(o.get("kind", ""))[:40]}
                     for o in p.get("options", [])[:10]
                     if isinstance(o, dict)]
-            # kẹp độ dài — title do não gửi, phình thì lọt thẳng vào
-            # event_store + chat-history.jsonl
-            title = str(tc.get("title") or "Trợ lý muốn làm một việc")[:200]
+            # tiêu đề Lan đọc hiểu — não khai chung chung thì tự tả từ
+            # kind + file/lệnh đích (F-008: duyệt mù "một việc" là không)
+            title = _perm_title(tc)
             # exec allowlist (content-guard ph-3): lệnh khớp glob trong
             # .devin/exec-allowlist.json → auto-duyệt, KHÔNG hiện card.
             # Đây là ask=on-miss của GoClaw: giảm consent fatigue khi
@@ -949,13 +1054,13 @@ class Acp:
                 broadcast({"t": "text", "text": txt})
         elif su == "tool_call":
             broadcast({"t": "tool",
-                       "title": str(u.get("title") or "đang làm việc")[:200],
+                       "title": _tool_title(u) or "đang làm việc",
                        "status": "in_progress"})
         elif su == "tool_call_update":
             st = u.get("status")
             if st in ("completed", "failed"):
                 broadcast({"t": "tool",
-                           "title": str(u.get("title") or "")[:200],
+                           "title": _tool_title(u),
                            "status": st})
         elif su == "session_info_update":
             pass
@@ -1405,6 +1510,7 @@ class Handler(BaseHTTPRequestHandler):
         "/api/config":        "_g_config",
         "/api/check-path":    "_g_check_path",
         "/api/count-glob":    "_g_count_glob",
+        "/api/pick-folder":   "_g_pick_folder_probe",
         "/api/bots":          "_g_bots",
         "/api/install-brain": "_g_install_brain",
     }
@@ -1426,6 +1532,7 @@ class Handler(BaseHTTPRequestHandler):
         "/api/bot-import-confirm":"_h_bot_import_confirm",
         "/api/emit-event":    "_h_emit_event",
         "/api/install-brain": "_h_install_brain",
+        "/api/pick-folder":   "_h_pick_folder",
     }
 
     def do_GET(self):
@@ -1547,6 +1654,44 @@ class Handler(BaseHTTPRequestHandler):
         self._json({"ok": True, "isdir":
                     os.path.isdir(p) if p and not path_sensitive(p) else False})
 
+    def _g_pick_folder_probe(self):
+        """UI hỏi có hiện nút 'duyệt folder' không — chỉ macOS có hộp
+        chọn folder qua osascript; OS khác → UI giấu nút, giữ ô gõ tay."""
+        self._json({"ok": True, "supported":
+                    sys.platform == "darwin"
+                    and shutil.which("osascript") is not None})
+
+    def _h_pick_folder(self, data):
+        """Mở hộp chọn folder của macOS — nút 'duyệt' kiểu đính kèm file
+        cho người không biết gõ path. Serial một hộp; timeout giết hộp
+        treo khi học viên bỏ đi."""
+        if sys.platform != "darwin" or not shutil.which("osascript"):
+            return self._json({"ok": False, "err": "không hỗ trợ"})
+        if not _pick_folder_lock.acquire(timeout=1):
+            return self._json({"ok": False,
+                               "err": "đang có hộp chọn mở"}, 409)
+        try:
+            p = subprocess.run(
+                ["osascript", "-e",
+                 'POSIX path of (choose folder with prompt '
+                 '"Chọn folder trợ lý được đọc")'],
+                capture_output=True, text=True, timeout=180)
+            out = (p.stdout or "").strip()
+            if p.returncode != 0 or not out:
+                return self._json({"ok": True, "cancelled": True})
+            # Dạng ~/... để khớp preset "📁 Downloads" — path tuyệt đối
+            # trùng Downloads sẽ sinh mục trùng trong danh sách chọn.
+            home = os.path.expanduser("~")
+            if out == home or out.startswith(home + os.sep):
+                out = "~" + out[len(home):]
+            self._json({"ok": True, "path": out.rstrip("/")})
+        except subprocess.TimeoutExpired:
+            self._json({"ok": True, "cancelled": True})
+        except Exception:
+            self._json({"ok": False, "err": "không mở được hộp chọn"})
+        finally:
+            _pick_folder_lock.release()
+
     def _g_count_glob(self):
         # verify engine của workflow hỏi "folder này có bao nhiêu file
         # khớp pattern" — trả SỐ, không trả tên (danh sách file = lộ
@@ -1594,6 +1739,18 @@ class Handler(BaseHTTPRequestHandler):
                                    # run_id này (beacon đếm theo lượt)
         if not locked:
             self._json({"err": "trợ lý đang xử lý câu trước"}, 409); return
+        if perm_dirty[0]:
+            # quyền folder vừa đổi trong khi não đang sống → sandbox cũ
+            # vẫn chặn ghi; respawn não ở đầu lượt mới để quyền ăn ngay
+            # (F-015 — trước đây agent phải bảo học viên restart app)
+            perm_dirty[0] = False
+            spawn_brain()
+            if acp is None or acp.dead or not acp.session_id:
+                prompt_lock.release()
+                self._json({"err": "đang khởi động lại trợ lý — "
+                                   "gửi lại sau vài giây"}, 503); return
+            broadcast({"t": "warn", "msg": "mình vừa nạp lại quyền "
+                                           "mới — làm tiếp ngay nhé"})
         try:
             acp.call("session/prompt", {
                 "sessionId": acp.session_id,
@@ -1998,6 +2155,7 @@ class Handler(BaseHTTPRequestHandler):
                                          "note": note})
                 save_json(PERM_FP, q)
                 gen_sandbox_profile()   # quyền mới áp ngay spawn não kế tiếp
+                perm_dirty[0] = True    # F-015: não đang sống vẫn giữ sb cũ
             if refused:
                 broadcast({"t": "err",
                            "msg": "bỏ qua folder không còn hợp lệ: "
@@ -2017,6 +2175,7 @@ class Handler(BaseHTTPRequestHandler):
                             if os.path.expanduser(str(f.get("path", ""))) != p]
             save_json(PERM_FP, q)
             gen_sandbox_profile()   # thu hồi cũng phải regen
+            perm_dirty[0] = True        # F-015: respawn não ở prompt kế
         rid = gate_local(f"Gỡ quyền folder {p}?", _apply)
         self._gate_resp(rid, "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để có hiệu lực")
 

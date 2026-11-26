@@ -1,69 +1,43 @@
-# Report — E2E persona "Lan" (chạy tới Phase C)
+# Report — E2E persona "Lan" (run 2, sau full reset)
 
-Ngày: 2026-11-26 · Tester: Devin đóng vai Lan (dân văn phòng, không biết code)
-Môi trường + bảng findings đầy đủ: `findings.md`
+Ngày: 2026-11-26 (đợt 2). Environment reset sạch: `~/TroLyAI-e2e` + `~/lan-test-brave` xoá dựng lại, fixture `~/Downloads/lan-test/` giữ.
 
-## Tóm tắt điều hành
-
-Sản phẩm **đạt ở tầng hội thoại** — giọng agent, cách báo cáo, quy trình xin
-phép đều đúng với người không biết code. Nút nghẽn lớn nhất nằm ở **lớp quyền
-và môi trường máy thật**: duyệt mù theo từng lệnh, thiếu deps Python, binary
-chưa ký, và một số chỗ "chết lặng" không báo gì.
-
-**Đã fix trong session**: F-004 (P0 — onboarding không bao giờ hiện, đã retest
-pass end-to-end), F-003 (P0 — portal im lặng khi token sai, banner 401 đã code),
-F-013 (**P0 — extension không load được trên mọi trình duyệt** do match pattern
-có port; đã fix + retest auto-pair `connected:true`), F-014 (P1 — `localhost:8080`
-không redirect → trang mất CSS; đã fix 301).
-
-**P0/P1 còn mở** (chi tiết trong findings.md):
-
-- **F-008 P1 — duyệt mù theo từng lệnh**: việc "tóm tắt file Excel" 1 câu → 6+
-  dialog "Trợ lý muốn làm một việc" không ghi việc gì, kéo dài 7+ phút.
-  → Dialog phải nói việc cụ thể + đọc trong folder đã cấp không hỏi lại.
-- **F-012 P1 — run fail thì im lặng**: tool cuối fail (hết hạn duyệt) → agent
-  không gửi câu kết; Lan chờ trong vô vọng.
-- **F-009/F-001 P1 — thiếu deps**: openpyxl không có trên máy mới → agent săn
-  python mất phút, `pip3` fail PEP-668. → Ship venv deps trong bundle.
-- **F-002 P1 — binary chưa ký Apple**: Gatekeeper chặn file tải về; owner đã có
-  tài khoản Apple Developer → codesign + notarize trong pipeline.
-- **F-003 P0 — banner 401**: đã code, cần retest trên Brave.
-
-## Điểm sáng — giữ nguyên
-
-- Agent nói chuyện đúng chuẩn AGENTS.md: kết luận trước, gom nhóm thay vì liệt
-  kê, chỉ kể bất thường cần quyết định, đúng 1 câu hỏi cuối kèm đề xuất.
-- Vòng file-ra-file hoàn chỉnh (CSV): tự tìm file trong folder con, tóm tắt
-  phát hiện dữ liệu lộn xộn, dọn về 1 kiểu ghi, xuất file mới có BOM UTF-8
-  (Excel mở đúng dấu), file gốc giữ nguyên, nói rõ file nằm đâu.
-- Onboarding sau fix: 7 bước trôi chảy, quyền folder dạng checkbox, không đòi
-  gõ path cho các ngăn quen thuộc.
-- i18n vi/en parity gần tuyệt đối; 4 trang chính không lộ jargon.
-- Test suite: test-packs ✅ test-gates ✅ test-content-guard (tĩnh) ✅.
-
-## Coverage
+## Kết quả theo phase
 
 | Phase | Trạng thái | Ghi chú |
 |---|---|---|
-| A — cài đặt & mở đầu | ✅ | Gatekeeper reject (F-002); launcher/install OK |
-| B — onboarding | ✅ | F-004 fixed & retest; F-005/006/007 mở |
-| C — portal & chat | 🟡 | C2/C3/C7 xong (F-008→012); C8–C11 mép chưa test |
-| D — kết nối apps | 🟡 | F-013 fixed → ext load + auto-pair OK, probe "đang hoạt động"; còn chờ login E1–E5 cho app thật |
-| E — 20 skills | 🟡 | tom-tat-file qua lời thường PASS end-to-end; cánh tay trình duyệt đã sống (F-013) |
-| F — bài học | ⏸ | Manifest/slides có sẵn, chưa click qua UI |
-| G — workflows | ⏸ | 4 workflow seed sẵn, chưa chạy qua UI |
-| H — bots | ⏸ | Hằng active đúng; menu bot chưa rà |
-| I — đời thường xấu | 🟡 | I8 máy-ngủ xảy ra thật → F-011/F-012 |
-| W — rà chữ | 🟡 | Code-audit xong (parity, jargon); chưa rà trực quan |
-| J — chốt | 🟡 | 3/4 suite PASS; content-guard live fail do cổng bị chiếm |
+| A cài đặt | ✅ | Fresh install chạy đúng, portal/onboarding redirect đúng (F-004 fixed). F-002 binary chưa ký Apple vẫn open — chờ cert owner |
+| B onboarding | ✅ PASS | 7 bước chạy trọn vẹn. **F-005 native folder picker hoạt động** (nút "Chọn bằng cách duyệt…" mở hộp macOS, path `~/...` dedupe preset). **F-007 rerun guard PASS** (mở lại onboarding → "Bạn đã cài xong rồi!") |
+| C chat | ✅ | C2 reply đúng vai + 1 câu hỏi. C7 Excel tóm tắt đầy đủ nhờ **F-009 venv auto-provision** (ensure-deps chạy lúc boot → `.venv` có openpyxl/docx). F-012 warn-on-silent-fail đã ship |
+| D apps | 🟡 partial | Extension auto-pair OK ("Đã nối trình duyệt", F-013 fixed). Màn Cài đặt: chấm xanh/xám + hint từng app, token + giải thích "chìa khoá nhà". App thật (Zalo/Google/Outlook) cần owner login — E1–E5 blocked |
+| E skills | ✅ core | Excel summary + gom-file end-to-end: 15 file → da-gom/3 nhóm, gốc giữ nguyên. Skill `gom-file` tự invoke |
+| F bài học | ✅ sau fix | **F-017**: `intro/` thiếu trong CODE_DIRS → bài 0 lỗi 404 thô — đã fix, slide đẹp |
+| G workflows | ✅ | "Dọn folder Downloads" chạy được — đối chiếu checklist tự báo cáo số file, có đường undo |
+| H bots | ✅ | Bot Hằng (marketing) activate, selector đổi bot OK |
+| I đời thường | 🟡 partial | F-011 countdown hint ship. **F-015 mới**: quyền cấp giữa chừng không ăn vào phiên đang chạy — đã fix bằng perm_dirty respawn |
+| W rà chữ | ✅ headless | i18n vi/en parity tốt; jargon chỉ trong comment code; 1 chỗ "chat-bridge" còn trong câu lỗi |
+| J suite | ✅ | test-packs PASS, test-gates PASS (18 endpoint), test-content-guard static PASS (live fail do cổng chiếm — môi trường), test-distribution PASS |
 
-## Việc còn lại (theo thứ tự)
+## Findings đợt 2 (thêm F-015 → F-018)
 
-1. Owner mở khoá máy khi test chạy (dialog xin phép nằm sau màn khoá).
-2. Owner cung cấp E1–E5: login Zalo/Google/Outlook/Canva trong profile test,
-   WP test + app password, OA token → mở khoá Phase D và nửa Phase E.
-3. Cài openpyxl vào môi trường test (hoặc ship venv) → retest case Excel.
-4. Fix F-008 + F-012 (hai P1 ảnh hưởng mọi luồng chat) → retest C7.
-5. Codesign + notarize `dist/troly` bằng tài khoản Apple Developer → F-002.
-6. Retest banner 401 (F-003) trên Brave thật.
-7. Chạy nốt C8–C11, F, G, H, I còn lại, W trực quan.
+- **F-015 P1 (fixed)**: quyền folder cấp giữa phiên không vào sandbox não đang chạy → ghi bị chặn, agent bảo Lan restart app. Fix: `perm_dirty` → prompt kế respawn não. Retest pass.
+- **F-016 P2 (noted)**: a11y index đổi theo DOM — thuộc test harness.
+- **F-017 P1 (fixed)**: `intro/` thiếu trong launcher CODE_DIRS → bài 0 "Làm quen" 404. Đã fix + retest.
+- **F-018 P2 (open)**: run_id reset sau bridge restart → history.jsonl trộn phiên (dashboard đếm sai).
+
+## Fix chưa commit (đợt 2)
+
+- `tools/chat-bridge.py` — perm_dirty respawn (F-015), pick-folder endpoint (F-005), _perm_title/_tool_title (F-008/F-010), _native_dialog_lock (F-006), F-012 warn
+- `tools/launcher.py` — intro/ vào CODE_DIRS (F-017), ensure-deps hook (F-009)
+- `tools/ensure-deps.py` — mới, venv auto-provision
+- `web/onboarding.html` — pick-folder button, F-007 guard
+- `web/chat.html` — F-011 countdown hint, F-010 label
+- `tools/test-gates.py` — khai /api/pick-folder OPEN_OK
+- `tools/content_guard.py`, `tools/gen-sandbox.py` — allowlist + deny-write (F-008)
+- `findings.md`, `report.md`
+
+## Còn lại (blocker owner)
+
+- F-002: binary cần Apple Developer cert ký (owner đã có tài khoản)
+- D real apps: Zalo/Google/Outlook/Canva login trên Brave test (E1–E5)
+- Phase W trực quan: rà chữ trên screenshots từng màn (một phần đã qua headless)

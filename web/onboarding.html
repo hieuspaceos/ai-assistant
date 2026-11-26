@@ -138,6 +138,11 @@ const T = {
     botSkip:'Bỏ qua — dùng trợ lý chung',
     botCreating:'Đang tạo trợ lý…',
     botErr:'Chưa tạo được trợ lý — bỏ qua bước này cũng được',
+    folderBrowse:'Chọn bằng cách duyệt…',
+    already:'Bạn đã cài xong rồi!',
+    alreadyLead:'Trợ lý đã sẵn sàng — mở portal để dùng tiếp nhé.',
+    alreadyBtn:'Mở portal',
+    alreadyRedo:'Cài lại từ đầu',
   },
   en: {
     sub:'first-time setup', welcome:'Hi there! Pick a language first',
@@ -185,6 +190,11 @@ const T = {
     botSkip:'Skip — use the general assistant',
     botCreating:'Creating your assistant…',
     botErr:'Couldn\'t create the assistant — skipping this step is fine too',
+    folderBrowse:'Browse for a folder…',
+    already:'You\'re all set already!',
+    alreadyLead:'Your assistant is ready — open the portal to keep going.',
+    alreadyBtn:'Open the portal',
+    alreadyRedo:'Set up again from scratch',
   },
 };
 
@@ -435,6 +445,7 @@ function stepBrain(){
 function stepFolder(){
   const s=document.getElementById('step');
   s.innerHTML=`<h1>${t('folder')}</h1><p class="lead">${t('folderLead')}</p><div class="opts cols" id="fl"></div>
+    <div class="custom-row" id="browseRow" style="display:none"><button class="btn pri" id="browse" style="width:100%">${t('folderBrowse')}</button></div>
     <div class="custom-row"><input type="text" id="cf" placeholder="${t('folderCustom')}"><button class="btn pri" id="cfbtn">+</button></div>
     <p class="note">${t('folderHint')}</p><p class="err" id="fe"></p>
     <div class="row" style="margin-top:22px"><button class="btn ghost">${t('back')}</button><button class="btn pri">${t('next')}</button></div>`;
@@ -442,13 +453,32 @@ function stepFolder(){
   function render(){
     fl.innerHTML='';
     [...FOLDER_PRESETS.map(p=>p.path), ...folders.filter(f=>!FOLDER_PRESETS.some(p=>p.path===f))].forEach(p=>{
+      const pr=FOLDER_PRESETS.find(x=>x.path===p);
       const c=el(`<label class="check${selFolders.has(p)?' sel':''}"><input type="checkbox"${selFolders.has(p)?' checked':''}><span></span></label>`);
-      c.querySelector('span').textContent='📁 '+p;
+      c.querySelector('span').textContent='📁 '+(pr?pr[lang]:p);
       c.querySelector('input').onchange=e=>{ e.target.checked?selFolders.add(p):selFolders.delete(p); c.classList.toggle('sel',e.target.checked); };
       fl.appendChild(c);
     });
   }
   render();
+  // Nút duyệt kiểu đính kèm file — chỉ hiện khi hệ điều hành có hộp chọn
+  // folder (macOS qua bridge); ô gõ path giữ lại cho OS khác/muốn gõ tay.
+  bfetch(BRIDGE+'/api/pick-folder').then(r=>r.json()).then(d=>{
+    if(d.supported) s.querySelector('#browseRow').style.display='block';
+  }).catch(()=>{});
+  s.querySelector('#browse').onclick=async()=>{
+    const b=s.querySelector('#browse'); b.disabled=true;
+    try{
+      const r=await bfetch(BRIDGE+'/api/pick-folder',{method:'POST',
+        headers:{'Content-Type':'application/json'},body:'{}'});
+      const d=await r.json().catch(()=>({}));
+      if(d.path && !folders.includes(d.path) && !FOLDER_PRESETS.some(p=>p.path===d.path)){
+        folders.push(d.path);
+      }
+      if(d.path){ selFolders.add(d.path); s.querySelector('#fe').textContent=''; render(); }
+    }catch(e){ s.querySelector('#fe').textContent=t('errBridge'); }
+    b.disabled=false;
+  };
   const addCustom=async()=>{
     const v=s.querySelector('#cf').value.trim();
     if(!v){ s.querySelector('#fe').textContent=t('errEmpty'); return; }
@@ -548,7 +578,21 @@ function stepDone(){
   s.querySelector('button').onclick=()=>{ location.href='index.html'; };
 }
 
-go(0);
+function showAlready(){
+  const s=document.getElementById('step');
+  s.innerHTML=`<div class="done-check">✅</div><h1 style="text-align:center">${t('already')}</h1>
+    <p class="lead" style="text-align:center">${t('alreadyLead')}</p>
+    <div class="row"><span></span><button class="btn pri" id="go">${t('alreadyBtn')}</button></div>
+    <p class="note" style="text-align:center"><a href="#" id="redo">${t('alreadyRedo')}</a></p>`;
+  s.querySelector('#go').onclick=()=>{ location.href='index.html'; };
+  s.querySelector('#redo').onclick=e=>{ e.preventDefault(); go(0); };
+}
+
+// Lan lỡ mở lại trang cài sau khi đã cài xong → không chạy lại (tạo bot
+// trùng, ghi đè quyền). config.language chỉ tồn tại sau setup thành công.
+bfetch(BRIDGE+'/api/config').then(r=>r.json()).then(c=>{
+  if (c && c.language) showAlready(); else go(0);
+}).catch(()=>go(0));
 tryPairExt();   // extension đã cài sẵn → nhận mã ngay, khỏi chờ bước cuối
 </script>
 </body>

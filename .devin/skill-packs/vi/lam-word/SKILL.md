@@ -17,10 +17,16 @@ luôn ra file mới.
 ## Kiểm tra tool (lần đầu)
 
 ```bash
-python3 -c "import docx"  # Windows: py -c "import docx"
+PY=.venv/bin/python; [ -x "$PY" ] || PY=python3
+# Windows: PY=.venv\Scripts\python hoặc py
+$PY -c "import docx"
 ```
 
-Thiếu → `pip install -r requirements.txt` (đã kèm `python-docx`).
+Mọi lệnh python trong skill này chạy bằng `$PY`. Thiếu gói →
+`python3 tools/ensure-deps.py` — tạo `.venv/` riêng trong folder, không
+đụng Python hệ thống (launcher cũng tự chạy mỗi lần mở app). Cần cài thì
+nói trước: *"mình cần cài một gói Python nhỏ để đọc Word — khoảng 30
+giây"*.
 
 ## Việc chính: điền template hàng loạt
 
