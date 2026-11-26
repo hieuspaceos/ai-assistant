@@ -171,9 +171,9 @@
 .close__actions { margin-top: var(--space-lg); display: flex; gap: var(--space-md); align-items: center; justify-content: center; flex-wrap: wrap; }
 
 /* footer colophon */
-.colophon { border-top: var(--rule-hair) solid var(--color-rule); padding-block: var(--space-xl) var(--space-2xl); font-size: var(--text-sm); color: var(--color-muted); }
+.colophon { border-top: var(--rule-hair) solid var(--color-rule); padding-block: var(--space-xl) var(--space-2xl); font-size: var(--text-sm); color: var(--color-muted); text-align: center; }
 .colophon a { color: var(--color-ink-2); }
-.colophon .links { margin-top: var(--space-sm); display: flex; gap: var(--space-lg); flex-wrap: wrap; }
+.colophon .links { margin-top: var(--space-sm); display: flex; gap: var(--space-lg); flex-wrap: wrap; justify-content: center; }
 
 /* hero note under actions */
 .hero__note { margin-top: var(--space-md); font-size: var(--text-sm); color: var(--color-muted); }
