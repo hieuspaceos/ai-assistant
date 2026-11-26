@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
 <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
-<link rel="stylesheet" href="style.css?v=12">
+<link rel="stylesheet" href="style.css?v=13">
 <link rel="stylesheet" href="story.css?v=8">
 </head>
 <body>
@@ -356,23 +356,14 @@
    </div>
   </section>
 
-  <!-- privacy statement -->
-  <section class="statement">
-    <div class="container">
-      <p class="big">Không gì rời máy bạn khi bạn không cho phép.</p>
-      <p class="small">Mã khoá mọi cửa; folder nào được mở do bạn. Gửi tin, đăng
-        bài, xoá file — trợ lý luôn hỏi bạn trước. AI không đọc được mật khẩu
-        hay khoá đăng nhập trên máy.
-        <a href="privacy.html">Chính sách riêng tư</a>.</p>
-    </div>
-  </section>
-
   <!-- faq -->
   <section class="section container" id="hoi">
-    <div class="headblock">
-      <h2>Hỏi nhanh</h2>
-    </div>
-    <div class="faq">
+    <div class="faq__grid">
+     <div>
+      <div class="headblock">
+        <h2>Hỏi nhanh</h2>
+      </div>
+      <div class="faq">
       <details>
         <summary>Có tốn tiền không?</summary>
         <p>Phần mềm trợ lý miễn phí, mã nguồn mở. Phần AI bên dưới (Claude,
@@ -396,31 +387,46 @@
           do bạn cấp, gửi tin hay đăng bài đều phải hỏi bạn trước. Chi tiết ở
           <a href="privacy.html">Chính sách riêng tư</a>.</p>
       </details>
+      </div>
+     </div>
+     <div class="botdance" aria-hidden="true">
+      <svg viewBox="0 0 140 150" width="240" height="258">
+        <text class="bd-note bd-note--1" x="8" y="38" font-size="15" fill="var(--color-accent)">♪</text>
+        <text class="bd-note bd-note--2" x="118" y="24" font-size="13" fill="var(--color-accent)">♫</text>
+        <g class="botdance__all">
+          <line x1="70" y1="10" x2="70" y2="26" stroke="var(--color-accent)" stroke-width="3" stroke-linecap="round"/>
+          <circle cx="70" cy="8" r="5" fill="var(--color-accent)"/>
+          <rect x="40" y="26" width="60" height="46" rx="16" fill="var(--color-accent)"/>
+          <circle cx="58" cy="46" r="5" fill="var(--color-accent-ink)"/>
+          <circle cx="82" cy="46" r="5" fill="var(--color-accent-ink)"/>
+          <path d="M58 58q12 7 24 0" stroke="var(--color-accent-ink)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+          <g class="bd-arm bd-arm--l"><path d="M40 80 L16 64" stroke="var(--color-accent)" stroke-width="7" stroke-linecap="round"/></g>
+          <g class="bd-arm bd-arm--r"><path d="M100 80 L124 64" stroke="var(--color-accent)" stroke-width="7" stroke-linecap="round"/></g>
+          <rect x="46" y="78" width="48" height="42" rx="12" fill="var(--color-accent)"/>
+          <g class="bd-leg bd-leg--l"><rect x="50" y="124" width="14" height="18" rx="6" fill="var(--color-accent-2)"/></g>
+          <g class="bd-leg bd-leg--r"><rect x="76" y="124" width="14" height="18" rx="6" fill="var(--color-accent-2)"/></g>
+        </g>
+      </svg>
+     </div>
     </div>
   </section>
 
   <!-- close -->
   <section class="section container" id="tai">
-    <div class="close__grid">
-      <div class="close__text">
-        <h2>Tải về. Mở. Học.</h2>
-        <p class="lead">Một file. Màn chào dẫn từng bước.</p>
-        <div class="close__actions">
-          <a class="btn btn--primary" href="https://github.com/hieuspaceos/ai-assistant/releases/latest">Tải về (macOS + Windows)</a>
-          <a class="btn btn--secondary" href="https://github.com/hieuspaceos/ai-assistant/blob/main/SETUP.md">Hướng dẫn cài đặt</a>
-        </div>
+    <div class="close__center">
+      <h2>Tải về. Mở. Học.</h2>
+      <p class="lead">Một file. Màn chào dẫn từng bước.</p>
+      <div class="close__actions">
+        <a class="btn btn--primary" href="https://github.com/hieuspaceos/ai-assistant/releases/latest">Tải về (macOS + Windows)</a>
+        <a class="btn btn--secondary" href="https://github.com/hieuspaceos/ai-assistant/blob/main/SETUP.md">Hướng dẫn cài đặt</a>
       </div>
-      <figure class="shot close__shot">
-        <img src="assets/onboarding.png" alt="Màn hình chào của Trợ lý AI: chọn ngôn ngữ Tiếng Việt hoặc English" width="788" height="818" loading="lazy" fetchpriority="low">
-        <figcaption>Màn hình đầu tiên sau khi mở file.</figcaption>
-      </figure>
     </div>
   </section>
 
 </main>
 
 <footer class="colophon container">
-  <p>Dự án mã nguồn mở phổ cập AI cho mọi nhà, của <a href="https://github.com/hieuspaceos">hieuspaceos</a>. Video và ảnh quay thật.</p>
+  <p>Một dự án của <a href="https://github.com/hieuspaceos">hieuspaceos</a></p>
   <p class="links">
     <a href="https://github.com/hieuspaceos/ai-assistant">Mã nguồn</a>
     <a href="https://github.com/hieuspaceos/ai-assistant/releases/latest">Tải về</a>
