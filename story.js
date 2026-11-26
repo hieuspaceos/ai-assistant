@@ -289,7 +289,7 @@ if (storyEl) {
     if (!slot) return;
     bellAnim = lottie.loadAnimation({
       container: slot, renderer: "svg", loop: true, autoplay: true,
-      path: "assets/story/bell.json",
+      path: "assets/story/bell.json?v=2",
     });
   }
 
