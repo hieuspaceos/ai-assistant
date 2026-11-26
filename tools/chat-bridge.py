@@ -727,6 +727,8 @@ class Acp:
         self.dead = False
         self.expect_death = False  # True khi BRIDGE tự giết (watchdog/đổi não)
         self.lock = threading.Lock()
+        self._waiters = {}   # mid → Event — call_sync chờ reply theo id
+        self._replies = {}   # mid → message trả lời (chỉ id đang chờ)
         self.proc = None
         self.brain_id = brain.get("id", brain["cmd"])
         try:
@@ -771,6 +773,24 @@ class Acp:
             self._write({"jsonrpc": "2.0", "id": mid, "method": method, "params": params})
         return mid
 
+    def call_sync(self, method, params, timeout=30):
+        # Gửi rồi CHỜ response của đúng id — handshake ACP bắt buộc tuần
+        # tự (initialize xong mới được session/new — não từ chối
+        # "Invalid request" nếu session/new đi trước).
+        ev = threading.Event()
+        with self.lock:
+            mid = self.next_id; self.next_id += 1
+            self._waiters[mid] = ev
+            try:
+                self._write({"jsonrpc": "2.0", "id": mid,
+                             "method": method, "params": params})
+            except Exception:
+                self._waiters.pop(mid, None)
+                return None
+        ev.wait(timeout)
+        self._waiters.pop(mid, None)
+        return self._replies.pop(mid, None)
+
     def _reader(self):
         # readline(SIZE): kẹp một "dòng" vô hạn — não gây lỗi phát stream
         # không-newline thì RAM không phình; đoạn cắt ra không parse được
@@ -802,6 +822,12 @@ class Acp:
                        "msg": "trợ lý vừa dừng đột ngột — chạy lại file start rồi thử lại"})
 
     def _dispatch(self, m):
+        # Reply của một call_sync đang chờ — ghi trước, vẫn cho các nhánh
+        # dưới xử lý tiếp (sessionId, err, done) như thường
+        mid = m.get("id")
+        if mid in self._waiters and ("result" in m or "error" in m):
+            self._replies[mid] = m
+            self._waiters[mid].set()
         # Kết quả của session/new (bất kể id nào)
         if self.session_id is None and isinstance(m.get("result"), dict) and m["result"].get("sessionId"):
             self.session_id = m["result"]["sessionId"]
@@ -2363,12 +2389,18 @@ def spawn_brain():
                 except Exception:
                     pass
         if not acp.dead:
-            acp.call("initialize", {
+            # initialize PHẢI có result trước khi session/new — bắn liền
+            # nhau thì não trả "Invalid request" (ACP đòi init xong trước)
+            # và session_id mãi rỗng → mọi prompt bị "chưa có session".
+            r = acp.call_sync("initialize", {
                 "protocolVersion": 1,
                 "clientCapabilities": {"fs": {"readTextFile": False,
                                               "writeTextFile": False},
                                        "terminal": False}})
-            acp.call("session/new", {"cwd": CWD, "mcpServers": []})
+            if r and r.get("result"):
+                # chờ luôn session/new để session_id sẵn khi hàm trả về
+                acp.call_sync("session/new", {"cwd": CWD,
+                                              "mcpServers": []})
 
 class BoundedServer(ThreadingHTTPServer):
     """Thread-per-connection KHÔNG trần → hàng nghìn kết nối treo là hết

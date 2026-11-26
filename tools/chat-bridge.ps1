@@ -513,6 +513,28 @@ function Call-Acp($method, $params) {
     return $id
 }
 
+$script:AcpReplies = @{}   # parity .py — reply của não theo id, Drain-Queue ghi
+
+function Wait-AcpReply($mid, $timeoutSec) {
+    # Chờ não trả lời call `$mid` — handshake ACP bắt buộc tuần tự
+    # (initialize xong mới được session/new — não từ chối "Invalid
+    # request" nếu session/new đi trước). Bơm Drain-Queue vì reader
+    # là event-driven (queue đổ trong Drain-Queue).
+    $end = (Get-Date).AddSeconds($timeoutSec)
+    while ((Get-Date) -lt $end) {
+        Drain-Queue
+        $k = [string]$mid
+        if ($script:AcpReplies.ContainsKey($k)) {
+            $r = $script:AcpReplies[$k]
+            $script:AcpReplies.Remove($k)
+            return $r
+        }
+        if ($script:AcpDead) { return $null }
+        Start-Sleep -Milliseconds 50
+    }
+    return $null
+}
+
 $script:RunId = 0        # parity .py — bump ở /api/prompt, event kèm run_id
 
 function Push-Event($ev) {
@@ -578,14 +600,20 @@ function Start-BrainSandboxed($brain, $cred) {
     # drain trong Drain-Queue (vốn đã chạy mỗi request, đơn luồng).
     $script:AcpTask = $script:AcpOut.ReadLineAsync()
     $script:AcpDead = $false
-    Call-Acp "initialize" @{
+    # initialize PHẢI có result trước khi session/new — bắn liền nhau
+    # thì não trả "Invalid request" và SessionId mãi rỗng → prompt kẹt
+    $mid = Call-Acp "initialize" @{
         protocolVersion = 1
         clientCapabilities = @{
             fs = @{ readTextFile = $false; writeTextFile = $false }
             terminal = $false
         }
-    } | Out-Null
-    Call-Acp "session/new" @{ cwd = $WorkDir; mcpServers = @() } | Out-Null
+    }
+    $r = Wait-AcpReply $mid 30
+    if ($r -and $r.result) {
+        $mid2 = Call-Acp "session/new" @{ cwd = $WorkDir; mcpServers = @() }
+        Wait-AcpReply $mid2 30 | Out-Null
+    }
     return $true
 }
 
@@ -667,14 +695,18 @@ function Start-Brain {
         }
     }
     $script:AcpProc.BeginOutputReadLine()
-    Call-Acp "initialize" @{
+    $mid = Call-Acp "initialize" @{
         protocolVersion = 1
         clientCapabilities = @{
             fs = @{ readTextFile = $false; writeTextFile = $false }
             terminal = $false
         }
-    } | Out-Null
-    Call-Acp "session/new" @{ cwd = $WorkDir; mcpServers = @() } | Out-Null
+    }
+    $r = Wait-AcpReply $mid 30
+    if ($r -and $r.result) {
+        $mid2 = Call-Acp "session/new" @{ cwd = $WorkDir; mcpServers = @() }
+        Wait-AcpReply $mid2 30 | Out-Null
+    }
 }
 
 function Drain-Queue {
@@ -691,6 +723,13 @@ function Drain-Queue {
     $line = $null
     while ($lineQueue.TryDequeue([ref]$line)) {
         try { $m = $line | ConvertFrom-Json } catch { continue }
+        # Reply của một call đang chờ — ghi trước, vẫn cho các nhánh
+        # dưới xử lý tiếp (sessionId, err, done) như thường
+        if ($null -ne $m.id -and `
+            ($m.PSObject.Properties.Name -contains "result" -or `
+             $m.PSObject.Properties.Name -contains "error")) {
+            $script:AcpReplies[[string]$m.id] = $m
+        }
         # Kết quả của session/new (bất kể id nào)
         if ($null -eq $script:SessionId -and $m.result -and $m.result.sessionId) {
             $script:SessionId = $m.result.sessionId
