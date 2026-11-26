@@ -24,7 +24,7 @@ const STORY = {
     ready: [["zalo", "Zalo đã tóm tắt"], ["sheet", "Báo giá cập nhật"], ["img", "Ảnh đã nén, gốc nguyên"]],
     payoff: "Không cần nhờ — nó tự chạy, mỗi sáng.",
     saved: "~45 phút",
-    savedCap: "tiết kiệm mỗi sáng",
+    savedCap: "mỗi sáng",
   },
   sales: {
     who: "Lan · sales",
@@ -47,7 +47,7 @@ const STORY = {
     ready: [["excel", "47 file theo tỉnh"], ["doc", "Báo giá nháp sẵn"], ["files", "List follow-up chờ"]],
     payoff: "Thứ hai không còn là cơn ác mộng.",
     saved: "~3 giờ",
-    savedCap: "tiết kiệm mỗi tuần",
+    savedCap: "mỗi tuần",
   },
   office: {
     who: "Hoa · văn phòng",
@@ -70,7 +70,7 @@ const STORY = {
     ready: [["doc", "Báo cáo đã điền"], ["files", "Hoá đơn theo tháng"], ["gmail", "Mail đã tóm tắt"]],
     payoff: "Bạn chỉ còn một việc: duyệt.",
     saved: "~1.5 giờ",
-    savedCap: "tiết kiệm mỗi chiều",
+    savedCap: "mỗi chiều",
   },
   content: {
     who: "Trang · content",
@@ -91,9 +91,9 @@ const STORY = {
     memoryLine: "Mình điền meta theo cách site bạn vẫn làm nhé.",
     recipe: "/bai-moi",
     ready: [["wp", "5 nháp đã đăng"], ["img", "Alt ảnh đầy đủ"], ["web", "Meta cũ đã soi"]],
-    payoff: "Checklist tự chạy — bạn chỉ viết.",
+    payoff: "Meta + alt tự xong — bạn chỉ viết bài.",
     saved: "~30 phút/bài",
-    savedCap: "tiết kiệm mỗi bài mới",
+    savedCap: "mỗi bài mới",
   },
   design: {
     who: "Tuấn · design",
@@ -115,8 +115,8 @@ const STORY = {
     recipe: "/anh-moi",
     ready: [["img", "Ảnh nén + đúng tên"], ["web", "Quá lớn đã xử"], ["files", "Folder theo ngày"]],
     payoff: "Mỗi chiều.",
-    saved: "40 phút → vài phút",
-    savedCap: "việc cuối ngày",
+    saved: "~35 phút",
+    savedCap: "mỗi chiều",
   },
 };
 
@@ -174,7 +174,7 @@ function scenePile(c) {
 }
 
 function sceneTasks(c) {
-  return `<div class="scene scene--tasks" role="group" aria-label="Trợ lý giải dồn">
+  return `<div class="scene scene--tasks" role="group" aria-label="Trợ lý làm hộ">
     <div class="tasks">
       <span class="bot" aria-hidden="true"></span>
       ${c.tasks.map(([ask, app, res], i) => `<div class="task beat" style="--i:${i}">
@@ -219,7 +219,7 @@ function sceneAuto(c) {
         ${c.ready.map(([app, r], i) => `<div class="ready beat" style="--i:${i + 2}">${tag(app)}${esc(r)}</div>`).join("")}
       </div>
     </div>
-    <p class="saved beat" style="--i:${c.ready.length + 2}"><strong>${esc(c.saved)}</strong> ${esc(c.savedCap)}</p>
+    <p class="saved beat" style="--i:${c.ready.length + 2}">Tiết kiệm <strong>${esc(c.saved)}</strong> ${esc(c.savedCap)}</p>
     <p class="scene__cap scene__cap--payoff beat" style="--i:${c.ready.length + 3}">${esc(c.payoff)}</p>
   </div>`;
 }
