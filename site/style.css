@@ -62,6 +62,8 @@
 
 /* ————— company band ————— */
 .ctyband { background: var(--color-accent-soft); }
+.ctyband .headblock { max-width: 44rem; margin-inline: auto; text-align: center; }
+.switcher-tabs--center { justify-content: center; }
 
 /* fleet dashboard mock (cty1) */
 .fleet { padding: var(--space-lg); }
