@@ -163,14 +163,15 @@
 .scene.is-on .task__res { opacity: 1; transform: none; transition: opacity 350ms var(--ease-out), transform 350ms var(--ease-out); transition-delay: calc(var(--i) * var(--step) + 1400ms); }
 .task__res::after { content: " ✓"; }
 
-.bot { position: absolute; left: -1.6rem; top: 0.8rem; width: 0.8rem; height: 0.8rem; border-radius: 50%; background: var(--color-accent); box-shadow: 0 0 0 5px var(--color-accent-soft); }
+.bot { position: absolute; left: -2.2rem; top: 0.5rem; width: 1.5rem; height: 1.5rem; color: var(--color-accent); filter: drop-shadow(0 0 0.35rem var(--color-accent-soft)); }
+.bot svg { display: block; width: 100%; height: 100%; fill: currentColor; }
 .scene.is-on .bot { animation: botrun 8s var(--ease-in-out) both; }
 /* dwell on each row while its result stamps, then rest on the teach beat */
 @keyframes botrun {
-  0%, 26% { top: 0.8rem; }
-  33%, 56% { top: 3.9rem; }
-  63%, 84% { top: 7rem; }
-  92%, 100% { top: 10.4rem; }
+  0%, 26% { top: 0.5rem; }
+  33%, 56% { top: 3.6rem; }
+  63%, 84% { top: 6.7rem; }
+  92%, 100% { top: 10.1rem; }
 }
 
 .teach { align-self: flex-start; margin-top: var(--space-2xs); background: var(--color-paper); border: var(--rule-hair) dashed var(--color-rule-2); border-radius: var(--space-sm); padding: var(--space-xs) var(--space-md); font-size: var(--text-sm); color: var(--color-ink-2); }
