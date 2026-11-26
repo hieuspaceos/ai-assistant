@@ -49,8 +49,10 @@
   .adm-row .k { color: var(--muted); min-width: 96px; flex-shrink: 0; }
   .adm-row .v { word-break: break-all; font-family: var(--mono); font-size: var(--text-sm); }
   .adm-list { margin: 0; padding: 0; list-style: none; font-size: var(--text-sm); }
-  .adm-list li { padding: var(--space-3xs) 0; display: flex; gap: var(--space-sm); align-items: baseline; }
-  .adm-list .mono { font-family: var(--mono); word-break: break-all; }
+  .adm-list li { padding: var(--space-3xs) 0; display: flex; flex-wrap: wrap; gap: var(--space-3xs) var(--space-sm); align-items: baseline; }
+  /* tên app không bị ép co gãy từng ký tự — message rớt dòng riêng (đồng bộ collector-web/index.html) */
+  .adm-list .mono { font-family: var(--mono); font-size: var(--text-xs); overflow-wrap: anywhere; min-width: 8em; }
+  .adm-list .adm-ev { flex-basis: 100%; }
   .adm-tag {
     flex-shrink: 0; font-size: var(--text-xs); border-radius: 999px;
     padding: 1px var(--space-xs); background: var(--accent-soft); color: var(--accent-deep);

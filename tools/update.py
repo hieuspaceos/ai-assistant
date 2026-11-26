@@ -81,6 +81,8 @@ def _jload(fp):
 def fetch(url, key=None, timeout=TIMEOUT):
     """GET bytes — không redirect, timeout ngắn. Lỗi → raise."""
     req = urllib.request.Request(url)
+    # Cloudflare chặn UA "Python-urllib" (1010) — cần UA riêng
+    req.add_header("User-Agent", "TroLyAI-Update/1")
     if key:
         req.add_header("X-Beacon-Key", key)
     with OPENER.open(req, timeout=timeout) as r:

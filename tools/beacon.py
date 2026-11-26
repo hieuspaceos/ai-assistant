@@ -31,6 +31,14 @@ cửa, không phải chìa khoá):
 import json, os, platform, secrets, socket, subprocess, sys, time
 import urllib.request
 
+# Windows console/logfile mặc định cp1252 không encode được tiếng Việt —
+# print chữ có dấu raise UnicodeEncodeError và giết cả vòng beacon.
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(errors="backslashreplace")
+    except Exception:
+        pass
+
 ROOT = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else
                        os.environ.get("TROLY_DATA") or os.getcwd())
 DEVIN = os.path.join(ROOT, ".devin")
@@ -92,9 +100,12 @@ def bridge_get(path, token, timeout=4):
 def collector_post(path, key, payload, base):
     """POST JSON lên collector; trả (http_code, obj|None). Lỗi mạng →
     raise — caller xếp vào backoff."""
+    # User-Agent bắt buộc: Cloudflare chặn UA mặc định "Python-urllib"
+    # (error 1010 → 403 HTML) — request không bao giờ tới worker
     req = urllib.request.Request(
         base + path, data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json",
+                 "User-Agent": f"TroLyAI-Beacon/{BEACON_VER}",
                  "X-Beacon-Key": key}, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=5) as r:

@@ -15,6 +15,22 @@ jobs:
           python tools/test-bridges.py
           python tools/test-parity.py
           python tools/test-packs.py
+      - name: worker 2-tier (wrangler dev + D1 local)
+        env:
+          WRANGLER_SEND_METRICS: "false"
+        run: |
+          npm install -g wrangler@4.151.3 --no-fund --no-audit
+          cd worker
+          python3 - <<'EOF'
+          import json, secrets
+          orgs = {"CIORG": {k: secrets.token_hex(24)
+                            for k in ("beacon_secret", "license_secret",
+                                      "admin_key")}}
+          open(".dev.vars", "w").write(
+              "VENDOR_KEY=" + secrets.token_hex(24)
+              + "\nORGS_JSON=" + json.dumps(orgs) + "\n")
+          EOF
+          cd .. && python tools/test-worker.py
 
   # S4 — smoke test vung cat Windows: lint .ps1, tao user han che +
   # ACL that, spawn cross-user qua AgentSpawn, e2e chat-bridge.ps1 +

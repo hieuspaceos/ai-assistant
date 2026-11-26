@@ -31,16 +31,25 @@ if errorlevel 1 (
   echo.
 )
 
-rem --- "Chia khoa nha" dung chung cho cac bridge — sinh 1 lan truoc khi
-rem launch (tranh race giua cac process); set env de ttyd/nao ke thua ---
+rem --- "Chia khoa nha" dung chung cho cac bridge ---
 if not exist .devin mkdir .devin
-rem file ton tai nhap nhung rong (ai do tao file trong) thi xoa de sinh lai
-if exist .devin\bridge.token (
-  for %%A in (.devin\bridge.token) do if %%~zA EQU 0 del .devin\bridge.token
+
+rem Dang chay san? → mo lai portal bang token CU ma bridge dang giu
+rem trong memory. Rotate cho nay ghi de file → portal ?t=T2 vs bridge
+rem giu T1 = 401, beacon doc lazy → bridge_get fail mai.
+curl -sf -o nul http://127.0.0.1:7682/api/health >nul 2>nul
+if not errorlevel 1 (
+  for /f "usebackq delims=" %%i in (".devin\bridge.token") do set "BRIDGE_TOKEN=%%i"
+  start http://localhost:8080/web/?t=%BRIDGE_TOKEN%
+  echo  Tro Ly AI dang chay san - da mo lai portal.
+  timeout /t 8 >nul
+  exit /b 0
 )
-if not exist .devin\bridge.token (
-  powershell -NoProfile -Command "[IO.File]::WriteAllText('.devin\bridge.token', ([BitConverter]::ToString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(24))).Replace('-','').ToLower())"
-)
+
+rem sinh MOI moi lan start that su (rotate mien phi, giam thoi gian song
+rem neu token lo), truoc khi launch de tranh race giua cac process;
+rem set env de ttyd/nao ke thua ---
+powershell -NoProfile -Command "[IO.File]::WriteAllText('.devin\bridge.token', ([BitConverter]::ToString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(24))).Replace('-','').ToLower())"
 for /f "usebackq delims=" %%i in (".devin\bridge.token") do set "BRIDGE_TOKEN=%%i"
 
 rem --- Kiem tra ttyd (de nhung terminal vao trang web) ---

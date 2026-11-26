@@ -4,183 +4,732 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Trợ lý AI — Fleet</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 38 38'><rect width='38' height='38' rx='11' fill='%23333'/></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 38 38'><rect width='38' height='38' rx='11' fill='%232f6b4f'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  /* Dashboard fleet cho IT/quản trị cty — chạy trên collector :8790,
-     KHÔNG phải portal :8080. Style tự chứa (không kéo styles.css của
-     portal — collector có thể deploy độc lập chỉ với folder này). */
+  /* Dashboard fleet 2 tầng — design tokens port từ site/tokens.css
+     (inline để folder này tự chứa: collector.py self-host cũng serve
+     được, không phụ thuộc site/). Master quản org/tài khoản/license;
+     cty-admin quản máy org mình. Login 2 cửa: user/pass hoặc dán key. */
   :root {
-    --bg: #faf9f7; --well: #fff; --ink: #2c2a26; --muted: #8a8578;
-    --border: #e4e0d8; --accent: #4a6fa5; --accent-soft: #e8eff8;
-    --bad: #9a2b20; --warn: #8a6210; --ok: #2e6b3a;
-    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color-scheme: light;
+    --space-3xs: 2px; --space-2xs: 4px; --space-xs: 8px;
+    --space-sm: 12px; --space-md: 16px; --space-lg: 24px;
+    --space-xl: 40px; --space-2xl: 64px;
+    --text-xs: 0.8125rem; --text-sm: 0.875rem; --text-md: 1rem;
+    --text-lg: 1.25rem; --text-xl: 1.5625rem;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --dur-short: 220ms;
+    --color-paper: oklch(98.5% 0.004 155);
+    --color-paper-2: oklch(96% 0.008 155);
+    --color-paper-3: oklch(93% 0.012 155);
+    --color-ink: oklch(20% 0.012 155);
+    --color-ink-2: oklch(30% 0.014 155);
+    --color-muted: oklch(48% 0.015 155);
+    --color-rule: oklch(90% 0.008 155);
+    --color-rule-2: oklch(78% 0.02 155);
+    --color-accent: oklch(48% 0.14 155);
+    --color-accent-2: oklch(40% 0.12 157);
+    --color-accent-soft: oklch(92% 0.05 155);
+    --color-accent-ink: oklch(99% 0.005 155);
+    --color-focus: oklch(45% 0.14 155);
+    --color-error: oklch(50% 0.16 27);
+    --color-error-soft: oklch(94% 0.04 27);
+    --color-success: oklch(45% 0.12 150);
+    --color-success-soft: oklch(93% 0.05 150);
+    --color-warn: oklch(52% 0.13 75);
+    --color-warn-soft: oklch(94% 0.05 85);
+    --font-body: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, monospace;
+    --radius-card: 16px; --radius-pill: 999px; --rule-hair: 1px;
+    --shadow-card: 0 1px 2px oklch(20% 0.02 155 / 0.07);
+    --container: 1440px; --gutter: 48px;
+    --z-drawer: 300; --z-modal: 400;
   }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink);
-         font: 14px/1.5 -apple-system, "Segoe UI", sans-serif; }
-  .hd { display: flex; align-items: center; gap: 12px; padding: 14px 24px;
-        border-bottom: 1px solid var(--border); background: var(--bg);
-        position: sticky; top: 0; z-index: 2; }
-  .hd .t { font-size: 18px; font-weight: 600; }
-  .hd .sub { color: var(--muted); font-size: 13px; }
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; background: var(--color-paper); color: var(--color-ink);
+         font-family: var(--font-body); font-size: var(--text-md);
+         line-height: 1.55; -webkit-font-smoothing: antialiased; }
+  [hidden] { display: none !important; }
+  :focus-visible { outline: 2px solid var(--color-focus);
+                   outline-offset: 2px; }
+  .mono { font-family: var(--font-mono); }
+  .container { width: 100%; max-width: var(--container);
+               margin-inline: auto; padding-inline: var(--gutter);
+               box-sizing: border-box; }
+
+  /* ---------- nút ---------- */
+  .btn { display: inline-block; border: var(--rule-hair) solid transparent;
+         border-radius: var(--radius-pill); padding: var(--space-xs)
+         var(--space-md); font-weight: 600; font-size: var(--text-sm);
+         color: var(--color-ink); background: var(--color-paper);
+         border-color: var(--color-rule-2); cursor: pointer;
+         transition: background-color var(--dur-short) var(--ease-out),
+                     color var(--dur-short) var(--ease-out); }
+  .btn:hover { background: var(--color-paper-2); }
+  .btn:active { transform: translateY(1px); }
+  .btn[disabled] { opacity: .55; cursor: not-allowed; }
+  .btn--primary { background: var(--color-accent); border-color:
+                  var(--color-accent); color: var(--color-accent-ink); }
+  .btn--primary:hover { background: var(--color-accent-2); }
+  .btn--danger { color: var(--color-error); }
+  .btn--sm { padding: var(--space-2xs) var(--space-sm);
+             font-size: var(--text-xs); }
+
+  /* ---------- login ---------- */
+  .login-wrap { min-height: 100vh; display: grid; place-items: center;
+                padding: var(--space-lg); }
+  .login-card { width: min(420px, 100%); background: var(--color-paper-2);
+                border-radius: var(--radius-card); padding:
+                var(--space-xl); box-shadow: var(--shadow-card); }
+  .login-card .wordmark { text-align: center; font-size: var(--text-xl);
+                          font-weight: 600; letter-spacing: -0.02em; }
+  .login-card .tagline { text-align: center; font-size: var(--text-sm);
+                         color: var(--color-muted);
+                         margin: var(--space-2xs) 0 var(--space-lg); }
+  .seg { display: flex; gap: var(--space-2xs); margin-bottom:
+         var(--space-lg); flex-wrap: wrap; }
+  .seg button { flex: 1; border: var(--rule-hair) solid var(--color-rule-2);
+                border-radius: var(--radius-pill); background:
+                var(--color-paper); color: var(--color-ink-2);
+                font-weight: 600; font-size: var(--text-sm);
+                padding: var(--space-xs) var(--space-md); cursor: pointer; }
+  .seg button.on { background: var(--color-accent-soft);
+                   color: var(--color-accent-2);
+                   border-color: var(--color-accent); }
+  .fld { margin-bottom: var(--space-sm); }
+  .fld label { display: block; font-size: var(--text-xs);
+               color: var(--color-muted); margin-bottom: var(--space-2xs); }
+  .fld input, .fld select, .fld textarea {
+    width: 100%; font: inherit; font-size: var(--text-sm);
+    padding: var(--space-xs) var(--space-sm);
+    border: var(--rule-hair) solid var(--color-rule);
+    border-radius: 10px; background: var(--color-paper);
+    color: var(--color-ink); }
+  .fld textarea { resize: vertical; font-family: var(--font-mono);
+                  font-size: var(--text-xs); }
+  .login-err { color: var(--color-error); font-size: var(--text-sm);
+               margin-top: var(--space-sm); min-height: 1.2em; }
+  .login-note { color: var(--color-muted); font-size: var(--text-xs);
+                margin-top: var(--space-md); border-top: var(--rule-hair)
+                solid var(--color-rule); padding-top: var(--space-sm); }
+
+  /* ---------- chrome ---------- */
+  .hd { border-bottom: var(--rule-hair) solid var(--color-rule);
+        position: sticky; top: 0; z-index: 200;
+        background: var(--color-paper); }
+  .hd .container { display: flex; align-items: center;
+                   gap: var(--space-md); padding-block: var(--space-sm);
+                   flex-wrap: wrap; }
+  .hd .t { font-size: var(--text-lg); font-weight: 600;
+           letter-spacing: -0.02em; }
+  .hd .who { font-size: var(--text-xs); color: var(--color-muted); }
+  .hd .who b { color: var(--color-ink-2); }
   .hd .sp { flex: 1; }
-  .seats { font-size: 13px; padding: 3px 12px; border-radius: 999px;
-           background: var(--accent-soft); color: var(--accent); }
-  .seats.warn { background: #fdf3e0; color: var(--warn); }
-  .seats.bad { background: #fdf1f0; color: var(--bad); }
-  .btn { font: inherit; font-size: 13px; cursor: pointer;
-         border: 1px solid var(--border); border-radius: 999px;
-         background: var(--well); color: var(--ink); padding: 4px 14px; }
-  .btn:hover { background: var(--accent-soft); }
-  .wrap { max-width: 1150px; padding: 18px 24px 60px; }
-  .pending { border: 1px solid #e8d9a0; background: #fdf9e8;
-             border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; }
-  .pending h3 { margin: 0 0 8px; font-size: 14px; color: var(--warn); }
-  .pending .prow { display: flex; align-items: center; gap: 10px;
-                   padding: 6px 0; font-size: 13px; }
-  .pending .mono { font-family: var(--mono); }
-  table { width: 100%; border-collapse: collapse; background: var(--well);
-          border: 1px solid var(--border); border-radius: 10px;
-          overflow: hidden; }
-  th, td { text-align: left; padding: 9px 12px; font-size: 13px;
-           border-bottom: 1px solid var(--border); }
-  th { color: var(--muted); font-weight: 500; font-size: 12px; }
-  tbody tr { cursor: pointer; }
-  tbody tr:hover { background: var(--accent-soft); }
-  tbody tr:last-child td { border-bottom: 0; }
-  tr.stale td { color: var(--muted); }
-  .tag { font-size: 11px; border-radius: 999px; padding: 1px 8px;
-         background: var(--accent-soft); color: var(--accent); }
-  .tag.bad { background: #fdf1f0; color: var(--bad); }
-  .tag.warn { background: #fdf3e0; color: var(--warn); }
-  .tag.ok { background: #eaf4ec; color: var(--ok); }
-  .tag.gray { background: #eee; color: var(--muted); }
-  .mono { font-family: var(--mono); }
-  .err-box { margin: 16px 24px; padding: 12px 16px; border-radius: 10px;
-             background: #fdf1f0; color: var(--bad); font-size: 13px; }
-  /* chi tiết máy — cùng class với web/admin.html để AdmRender đổ vào */
-  .detail { margin-top: 18px; }
-  .adm-grid { display: grid; gap: 14px;
-              grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
-  .adm-card { border: 1px solid var(--border); border-radius: 10px;
-              background: var(--well); padding: 14px; }
-  .adm-card h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; }
-  .adm-row { display: flex; gap: 10px; font-size: 13px; padding: 2px 0; }
-  .adm-row .k { color: var(--muted); min-width: 96px; flex-shrink: 0; }
-  .adm-row .v { word-break: break-all; font-family: var(--mono);
-                font-size: 12px; }
-  .adm-list { margin: 0; padding: 0; list-style: none; font-size: 13px; }
-  .adm-list li { padding: 2px 0; display: flex; gap: 10px;
+  .hd .acts { display: flex; gap: var(--space-xs); flex-wrap: wrap; }
+  .role-tag { font-size: var(--text-xs); border-radius:
+              var(--radius-pill); padding: 1px 10px; font-weight: 600;
+              background: var(--color-accent-soft);
+              color: var(--color-accent-2); }
+  .role-tag.master { background: oklch(93% 0.05 300);
+                     color: oklch(40% 0.12 300); }
+  .seats { font-size: var(--text-xs); font-weight: 600; padding: 3px 12px;
+           border-radius: var(--radius-pill);
+           background: var(--color-accent-soft);
+           color: var(--color-accent-2); }
+  .seats.warn { background: var(--color-warn-soft);
+                color: var(--color-warn); }
+  .seats.bad { background: var(--color-error-soft);
+               color: var(--color-error); }
+  .lang { font-family: var(--font-mono); font-size: var(--text-xs);
+          padding: var(--space-2xs) var(--space-sm); }
+
+  .tabs { border-bottom: var(--rule-hair) solid var(--color-rule); }
+  .tabs .container { display: flex; gap: var(--space-2xs);
+                     padding-block: var(--space-sm); overflow-x: auto; }
+  .tabs button { border: var(--rule-hair) solid var(--color-rule-2);
+                 border-radius: var(--radius-pill); background:
+                 var(--color-paper); color: var(--color-ink-2);
+                 font-weight: 600; font-size: var(--text-sm);
+                 padding: var(--space-2xs) var(--space-md);
+                 cursor: pointer; white-space: nowrap; }
+  .tabs button.on { background: var(--color-accent-soft);
+                    color: var(--color-accent-2);
+                    border-color: var(--color-accent); }
+
+  .wrap { padding-block: var(--space-lg) var(--space-2xl); }
+  .err-box { margin: var(--space-md) auto 0; max-width:
+             var(--container); padding: var(--space-sm) var(--gutter); }
+  .err-box div { background: var(--color-error-soft);
+                 color: var(--color-error); border-radius: 10px;
+                 padding: var(--space-sm) var(--space-md);
+                 font-size: var(--text-sm); }
+
+  /* ---------- stat cards ---------- */
+  .stats { display: grid; gap: var(--gap-columns, 16px);
+           grid-template-columns: repeat(4, minmax(0, 1fr));
+           margin-bottom: var(--space-lg); }
+  .stat { background: var(--color-paper-2); border-radius:
+          var(--radius-card); padding: var(--space-md)
+          var(--space-lg); }
+  .stat .n { font-size: var(--text-xl); font-weight: 600;
+             letter-spacing: -0.02em; font-variant-numeric:
+             tabular-nums; }
+  .stat .l { font-size: var(--text-xs); color: var(--color-muted); }
+
+  /* ---------- pending ---------- */
+  .pending { background: var(--color-warn-soft); border-radius:
+             var(--radius-card); padding: var(--space-md)
+             var(--space-lg); margin-bottom: var(--space-lg); }
+  .pending h3 { margin: 0 0 var(--space-xs); font-size: var(--text-sm);
+                color: var(--color-warn); font-weight: 600; }
+  .pending .prow { display: flex; align-items: center;
+                   gap: var(--space-sm); padding: var(--space-2xs) 0;
+                   font-size: var(--text-sm); flex-wrap: wrap; }
+
+  /* ---------- bảng (pattern .compare của site) ---------- */
+  .tbl-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 640px;
+          border-top: var(--rule-hair) solid var(--color-rule); }
+  th { text-align: left; font-weight: 600; font-size: var(--text-xs);
+       color: var(--color-muted); padding: var(--space-sm)
+       var(--space-sm) var(--space-sm) 0; }
+  td { border-top: var(--rule-hair) solid var(--color-rule);
+       padding: var(--space-sm) var(--space-sm) var(--space-sm) 0;
+       font-size: var(--text-sm); vertical-align: middle; }
+  tbody tr.click { cursor: pointer; }
+  tbody tr.click:hover td { background: var(--color-paper-2); }
+  tr.stale td { color: var(--color-muted); }
+  .tag { font-size: var(--text-xs); font-weight: 600; border-radius:
+         var(--radius-pill); padding: 1px 10px; white-space: nowrap;
+         background: var(--color-accent-soft);
+         color: var(--color-accent-2); }
+  .tag.bad { background: var(--color-error-soft);
+             color: var(--color-error); }
+  .tag.warn { background: var(--color-warn-soft);
+              color: var(--color-warn); }
+  .tag.ok { background: var(--color-success-soft);
+            color: var(--color-success); }
+  .tag.gray { background: var(--color-paper-3);
+              color: var(--color-muted); }
+  .empty { color: var(--color-muted); font-size: var(--text-sm);
+           padding: var(--space-xl); text-align: center; }
+  .dot { display: inline-block; width: 8px; height: 8px;
+         border-radius: 50%; margin-right: var(--space-xs);
+         vertical-align: baseline; }
+  .dot.on { background: var(--color-success); }
+  .dot.off { background: var(--color-rule-2); }
+  .connsum { font-size: var(--text-xs); color: var(--color-muted);
+             margin-bottom: var(--space-md); display: flex;
+             gap: var(--space-xs); flex-wrap: wrap;
+             align-items: center; }
+  /* conns thu gọn trong drawer: tên + tag 1 dòng, ghi chú ẩn */
+  #adm-conns.compact li { flex-wrap: nowrap; }
+  #adm-conns.compact .adm-ev { display: none; }
+  #adm-conns.compact .mono { min-width: 0; flex: 1; }
+
+  /* ---------- card + form quản trị ---------- */
+  .card { background: var(--color-paper-2); border-radius:
+          var(--radius-card); padding: var(--space-lg);
+          margin-bottom: var(--space-lg); }
+  .card h3 { margin: 0 0 var(--space-md); font-size: var(--text-md);
+             font-weight: 600; }
+  .frow { display: flex; gap: var(--space-sm); flex-wrap: wrap;
+          align-items: flex-end; }
+  .frow .fld { margin-bottom: 0; flex: 1; min-width: 150px; }
+  .frow .fld.grow2 { flex: 2; }
+  .frow .fld input, .frow .fld select { background: var(--color-paper); }
+  .out { margin-top: var(--space-md); border: 1px dashed
+         var(--color-rule-2); border-radius: 10px;
+         padding: var(--space-md); }
+  .out pre { font-family: var(--font-mono); font-size: var(--text-xs);
+             margin: var(--space-2xs) 0; white-space: pre-wrap;
+             word-break: break-all; }
+  .out .row { display: flex; gap: var(--space-xs); align-items: center;
+              flex-wrap: wrap; margin: var(--space-xs) 0;
+              font-size: var(--text-sm); }
+
+  /* ---------- drawer chi tiết máy ---------- */
+  .scrim { position: fixed; inset: 0; background:
+           oklch(20% 0.012 155 / 0.4); z-index: var(--z-drawer);
+           opacity: 0; pointer-events: none;
+           transition: opacity var(--dur-short) var(--ease-out); }
+  .scrim.on { opacity: 1; pointer-events: auto; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0;
+            z-index: calc(var(--z-drawer) + 1);
+            width: min(600px, 96vw); background: var(--color-paper);
+            overflow-y: auto; transform: translateX(100%);
+            transition: transform var(--dur-short) var(--ease-out);
+            padding: var(--space-lg); }
+  .drawer.on { transform: translateX(0); }
+  .drawer .dhead { display: flex; align-items: center;
+                   gap: var(--space-sm); margin-bottom: var(--space-md); }
+  .drawer .dhead h2 { font-size: var(--text-lg); margin: 0; flex: 1;
+                      letter-spacing: -0.02em; }
+
+  .adm-grid { display: grid; gap: var(--space-sm);
+              grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .adm-card { border-radius: var(--radius-card);
+              background: var(--color-paper-2); padding: var(--space-md); }
+  .adm-card h3 { margin: 0 0 var(--space-xs); font-size: var(--text-sm);
+                 font-weight: 600; }
+  .adm-row { display: flex; gap: var(--space-sm); font-size: var(--text-sm);
+             padding: 2px 0; }
+  .adm-row .k { color: var(--color-muted); min-width: 96px;
+                flex-shrink: 0; }
+  .adm-row .v { word-break: break-all; font-family: var(--font-mono);
+                font-size: var(--text-xs); }
+  .adm-list { margin: 0; padding: 0; list-style: none;
+              font-size: var(--text-sm); }
+  .adm-list li { padding: var(--space-2xs) 0; display: flex;
+                 flex-wrap: wrap; gap: var(--space-2xs) var(--space-sm);
                  align-items: baseline; }
-  .adm-list .mono { font-family: var(--mono); word-break: break-all; }
-  .adm-tag { flex-shrink: 0; font-size: 11px; border-radius: 999px;
-             padding: 1px 8px; background: var(--accent-soft);
-             color: var(--accent); }
-  .adm-tag.gray { background: #eee; color: var(--muted); }
-  .adm-ev { font-family: var(--mono); font-size: 11px; color: var(--muted); }
-  .adm-ev b { color: var(--ink); font-weight: 500; }
-  .adm-empty { color: var(--muted); font-size: 13px; }
-  .usage { margin-top: 14px; }
-  .usage td, .usage th { padding: 5px 10px; font-size: 12px; }
+  /* tên app không bị ép co gãy từng ký tự — message rớt dòng riêng */
+  .adm-list .mono { font-family: var(--font-mono);
+                    font-size: var(--text-xs);
+                    overflow-wrap: anywhere; min-width: 8em; }
+  .adm-list .adm-ev { flex-basis: 100%; }
+  .adm-tag { flex-shrink: 0; font-size: var(--text-xs); font-weight: 600;
+             border-radius: var(--radius-pill); padding: 1px 8px;
+             background: var(--color-accent-soft);
+             color: var(--color-accent-2); }
+  .adm-tag.gray { background: var(--color-paper-3);
+                  color: var(--color-muted); }
+  .adm-ev { font-family: var(--font-mono); font-size: var(--text-xs);
+            color: var(--color-muted); }
+  .adm-ev b { color: var(--color-ink); font-weight: 500; }
+  .adm-empty { color: var(--color-muted); font-size: var(--text-sm); }
+  .usage { margin-top: var(--space-md); }
+  .usage td, .usage th { padding: var(--space-2xs) var(--space-sm)
+                         var(--space-2xs) 0; font-size: var(--text-xs); }
+
+  /* ---------- modal ---------- */
+  .modal-wrap { position: fixed; inset: 0; z-index: var(--z-modal);
+                display: grid; place-items: center;
+                background: oklch(20% 0.012 155 / 0.4);
+                padding: var(--space-lg); }
+  .modal { width: min(540px, 100%); background: var(--color-paper);
+           border-radius: var(--radius-card); padding: var(--space-lg);
+           max-height: 86vh; overflow-y: auto;
+           box-shadow: var(--shadow-card); }
+  .modal h3 { margin: 0 0 var(--space-md); font-size: var(--text-lg);
+              letter-spacing: -0.02em; }
+  .modal .end { display: flex; justify-content: flex-end;
+                gap: var(--space-xs); margin-top: var(--space-md); }
+
+  @media (max-width: 60rem) { :root { --gutter: 24px; } }
+  @media (max-width: 40rem) {
+    :root { --gutter: 16px; }
+    .stats { grid-template-columns: 1fr 1fr; }
+    .hd .container { gap: var(--space-xs); }
+    .drawer { width: 100vw; }
+    .frow .fld { min-width: 100%; }
+  }
 </style>
 </head>
 <body>
-<div class="hd">
-  <div>
-    <div class="t" id="t-title">Fleet — Trợ lý AI</div>
-    <div class="sub" id="t-sub">toàn bộ máy trong công ty</div>
-  </div>
-  <div class="sp"></div>
-  <span class="seats" id="seats" hidden></span>
-  <button class="btn" id="btn-refresh" type="button">Làm mới</button>
-</div>
-<div class="err-box" id="err" hidden></div>
-<div class="wrap" id="wrap" hidden>
-  <div class="pending" id="pending" hidden>
-    <h3 id="t-pending">Máy chờ duyệt</h3>
-    <div id="pending-list"></div>
-  </div>
-  <table>
-    <thead><tr id="cols">
-      <th>Máy / nhân viên</th><th>Não</th><th>Ver / Ext</th>
-      <th>Báo lúc</th><th>Hôm nay</th><th>Bot</th><th>License</th>
-    </tr></thead>
-    <tbody id="rows"></tbody>
-  </table>
-  <div class="detail" id="detail" hidden>
-    <h3 id="dt-title" style="font-size:15px"></h3>
-    <div class="adm-grid">
-      <div class="adm-card"><h3 id="t-sys">Hệ thống</h3><div id="adm-sys"></div></div>
-      <div class="adm-card"><h3 id="t-bot">Trợ lý</h3><div id="adm-bots"></div></div>
-      <div class="adm-card"><h3 id="t-perm">Folder được phép</h3><div id="adm-perms"></div></div>
-      <div class="adm-card"><h3 id="t-conn">Kết nối ứng dụng</h3><div id="adm-conns"></div></div>
-      <div class="adm-card"><h3 id="t-ev">Hoạt động gần đây</h3><div id="adm-evs"></div></div>
+
+<!-- ================= LOGIN ================= -->
+<div class="login-wrap" id="view-login" hidden>
+  <div class="login-card">
+    <div class="wordmark">Trợ lý AI</div>
+    <div class="tagline" id="lg-sub">bảng quản trị fleet</div>
+    <div class="seg">
+      <button type="button" id="seg-acct" class="on">Tài khoản</button>
+      <button type="button" id="seg-key">Dán key</button>
     </div>
-    <table class="usage" id="usage" hidden>
-      <thead><tr><th>Ngày</th><th>Lượt xong</th><th>Lỗi</th>
-                 <th>Xin phép</th><th>Tự duyệt</th><th>Nghi độc</th></tr></thead>
-      <tbody id="usage-rows"></tbody>
-    </table>
-    <button class="btn" id="btn-revoke" type="button"
-            style="margin-top:12px">Thu hồi máy này</button>
+    <div id="lg-acct">
+      <div class="fld"><label id="lg-l-user">Tên đăng nhập</label>
+        <input id="lg-user" autocomplete="username" spellcheck="false"></div>
+      <div class="fld"><label id="lg-l-pass">Mật khẩu</label>
+        <input id="lg-pass" type="password" autocomplete="current-password"></div>
+      <button class="btn btn--primary" id="btn-login" type="button"
+              style="width:100%">Đăng nhập</button>
+    </div>
+    <div id="lg-key" hidden>
+      <div class="fld"><label id="lg-l-key">Admin key / vendor key</label>
+        <textarea id="lg-keyin" rows="3" spellcheck="false"
+                  placeholder="hex key vendor hoặc IT cấp"></textarea></div>
+      <button class="btn btn--primary" id="btn-key" type="button"
+              style="width:100%">Vào bằng key</button>
+    </div>
+    <div class="login-err" id="lg-err"></div>
+    <div class="login-note" id="lg-note">
+      Collector tự host (không có tài khoản)? Dùng ô <b>Dán key</b> —
+      đó chính là admin_key trong collector.json của cty bạn.
+    </div>
   </div>
 </div>
+
+<!-- ================= DASHBOARD ================= -->
+<div id="view-dash" hidden>
+  <div class="hd"><div class="container">
+    <div>
+      <div class="t">Fleet</div>
+      <div class="who"><b id="who-name"></b> <span id="who-org"></span>
+        <span class="role-tag" id="who-role"></span></div>
+    </div>
+    <div class="sp"></div>
+    <span class="seats" id="seats" hidden></span>
+    <div class="acts">
+      <button class="btn lang" id="btn-lang" type="button">EN</button>
+      <button class="btn" id="btn-pass" type="button" hidden>Đổi mật khẩu</button>
+      <button class="btn" id="btn-refresh" type="button">Làm mới</button>
+      <button class="btn" id="btn-logout" type="button">Thoát</button>
+    </div>
+  </div></div>
+  <div class="tabs"><div class="container" id="tabs"></div></div>
+  <div class="err-box" id="err" hidden><div id="err-msg"></div></div>
+  <div class="wrap container" id="wrap"></div>
+</div>
+
+<!-- drawer chi tiết máy -->
+<div class="scrim" id="scrim"></div>
+<div class="drawer" id="drawer">
+  <div class="dhead">
+    <h2 id="dt-title"></h2>
+    <button class="btn" id="dt-close" type="button">✕</button>
+  </div>
+  <div class="adm-grid">
+    <div class="adm-card"><h3 id="t-sys">Hệ thống</h3><div id="adm-sys"></div></div>
+    <div class="adm-card"><h3 id="t-bot">Trợ lý</h3><div id="adm-bots"></div></div>
+    <div class="adm-card"><h3 id="t-perm">Folder được phép</h3><div id="adm-perms"></div></div>
+    <div class="adm-card"><h3 id="t-conn">Kết nối ứng dụng
+      <button class="btn btn--sm" id="conn-more" type="button"
+              style="float:right">ghi chú</button></h3>
+      <div id="adm-conns" class="compact"></div></div>
+    <div class="adm-card"><h3 id="t-ev">Hoạt động gần đây</h3><div id="adm-evs"></div></div>
+  </div>
+  <table class="usage" id="usage" hidden>
+    <thead><tr><th>Ngày</th><th>Lượt xong</th><th>Lỗi</th>
+               <th>Xin phép</th><th>Tự duyệt</th><th>Nghi độc</th></tr></thead>
+    <tbody id="usage-rows"></tbody>
+  </table>
+  <button class="btn btn--danger" id="btn-revoke" type="button"
+          style="margin-top:var(--space-md)">Thu hồi máy này</button>
+</div>
+
+<!-- modal chung -->
+<div class="modal-wrap" id="modal-wrap" hidden>
+  <div class="modal">
+    <h3 id="mo-title"></h3>
+    <div id="mo-body"></div>
+    <div class="end" id="mo-end"></div>
+  </div>
+</div>
+
 <script src="adm-render.js"></script>
 <script>
-/* Admin key đi qua ?key= một lần → sessionStorage → header X-Admin-Key
-   mọi fetch /api/* (pattern giống bridge-token.js — nhưng key này chỉ
-   có IT cty cầm, máy NV không có). */
+const $ = s => document.querySelector(s);
+const esc = AdmRender.esc;
+const SS = sessionStorage;
+
+/* ---------- i18n đầy đủ — browser lang mặc định, nút EN/VI đổi tay,
+   nhớ trong localStorage ---------- */
+const I18N = {
+  vi: {
+    loginTitle: 'bảng quản trị fleet',
+    segAcct: 'Tài khoản', segKey: 'Dán key',
+    lUser: 'Tên đăng nhập', lPass: 'Mật khẩu', btnLogin: 'Đăng nhập',
+    lKey: 'Admin key / vendor key', btnKey: 'Vào bằng key',
+    noteKey: 'Collector tự host (không có tài khoản)? Dùng ô '
+      + 'Dán key — đó chính là admin_key trong collector.json của cty bạn.',
+    refresh: 'Làm mới', logout: 'Thoát', chpass: 'Đổi mật khẩu',
+    pending: 'Máy chờ duyệt', approve: 'Duyệt', revoke: 'Thu hồi',
+    revokeOne: 'Thu hồi máy này',
+    cols: { machine: 'Máy / nhân viên', org: 'Org', brain: 'Não',
+            ver: 'Ver / Ext', seen: 'Báo lúc', today: 'Hôm nay',
+            bot: 'Bot', conns: 'Kết nối', lic: 'License' },
+    flt: 'lọc máy…', connsAll: 'Kết nối theo app',
+    connMore: 'ghi chú', connLess: 'ẩn ghi chú',
+    seats: '{a}/{s} ghế đang dùng', seatsNone: 'chưa có license',
+    allOrg: '(mọi cty)',
+    ago: { m: ' phút trước', h: ' giờ trước', d: ' ngày trước' },
+    lic: { ok: 'OK', expiring: 'sắp hạn', expired: 'hết hạn',
+           invalid: 'không hợp lệ', missing: 'thiếu',
+           exceeded: 'vượt ghế' },
+    usageCols: ['Ngày', 'Lượt xong', 'Lỗi', 'Xin phép', 'Tự duyệt',
+                'Nghi độc'],
+    tabs: { fleet: 'Máy', orgs: 'Công ty', accounts: 'Tài khoản',
+            audit: 'Nhật ký', packs: 'Pack' },
+    stats: ['Máy đang online', 'Máy trong fleet', 'Chờ duyệt', 'Lỗi hôm nay'],
+    emptyMachines: 'chưa có máy nào',
+    ogCreate: 'Tạo công ty mới', ogName: 'Tên org', ogNote: 'Ghi chú',
+    ogUser: 'User cty-admin', ogPass: 'Pass cty-admin', ogBtn: 'Tạo',
+    ogCols: ['Org', 'Máy', 'License', 'Ghi chú', ''],
+    ogEmpty: 'chưa có org nào',
+    ogDone: 'đã tạo', licBtn: 'Cấp license',
+    licTitle: 'Cấp license — {o}', licSeats: 'Số ghế',
+    licExp: 'Hết hạn', licIssue: 'Ký license', cancel: 'Huỷ',
+    licDone: 'Giao file này cho IT cty — đặt trong .devin/license.json '
+             + 'của bộ cài.',
+    rotBtn: 'Xoay khoá', rotTitle: 'Xoay khoá — {o}',
+    rotWarn: 'Sinh beacon_secret + admin_key MỚI. fleet.json cũ và '
+             + 'admin_key cũ chết ngay — phải phát lại cho IT.',
+    rotKill: 'Đá toàn bộ máy về pending (buộc pair lại — chỉ khi '
+             + 'secret lộ)',
+    rotGo: 'Xoay ngay', rotDone: 'đã xoay khoá',
+    rotKilled: '{n} máy đã về pending — cần fleet.json mới + duyệt lại.',
+    acCreate: 'Tạo tài khoản', acUser: 'Username', acPass: 'Pass',
+    acRole: 'Vai trò', acOrg: 'Org',
+    roleAdmin: 'cty-admin', roleMaster: 'master',
+    acCols: ['Username', 'Vai trò', 'Org', 'Trạng thái', 'Tạo lúc', ''],
+    acEmpty: 'chưa có tài khoản',
+    stOn: 'hoạt động', stOff: 'khoá', btnLock: 'Khoá', btnUnlock: 'Mở lại',
+    btnReset: 'Đặt lại mk',
+    auCols: ['Lúc', 'Ai', 'Việc', 'Org', 'Đối tượng', 'Chi tiết'],
+    auEmpty: 'trống',
+    pkTitle: 'Đẩy gói quy trình (pack)',
+    pkFile: 'File pack (.json — có org + pack_version bên trong)',
+    pkPush: 'Đẩy pack', pkLatest: 'Pack đang phát', pkEmpty: 'chưa có pack nào',
+    pkBad: 'file lỗi: ',
+    pwTitle: 'Đổi mật khẩu', pwOld: 'Mật khẩu cũ', pwNew: 'Mật khẩu mới (≥ 8)',
+    pwBtn: 'Đổi',
+    rpTitle: 'Đặt lại mật khẩu — {u}', rpNew: 'Mật khẩu mới (≥ 8)',
+    rpBtn: 'Đặt lại',
+    close: 'Đóng', done: 'Xong', copy: 'Copy', copied: 'Đã copy ✓',
+    dl: 'Tải file',
+    ogFleet: 'gói vào bộ cài cty',
+    ogKey: '(cửa "Dán key")',
+    ogAdmin: 'Tài khoản cty-admin', ogAdminHint: 'pass bạn vừa đặt.',
+    ogLicHint: 'license_secret giữ server-side — cấp license bằng nút '
+               + '"Cấp license" ở bảng.',
+    errGeneric: 'lỗi',
+  },
+  en: {
+    loginTitle: 'fleet management',
+    segAcct: 'Account', segKey: 'Paste key',
+    lUser: 'Username', lPass: 'Password', btnLogin: 'Sign in',
+    lKey: 'Admin key / vendor key', btnKey: 'Enter with key',
+    noteKey: 'Self-hosted collector (no accounts)? Use Paste key — '
+      + 'that is the admin_key in your company collector.json.',
+    refresh: 'Refresh', logout: 'Sign out', chpass: 'Change password',
+    pending: 'Pending machines', approve: 'Approve', revoke: 'Revoke',
+    revokeOne: 'Revoke this machine',
+    cols: { machine: 'Machine / user', org: 'Org', brain: 'Brain',
+            ver: 'Ver / Ext', seen: 'Seen', today: 'Today',
+            bot: 'Bot', conns: 'Apps', lic: 'License' },
+    flt: 'filter…', connsAll: 'Connections by app',
+    connMore: 'notes', connLess: 'hide notes',
+    seats: '{a}/{s} seats in use', seatsNone: 'no license yet',
+    allOrg: '(all orgs)',
+    ago: { m: 'm ago', h: 'h ago', d: 'd ago' },
+    lic: { ok: 'OK', expiring: 'expiring', expired: 'expired',
+           invalid: 'invalid', missing: 'missing',
+           exceeded: 'over seats' },
+    usageCols: ['Day', 'Done', 'Errors', 'Perm', 'Auto', 'Suspect'],
+    tabs: { fleet: 'Machines', orgs: 'Companies', accounts: 'Accounts',
+            audit: 'Audit log', packs: 'Packs' },
+    stats: ['Machines online', 'Fleet machines', 'Pending', 'Errors today'],
+    emptyMachines: 'no machines yet',
+    ogCreate: 'New company', ogName: 'Org name', ogNote: 'Note',
+    ogUser: 'Admin username', ogPass: 'Admin password', ogBtn: 'Create',
+    ogCols: ['Org', 'Machines', 'License', 'Note', ''],
+    ogEmpty: 'no orgs yet',
+    ogDone: 'created', licBtn: 'Issue license',
+    licTitle: 'Issue license — {o}', licSeats: 'Seats',
+    licExp: 'Expiry', licIssue: 'Sign license', cancel: 'Cancel',
+    licDone: 'Hand this file to the company IT — it goes into '
+             + '.devin/license.json of the installer bundle.',
+    rotBtn: 'Rotate keys', rotTitle: 'Rotate keys — {o}',
+    rotWarn: 'Generates NEW beacon_secret + admin_key. Old fleet.json '
+             + 'and admin_key die immediately — hand the new ones to IT.',
+    rotKill: 'Kick all machines back to pending (force re-pair — only '
+             + 'if secrets leaked)',
+    rotGo: 'Rotate now', rotDone: 'keys rotated',
+    rotKilled: '{n} machines moved to pending — they need the new '
+               + 'fleet.json and re-approval.',
+    acCreate: 'New account', acUser: 'Username', acPass: 'Password',
+    acRole: 'Role', acOrg: 'Org',
+    roleAdmin: 'company admin', roleMaster: 'master',
+    acCols: ['Username', 'Role', 'Org', 'Status', 'Created', ''],
+    acEmpty: 'no accounts yet',
+    stOn: 'active', stOff: 'locked', btnLock: 'Lock', btnUnlock: 'Unlock',
+    btnReset: 'Reset pw',
+    auCols: ['Time', 'Actor', 'Action', 'Org', 'Target', 'Detail'],
+    auEmpty: 'empty',
+    pkTitle: 'Push a config pack',
+    pkFile: 'Pack file (.json — contains org + pack_version)',
+    pkPush: 'Push pack', pkLatest: 'Live packs', pkEmpty: 'no packs yet',
+    pkBad: 'bad file: ',
+    pwTitle: 'Change password', pwOld: 'Current password',
+    pwNew: 'New password (≥ 8)', pwBtn: 'Change',
+    rpTitle: 'Reset password — {u}', rpNew: 'New password (≥ 8)',
+    rpBtn: 'Reset',
+    close: 'Close', done: 'Done', copy: 'Copy', copied: 'Copied ✓',
+    dl: 'Download',
+    ogFleet: 'bundle this into the company installer',
+    ogKey: '(the "Paste key" door)',
+    ogAdmin: 'Company-admin account', ogAdminHint: 'password you just set.',
+    ogLicHint: 'license_secret stays server-side — issue licenses with '
+               + 'the "Issue license" button in the table.',
+    errGeneric: 'error',
+  },
+};
+let S = I18N[localStorage.getItem('fleet_lang')] ||
+        I18N[(navigator.language || '').startsWith('en') ? 'en' : 'vi'];
+const t = (k, o) => {
+  let s = S[k] || I18N.vi[k] || k;
+  if (o) for (const [a, b] of Object.entries(o))
+    s = s.replace('{' + a + '}', b);
+  return s;
+};
+$('#btn-lang').onclick = () => {
+  const next = S === I18N.en ? 'vi' : 'en';
+  localStorage.setItem('fleet_lang', next);
+  S = I18N[next];
+  chrome();
+  if (ME) switchTab(curTab);
+};
+// text tĩnh đổi theo ngôn ngữ
+function chrome() {
+  $('#btn-lang').textContent = S === I18N.en ? 'VI' : 'EN';
+  $('#lg-sub').textContent = t('loginTitle');
+  $('#seg-acct').textContent = t('segAcct');
+  $('#seg-key').textContent = t('segKey');
+  $('#lg-l-user').textContent = t('lUser');
+  $('#lg-l-pass').textContent = t('lPass');
+  $('#btn-login').textContent = t('btnLogin');
+  $('#lg-l-key').textContent = t('lKey');
+  $('#btn-key').textContent = t('btnKey');
+  $('#lg-note').innerHTML = esc(t('noteKey'));
+  $('#btn-pass').textContent = t('chpass');
+  $('#btn-refresh').textContent = t('refresh');
+  $('#btn-logout').textContent = t('logout');
+  $('#btn-revoke').textContent = t('revokeOne');
+  $('#usage').querySelector('thead tr').innerHTML =
+    t('usageCols').map(c => `<th>${esc(c)}</th>`).join('');
+  $('#t-sys').textContent = AdmRender.I18N[S === I18N.en ? 'en' : 'vi'].sys;
+  $('#t-bot').textContent = AdmRender.I18N[S === I18N.en ? 'en' : 'vi'].bot;
+  $('#t-perm').textContent = AdmRender.I18N[S === I18N.en ? 'en' : 'vi'].perm;
+  $('#t-conn').childNodes[0].textContent =
+    AdmRender.I18N[S === I18N.en ? 'en' : 'vi'].conn + ' ';
+  $('#conn-more').textContent =
+    $('#adm-conns').classList.contains('compact')
+      ? t('connMore') : t('connLess');
+  $('#t-ev').textContent = AdmRender.I18N[S === I18N.en ? 'en' : 'vi'].ev;
+  if (ME) buildTabs();
+}
+
+/* ---------- auth: session token HOẶC key cũ ---------- */
 const q = new URLSearchParams(location.search);
 if (q.get('key')) {
-  sessionStorage.setItem('fleet_admin_key', q.get('key'));
+  SS.setItem('fleet_admin_key', q.get('key'));
   q.delete('key');
   history.replaceState(null, '', location.pathname +
     (q.toString() ? '?' + q.toString() : '') + location.hash);
 }
-const KEY = sessionStorage.getItem('fleet_admin_key') || '';
-const api = (p, o) => {
+function authHdr() {
+  const tok = SS.getItem('fleet_token');
+  return tok ? { 'Authorization': 'Bearer ' + tok }
+             : { 'X-Admin-Key': SS.getItem('fleet_admin_key') || '' };
+}
+async function api(p, o) {
   o = o || {};
-  o.headers = Object.assign({ 'X-Admin-Key': KEY }, o.headers || {});
-  return fetch(p, o).then(r => { if (!r.ok) throw r.status; return r.json(); });
-};
-const $ = s => document.querySelector(s);
-const esc = AdmRender.esc;
-const I18N = {
-  vi: {
-    title: 'Fleet — Trợ lý AI', sub: 'toàn bộ máy trong công ty',
-    refresh: 'Làm mới', pending: 'Máy chờ duyệt', approve: 'Duyệt',
-    revoke: 'Thu hồi', revoked: 'Thu hồi máy này',
-    noKey: 'Thiếu admin key — mở bằng đường dẫn có ?key=<admin_key> '
-         + 'mà vendor cấp cho IT.',
-    denied: 'Sai admin key hoặc collector chưa chạy.',
-    seats: '{a}/{s} ghế đang dùng', seatsNone: 'chưa có license',
-    ago: { m: ' phút trước', h: ' giờ trước', d: ' ngày trước' },
-    cols: ['Máy / nhân viên', 'Não', 'Ver / Ext', 'Báo lúc', 'Hôm nay',
-           'Bot', 'License'],
-    lic: { ok: 'OK', expiring: 'sắp hạn', expired: 'hết hạn',
-           invalid: 'không hợp lệ', missing: 'thiếu', exceeded: 'vượt ghế' },
-    usageCols: ['Ngày', 'Lượt xong', 'Lỗi', 'Xin phép', 'Tự duyệt',
-                'Nghi độc'],
-  },
-  en: {
-    title: 'Fleet — Trợ lý AI', sub: 'all machines in the company',
-    refresh: 'Refresh', pending: 'Pending machines', approve: 'Approve',
-    revoke: 'Revoke', revoked: 'Revoke this machine',
-    noKey: 'Missing admin key — open with ?key=<admin_key> as issued '
-         + 'to IT by the vendor.',
-    denied: 'Wrong admin key or collector is not running.',
-    seats: '{a}/{s} seats in use', seatsNone: 'no license yet',
-    ago: { m: 'm ago', h: 'h ago', d: 'd ago' },
-    cols: ['Machine / user', 'Brain', 'Ver / Ext', 'Seen', 'Today',
-           'Bot', 'License'],
-    lic: { ok: 'OK', expiring: 'expiring', expired: 'expired',
-           invalid: 'invalid', missing: 'missing', exceeded: 'over seats' },
-    usageCols: ['Day', 'Done', 'Errors', 'Perm', 'Auto', 'Suspect'],
-  },
-};
-let S = I18N.vi;
-const t = k => S[k] || I18N.vi[k] || k;
+  o.headers = Object.assign(authHdr(), o.headers || {});
+  if (typeof o.body === 'string')
+    o.headers['Content-Type'] = 'application/json';
+  const r = await fetch(p, o);
+  if (r.status === 401) { showLogin(); throw 'auth'; }
+  if (!r.ok) {
+    const d = await r.json().catch(() => ({}));
+    throw d.err || ('HTTP ' + r.status);
+  }
+  return r.json();
+}
 
+let ME = null;
+let curTab = 'fleet';
+
+/* ---------- login view ---------- */
+function showLogin() {
+  SS.removeItem('fleet_token');
+  $('#view-dash').hidden = true;
+  $('#view-login').hidden = false;
+}
+$('#seg-acct').onclick = () => {
+  $('#seg-acct').className = 'on'; $('#seg-key').className = '';
+  $('#lg-acct').hidden = false; $('#lg-key').hidden = true;
+};
+$('#seg-key').onclick = () => {
+  $('#seg-key').className = 'on'; $('#seg-acct').className = '';
+  $('#lg-key').hidden = false; $('#lg-acct').hidden = true;
+};
+$('#btn-login').onclick = async () => {
+  $('#lg-err').textContent = '';
+  try {
+    const r = await fetch('api/login', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user: $('#lg-user').value,
+                             pass: $('#lg-pass').value }) });
+    const d = await r.json();
+    if (!r.ok) throw d.err || ('HTTP ' + r.status);
+    SS.setItem('fleet_token', d.token);
+    SS.removeItem('fleet_admin_key');
+    boot();
+  } catch (e) { $('#lg-err').textContent = String(e); }
+};
+$('#btn-key').onclick = () => {
+  const k = $('#lg-keyin').value.trim();
+  if (!k) return;
+  SS.setItem('fleet_admin_key', k);
+  SS.removeItem('fleet_token');
+  boot();
+};
+$('#lg-pass').addEventListener('keydown',
+  e => { if (e.key === 'Enter') $('#btn-login').click(); });
+
+$('#btn-logout').onclick = () => {
+  api('api/logout', { method: 'POST' }).catch(() => {});
+  SS.removeItem('fleet_admin_key');
+  showLogin();
+};
+
+/* ---------- boot ---------- */
+async function boot() {
+  try { ME = await api('api/whoami'); }
+  catch (e) {
+    if (e !== 'auth') $('#lg-err').textContent = String(e);
+    return showLogin();
+  }
+  $('#view-login').hidden = true;
+  $('#view-dash').hidden = false;
+  $('#who-name').textContent = ME.name;
+  $('#who-org').textContent = ME.org === '*' ? t('allOrg') : ME.org;
+  const rt = $('#who-role');
+  rt.textContent = ME.role === 'master' ? t('roleMaster')
+                                      : t('roleAdmin');
+  rt.className = 'role-tag' + (ME.role === 'master' ? ' master' : '');
+  $('#btn-pass').hidden = ME.via !== 'session';
+  buildTabs();
+  switchTab('fleet');
+}
+
+/* ---------- tabs ---------- */
+const TABS = () => ME.role === 'master'
+  ? ['fleet', 'orgs', 'accounts', 'audit', 'packs']
+  : ['fleet', 'audit', 'packs'];
+function buildTabs() {
+  $('#tabs').innerHTML = TABS().map(k =>
+    `<button type="button" data-tab="${k}">${esc(t('tabs')[k])}</button>`
+  ).join('');
+  for (const b of $('#tabs').querySelectorAll('button'))
+    b.classList.toggle('on', b.dataset.tab === curTab);
+}
+function switchTab(k) {
+  curTab = k;
+  buildTabs();
+  ({ fleet: renderFleet, orgs: renderOrgs, accounts: renderAccounts,
+     audit: renderAudit, packs: renderPacks })[k]();
+}
+$('#tabs').addEventListener('click', e => {
+  if (e.target.dataset.tab) switchTab(e.target.dataset.tab);
+});
+$('#btn-refresh').onclick = () => switchTab(curTab);
+
+/* ---------- helpers ---------- */
 function ago(ts) {
   if (!ts) return '—';
   const d = Math.floor(Date.now() / 1000) - ts;
@@ -189,87 +738,179 @@ function ago(ts) {
   return Math.floor(d / 86400) + t('ago').d;
 }
 const licTag = st =>
-  `<span class="tag ${st === 'ok' ? 'ok' : st === 'expiring' ? 'warn' : st ? 'bad' : 'gray'}">${esc(t('lic')[st] || st || '—')}</span>`;
+  `<span class="tag ${st === 'ok' ? 'ok' : st === 'expiring' ? 'warn'
+    : st ? 'bad' : 'gray'}">${esc(t('lic')[st] || st || '—')}</span>`;
+const dayStr = ts => ts ? new Date(ts * 1000).toLocaleDateString(
+  S === I18N.en ? 'en-GB' : 'vi-VN') : '—';
+function modal(title, bodyHtml, endHtml) {
+  $('#mo-title').textContent = title;
+  $('#mo-body').innerHTML = bodyHtml;
+  $('#mo-end').innerHTML = endHtml ||
+    `<button class="btn" data-close>${esc(t('close'))}</button>`;
+  $('#modal-wrap').hidden = false;
+}
+function closeModal() { $('#modal-wrap').hidden = true; }
+$('#modal-wrap').addEventListener('click', e => {
+  if (e.target === $('#modal-wrap') ||
+      e.target.dataset.close !== undefined) closeModal();
+});
+function copyTxt(txt, btn) {
+  navigator.clipboard.writeText(txt)
+    .then(() => { btn.textContent = t('copied');
+                  setTimeout(() => btn.textContent = t('copy'), 1200); });
+}
+function dlJson(obj, fname) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(
+    [JSON.stringify(obj, null, 2)], { type: 'application/json' }));
+  a.download = fname;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+const errBox = m => {
+  $('#err').hidden = !m;
+  $('#err-msg').textContent = m || '';
+};
 
-function chrome() {
-  $('#t-title').textContent = t('title');
-  $('#t-sub').textContent = t('sub');
-  $('#btn-refresh').textContent = t('refresh');
-  $('#t-pending').textContent = t('pending');
-  $('#btn-revoke').textContent = t('revoked');
-  $('#cols').innerHTML = t('cols').map(c => `<th>${esc(c)}</th>`).join('');
-  $('#usage').querySelector('thead tr').innerHTML =
-    t('usageCols').map(c => `<th>${esc(c)}</th>`).join('');
-  $('#t-sys').textContent = AdmRender.I18N.vi.sys;
-  $('#t-bot').textContent = AdmRender.I18N.vi.bot;
-  $('#t-perm').textContent = AdmRender.I18N.vi.perm;
-  $('#t-conn').textContent = AdmRender.I18N.vi.conn;
-  $('#t-ev').textContent = AdmRender.I18N.vi.ev;
+/* ============ TAB: MÁY ============ */
+// m.conns = [{n,s}] do /api/fleet trả → đếm kết nối cả fleet,
+// không phải mở drawer từng máy
+const connsOf = m => m.conns || [];
+const connTag = (c, tt) =>
+  `<span class="tag ${tt && c === tt ? 'ok' : c === 0 && tt ? 'bad'
+     : 'warn'}">${esc(c + '/' + (tt || 0))}</span>`;
+let fleetFilter = '';
+
+async function renderFleet() {
+  const wrap = $('#wrap');
+  const isMaster = ME.role === 'master';
+  const cols = ['machine', ...(isMaster ? ['org'] : []), 'brain',
+                'ver', 'seen', 'today', 'bot', 'conns', 'lic'];
+  wrap.innerHTML = `
+    <div class="stats" id="stats"></div>
+    <div class="pending" id="pending" hidden>
+      <h3>${esc(t('pending'))}</h3><div id="pending-list"></div>
+    </div>
+    <div class="connsum" id="connsum" hidden></div>
+    <div class="fld" style="max-width:280px;margin-bottom:var(--space-sm)">
+      <input id="flt" placeholder="${esc(t('flt'))}"
+             value="${esc(fleetFilter)}"></div>
+    <div class="tbl-scroll"><table><thead><tr>${
+      cols.map(k => `<th>${esc(t('cols')[k])}</th>`).join('')
+    }</tr></thead><tbody id="rows">
+      <tr><td class="empty">…</td></tr></tbody></table></div>`;
+  let fleet, lic, pend;
+  try {
+    [fleet, lic, pend] = await Promise.all(
+      [api('api/fleet'), api('api/license'), api('api/pending')]);
+    errBox(null);
+  } catch (e) { return errBox(String(e)); }
+
+  const ms = (fleet.machines || [])
+    .sort((a, b) => (b.last_seen || 0) - (a.last_seen || 0));
+  const pl = pend.pending || [];
+  const online = ms.filter(m =>
+    m.last_seen && (Date.now() / 1000 - m.last_seen) < 3600).length;
+  const errs = ms.reduce((s, m) => s + ((m.today || {}).err || 0), 0);
+  const st = t('stats');
+  $('#stats').innerHTML =
+    [online + '/' + ms.length, ms.length, pl.length, errs]
+      .map((n, i) => `<div class="stat"><div class="n">${esc(n)}</div>` +
+                     `<div class="l">${esc(st[i])}</div></div>`).join('');
+
+  // tổng hợp kết nối theo app cho cả fleet
+  const agg = {};
+  for (const m of ms) for (const a of connsOf(m)) {
+    (agg[a.n] = agg[a.n] || { c: 0, t: 0 }).t++;
+    if (a.s === 'connected') agg[a.n].c++;
+  }
+  const cs = $('#connsum');
+  // app thiếu kết nối nhiều lên đầu; >8 app → gom đuôi vào "+N khác"
+  const aggs = Object.entries(agg)
+    .sort((a, b) => a[1].c / a[1].t - b[1].c / b[1].t);
+  cs.hidden = !aggs.length;
+  const head = aggs.slice(0, 8), tail = aggs.slice(8);
+  cs.innerHTML = `<span class="l">${esc(t('connsAll'))}:</span> ` +
+    head.map(([k, v]) =>
+      `<span class="tag ${v.c === v.t ? 'ok' : v.c === 0 ? 'gray' : 'warn'}">` +
+      `${esc(k)} ${esc(v.c + '/' + v.t)}</span>`).join(' ') +
+    (tail.length
+      ? ` <button class="btn btn--sm" id="conn-tail">+${tail.length}…</button>`
+      : '');
+  const tailBtn = $('#conn-tail');
+  if (tailBtn) tailBtn.onclick = () => {
+    cs.insertAdjacentHTML('beforeend', ' ' + tail.map(([k, v]) =>
+      `<span class="tag ${v.c === v.t ? 'ok' : v.c === 0 ? 'gray' : 'warn'}">` +
+      `${esc(k)} ${esc(v.c + '/' + v.t)}</span>`).join(' '));
+    tailBtn.remove();
+  };
+
+  const seats = $('#seats');
+  if (lic.seats) {
+    seats.hidden = false;
+    seats.textContent = t('seats', { a: lic.active30, s: lic.seats }) +
+      (lic.expiry ? ' · ' + lic.expiry : '');
+    seats.className = 'seats' +
+      (lic.status === 'exceeded' || lic.status === 'expired' ? ' bad'
+       : lic.status !== 'ok' ? ' warn' : '');
+  } else if (!isMaster) {
+    seats.hidden = false;
+    seats.textContent = t('seatsNone');
+    seats.className = 'seats warn';
+  } else seats.hidden = true;
+
+  $('#pending').hidden = !pl.length;
+  $('#pending-list').innerHTML = pl.map(m =>
+    `<div class="prow"><span class="mono"><b>${esc(m.hostname || m.machine_id)}</b></span>` +
+    `<span class="tag">${esc(m.org || '')}</span>` +
+    `<span class="tag gray">${esc(m.os || '')}</span>` +
+    `<button class="btn btn--sm" data-approve="${esc(m.machine_id)}">${esc(t('approve'))}</button>` +
+    `<button class="btn btn--sm btn--danger" data-revoke="${esc(m.machine_id)}">${esc(t('revoke'))}</button>` +
+    `</div>`).join('');
+
+  $('#flt').oninput = e => {
+    fleetFilter = e.target.value.toLowerCase();
+    paintRows();
+  };
+  function paintRows() {
+    const show = ms.filter(m => !fleetFilter ||
+      (m.hostname || '').toLowerCase().includes(fleetFilter) ||
+      (m.learner || '').toLowerCase().includes(fleetFilter) ||
+      (m.org || '').toLowerCase().includes(fleetFilter));
+    $('#rows').innerHTML = show.map(m => {
+      const live = m.last_seen &&
+        (Date.now() / 1000 - m.last_seen) < 3600;
+      const td = m.today || {};
+      const apps = connsOf(m);
+      const nc = apps.filter(a => a.s === 'connected').length;
+      return `<tr class="click ${live ? '' : 'stale'}" data-mid="${esc(m.machine_id)}">` +
+        `<td><span class="dot ${live ? 'on' : 'off'}"></span>` +
+        `<b>${esc(m.hostname)}</b>` +
+        (m.learner ? ` <span class="mono">${esc(m.learner)}</span>` : '') + `</td>` +
+        (isMaster ? `<td><span class="tag">${esc(m.org)}</span></td>` : '') +
+        `<td>${esc(m.brain || '—')}</td>` +
+        `<td class="mono">${esc(m.version || '?')} / ${esc(m.ext || '?')}</td>` +
+        `<td>${esc(ago(m.last_seen))}</td>` +
+        `<td>${esc(td.done || 0)} ✓` +
+        (td.err ? ` · <span class="tag bad">${esc(td.err)} err</span>` : '') +
+        (td.inj_suspect ? ` · <span class="tag warn">${esc(td.inj_suspect)} inj</span>` : '') +
+        `</td>` +
+        `<td class="mono">${esc(m.bot || '—')}</td>` +
+        `<td>${apps.length ? connTag(nc, apps.length) : '—'}</td>` +
+        `<td>${licTag(m.license_status)}</td></tr>`;
+    }).join('') ||
+      `<tr><td colspan="${cols.length}" class="empty">${esc(t('emptyMachines'))}</td></tr>`;
+  }
+  paintRows();
 }
 
-function loadPending() {
-  api('api/pending').then(d => {
-    const list = d.pending || [];
-    $('#pending').hidden = !list.length;
-    $('#pending-list').innerHTML = list.map(m =>
-      `<div class="prow"><span class="mono">${esc(m.hostname || m.machine_id)}</span>` +
-      `<span class="tag gray">${esc(m.os || '')}</span>` +
-      `<button class="btn" data-approve="${esc(m.machine_id)}">${esc(t('approve'))}</button>` +
-      `<button class="btn" data-revoke="${esc(m.machine_id)}">${esc(t('revoke'))}</button>` +
-      `</div>`).join('');
-  }).catch(() => {});
-}
-
-function load() {
-  Promise.all([api('api/fleet'), api('api/license')])
-    .then(([fleet, lic]) => {
-      $('#err').hidden = true;
-      $('#wrap').hidden = false;
-      const seats = $('#seats');
-      if (lic.seats) {
-        seats.hidden = false;
-        seats.textContent = t('seats')
-          .replace('{a}', lic.active30).replace('{s}', lic.seats);
-        seats.className = 'seats' +
-          (lic.status === 'exceeded' || lic.status === 'expired' ? ' bad'
-           : lic.status !== 'ok' ? ' warn' : '');
-      } else {
-        seats.hidden = false;
-        seats.textContent = t('seatsNone');
-        seats.className = 'seats warn';
-      }
-      $('#rows').innerHTML = (fleet.machines || []).map(m => {
-        const stale = !m.last_seen ||
-          (Date.now() / 1000 - m.last_seen) > 3600;
-        const td = m.today || {};
-        return `<tr class="${stale ? 'stale' : ''}" data-mid="${esc(m.machine_id)}">` +
-          `<td><b>${esc(m.hostname)}</b>` +
-          (m.learner ? ` <span class="mono">${esc(m.learner)}</span>` : '') +
-          `</td>` +
-          `<td>${esc(m.brain || '—')}</td>` +
-          `<td class="mono">${esc(m.version || '?')} / ${esc(m.ext || '?')}</td>` +
-          `<td>${esc(ago(m.last_seen))}</td>` +
-          `<td>${esc(td.done || 0)} ✓` +
-          (td.err ? ` · <span class="tag bad">${esc(td.err)} lỗi</span>` : '') +
-          (td.inj_suspect ? ` · <span class="tag warn">${esc(td.inj_suspect)} nghi độc</span>` : '') +
-          `</td>` +
-          `<td class="mono">${esc(m.bot || '—')}</td>` +
-          `<td>${licTag(m.license_status)}</td></tr>`;
-      }).join('') || `<tr><td colspan="7" class="adm-empty">—</td></tr>`;
-    }).catch(() => {
-      $('#err').hidden = false;
-      $('#err').textContent = KEY ? t('denied') : t('noKey');
-      $('#wrap').hidden = true;
-    });
-}
-
+/* ============ drawer ============ */
 let curMid = null;
-function detail(mid) {
+function openDrawer(mid) {
   api('api/fleet/' + encodeURIComponent(mid)).then(d => {
     curMid = mid;
-    $('#detail').hidden = false;
     $('#dt-title').textContent =
-      (d.hostname || mid) + ' — ' + (d.snapshot.config?.learner_name || '');
+      (d.hostname || mid) + ' — ' + (d.org || '');
     const snap = d.snapshot || {};
     AdmRender.renderInto({
       sys: $('#adm-sys'), bots: $('#adm-bots'), perms: $('#adm-perms'),
@@ -288,40 +929,365 @@ function detail(mid) {
         `<td>${esc(c['perm:auto'] || 0)}</td>` +
         `<td>${esc(c.inj_suspect || 0)}</td></tr>`;
     }).join('');
-    $('#detail').scrollIntoView({ behavior: 'smooth' });
-  }).catch(() => {});
+    $('#drawer').classList.add('on');
+    $('#scrim').classList.add('on');
+  }).catch(e => errBox(String(e)));
 }
-
-document.addEventListener('click', e => {
-  const ap = e.target.dataset && e.target.dataset.approve;
-  const rv = e.target.dataset && e.target.dataset.revoke;
-  if (ap || rv) {
-    const ep = ap ? 'api/pair-approve' : 'api/pair-revoke';
-    api(ep, { method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ machine_id: ap || rv }) })
-      .then(() => { loadPending(); load(); });
-    return;
-  }
-  const tr = e.target.closest('tr[data-mid]');
-  if (tr) detail(tr.dataset.mid);
-});
+function closeDrawer() {
+  $('#drawer').classList.remove('on');
+  $('#scrim').classList.remove('on');
+  curMid = null;
+}
+$('#conn-more').onclick = () => {
+  const el = $('#adm-conns');
+  el.classList.toggle('compact');
+  $('#conn-more').textContent =
+    el.classList.contains('compact') ? t('connMore') : t('connLess');
+};
+$('#dt-close').onclick = closeDrawer;
+$('#scrim').onclick = closeDrawer;
 $('#btn-revoke').onclick = () => {
   if (!curMid) return;
   api('api/pair-revoke', { method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ machine_id: curMid }) })
-    .then(() => { $('#detail').hidden = true; load(); loadPending(); });
+    .then(() => { closeDrawer(); switchTab('fleet'); });
 };
-$('#btn-refresh').onclick = () => { load(); loadPending(); };
 
-// ngôn ngữ theo browser của IT — dashboard cty, không theo config học viên
-if (navigator.language && navigator.language.startsWith('en'))
-  S = I18N.en;
+/* ============ TAB: CÔNG TY (master) ============ */
+async function renderOrgs() {
+  const wrap = $('#wrap');
+  wrap.innerHTML = `
+    <div class="card"><h3>${esc(t('ogCreate'))}</h3>
+      <div class="frow">
+        <div class="fld"><label>${esc(t('ogName'))}</label>
+          <input id="og-name" placeholder="ABC" maxlength="24"></div>
+        <div class="fld grow2"><label>${esc(t('ogNote'))}</label>
+          <input id="og-note" placeholder="…"></div>
+        <div class="fld"><label>${esc(t('ogUser'))}</label>
+          <input id="og-auser" placeholder="it-abc"></div>
+        <div class="fld"><label>${esc(t('ogPass'))}</label>
+          <input id="og-apass" placeholder="≥ 8"></div>
+        <button class="btn btn--primary" id="og-create" type="button">${esc(t('ogBtn'))}</button>
+      </div>
+    </div>
+    <div id="og-lic-box" hidden>
+      <div class="card"><h3 id="og-lic-title"></h3>
+        <div class="frow">
+          <div class="fld"><label>${esc(t('licSeats'))}</label>
+            <input id="lic-seats" type="number" min="1" value="10"></div>
+          <div class="fld"><label>${esc(t('licExp'))}</label>
+            <input id="lic-expiry" type="date"></div>
+          <button class="btn btn--primary" id="lic-issue" type="button">${esc(t('licIssue'))}</button>
+          <button class="btn" data-close-lic type="button">${esc(t('cancel'))}</button>
+        </div>
+      </div>
+    </div>
+    <div class="tbl-scroll"><table><thead><tr>${
+      t('ogCols').map(c => `<th>${esc(c)}</th>`).join('')
+    }</tr></thead><tbody id="og-rows">
+      <tr><td class="empty">…</td></tr></tbody></table></div>`;
+
+  let d;
+  try { d = await api('api/orgs'); errBox(null); }
+  catch (e) { return errBox(String(e)); }
+  $('#og-rows').innerHTML = (d.orgs || []).map(o =>
+    `<tr><td><b class="mono">${esc(o.name)}</b>` +
+    (o.env_only ? ' <span class="tag gray">env</span>' : '') + `</td>` +
+    `<td>${esc(o.machines || 0)}</td>` +
+    `<td>${licTag(o.license_worst)}</td>` +
+    `<td style="color:var(--color-muted)">${esc(o.note || '')}</td>` +
+    `<td><button class="btn btn--sm" data-lic="${esc(o.name)}">${esc(t('licBtn'))}</button> ` +
+    `<button class="btn btn--sm" data-rot="${esc(o.name)}">${esc(t('rotBtn'))}</button></td></tr>`
+  ).join('') || `<tr><td colspan="5" class="empty">${esc(t('ogEmpty'))}</td></tr>`;
+
+  $('#og-create').onclick = async () => {
+    const body = { name: $('#og-name').value, note: $('#og-note').value };
+    if ($('#og-auser').value) {
+      body.admin_user = $('#og-auser').value;
+      body.admin_pass = $('#og-apass').value;
+    }
+    try {
+      const r = await api('api/orgs', { method: 'POST',
+                                        body: JSON.stringify(body) });
+      const fj = JSON.stringify(r.fleet, null, 2);
+      modal(r.org + ' ' + t('ogDone'), `
+        <div class="out">
+          <div class="row"><b>fleet.json</b> — ${esc(t('ogFleet'))}:
+            <button class="btn btn--sm" id="cp-fleet">${esc(t('copy'))}</button>
+            <button class="btn btn--sm" id="dl-fleet">${esc(t('dl'))}</button></div>
+          <pre>${esc(fj)}</pre>
+          <div class="row"><b>admin_key</b> ${esc(t('ogKey'))}:
+            <button class="btn btn--sm" id="cp-key">${esc(t('copy'))}</button></div>
+          <pre>${esc(r.admin_key)}</pre>
+          ${r.admin ? `<div class="row">${esc(t('ogAdmin'))}:
+            <b>${esc(r.admin.username)}</b> — ${esc(t('ogAdminHint'))}</div>` : ''}
+          <div class="row" style="color:var(--color-muted)">${esc(t('ogLicHint'))}</div>
+        </div>`,
+        `<button class="btn btn--primary" data-close>${esc(t('done'))}</button>`);
+      $('#cp-fleet').onclick = e => copyTxt(fj, e.target);
+      $('#dl-fleet').onclick = () => dlJson(r.fleet, 'fleet.json');
+      $('#cp-key').onclick = e => copyTxt(r.admin_key, e.target);
+      renderOrgs();
+    } catch (e) { errBox(String(e)); }
+  };
+}
+let licOrg = null;
+
+/* ============ TAB: TÀI KHOẢN (master) ============ */
+async function renderAccounts() {
+  const wrap = $('#wrap');
+  let orgs;
+  try { orgs = (await api('api/orgs')).orgs || []; }
+  catch (e) { return errBox(String(e)); }
+  wrap.innerHTML = `
+    <div class="card"><h3>${esc(t('acCreate'))}</h3>
+      <div class="frow">
+        <div class="fld"><label>${esc(t('acUser'))}</label>
+          <input id="ac-user" placeholder="it-abc"></div>
+        <div class="fld"><label>${esc(t('acPass'))}</label>
+          <input id="ac-pass" placeholder="≥ 8"></div>
+        <div class="fld"><label>${esc(t('acRole'))}</label>
+          <select id="ac-role">
+            <option value="admin">${esc(t('roleAdmin'))}</option>
+            <option value="master">${esc(t('roleMaster'))}</option>
+          </select></div>
+        <div class="fld" id="ac-org-fld"><label>${esc(t('acOrg'))}</label>
+          <select id="ac-org">${
+            orgs.map(o => `<option>${esc(o.name)}</option>`).join('')
+          }</select></div>
+        <button class="btn btn--primary" id="ac-create" type="button">${esc(t('ogBtn'))}</button>
+      </div>
+    </div>
+    <div class="tbl-scroll"><table><thead><tr>${
+      t('acCols').map(c => `<th>${esc(c)}</th>`).join('')
+    }</tr></thead><tbody id="ac-rows">
+      <tr><td class="empty">…</td></tr></tbody></table></div>`;
+  $('#ac-role').onchange = () => {
+    $('#ac-org-fld').hidden = $('#ac-role').value === 'master';
+  };
+  let d;
+  try { d = await api('api/admins'); errBox(null); }
+  catch (e) { return errBox(String(e)); }
+  $('#ac-rows').innerHTML = (d.admins || []).map(a =>
+    `<tr><td><b>${esc(a.username)}</b></td>` +
+    `<td><span class="tag ${a.role === 'master' ? '' : 'gray'}">${esc(a.role)}</span></td>` +
+    `<td class="mono">${esc(a.org || '—')}</td>` +
+    `<td>${a.disabled ? `<span class="tag bad">${esc(t('stOff'))}</span>`
+                      : `<span class="tag ok">${esc(t('stOn'))}</span>`}</td>` +
+    `<td>${esc(dayStr(a.created_ts))}</td>` +
+    `<td style="white-space:nowrap">` +
+    `<button class="btn btn--sm" data-toggle-adm="${a.id}" data-dis="${a.disabled ? 0 : 1}">` +
+    `${esc(a.disabled ? t('btnUnlock') : t('btnLock'))}</button> ` +
+    `<button class="btn btn--sm" data-reset-pass="${a.id}" data-uname="${esc(a.username)}">${esc(t('btnReset'))}</button>` +
+    `</td></tr>`
+  ).join('') || `<tr><td colspan="6" class="empty">${esc(t('acEmpty'))}</td></tr>`;
+
+  $('#ac-create').onclick = async () => {
+    const body = { username: $('#ac-user').value,
+                   password: $('#ac-pass').value,
+                   role: $('#ac-role').value };
+    if (body.role === 'admin') body.org = $('#ac-org').value;
+    try {
+      await api('api/admins', { method: 'POST', body: JSON.stringify(body) });
+      switchTab('accounts');
+    } catch (e) { errBox(String(e)); }
+  };
+}
+
+/* ============ TAB: NHẬT KÝ ============ */
+async function renderAudit() {
+  const wrap = $('#wrap');
+  wrap.innerHTML = `<div class="tbl-scroll"><table><thead><tr>${
+    t('auCols').map(c => `<th>${esc(c)}</th>`).join('')
+  }</tr></thead><tbody id="au-rows">
+    <tr><td class="empty">…</td></tr></tbody></table></div>`;
+  let d;
+  try { d = await api('api/audit'); errBox(null); }
+  catch (e) { return errBox(String(e)); }
+  $('#au-rows').innerHTML = (d.audit || []).map(r =>
+    `<tr><td class="mono" style="white-space:nowrap">${
+      new Date(r.ts * 1000).toLocaleString(
+        S === I18N.en ? 'en-GB' : 'vi-VN')}</td>` +
+    `<td>${esc(r.actor)}</td><td><span class="tag">${esc(r.action)}</span></td>` +
+    `<td class="mono">${esc(r.org)}</td>` +
+    `<td class="mono" style="font-size:var(--text-xs)">${esc(r.target)}</td>` +
+    `<td style="color:var(--color-muted);font-size:var(--text-xs)">${esc(r.detail)}</td></tr>`
+  ).join('') || `<tr><td colspan="6" class="empty">${esc(t('auEmpty'))}</td></tr>`;
+}
+
+/* ============ TAB: PACK ============ */
+async function renderPacks() {
+  const wrap = $('#wrap');
+  wrap.innerHTML = `
+    <div class="card"><h3>${esc(t('pkTitle'))}</h3>
+      <div class="frow">
+        <div class="fld grow2"><label>${esc(t('pkFile'))}</label>
+          <input id="pk-file" type="file" accept=".json"></div>
+        <button class="btn btn--primary" id="pk-push" type="button" disabled>
+          ${esc(t('pkPush'))}</button>
+      </div>
+      <div id="pk-info" style="font-size:var(--text-sm);margin-top:var(--space-xs)"></div>
+    </div>
+    <div class="card"><h3>${esc(t('pkLatest'))}</h3><div id="pk-latest"></div></div>`;
+  try {
+    const d = await api('api/packs'); errBox(null);
+    const ent = Object.entries(d.latest || {});
+    $('#pk-latest').innerHTML = ent.length ? ent.map(([o, p]) =>
+      `<div class="adm-row"><span class="k mono">${esc(o)}</span>` +
+      `<span class="v">v${esc(p.version)} · ${esc(String(p.sha256).slice(0, 12))}…</span></div>`
+    ).join('') : `<div class="adm-empty">${esc(t('pkEmpty'))}</div>`;
+  } catch (e) { errBox(String(e)); }
+  let packObj = null;
+  $('#pk-file').onchange = async e => {
+    const f = e.target.files[0];
+    packObj = null; $('#pk-push').disabled = true;
+    if (!f) return;
+    try {
+      packObj = JSON.parse(await f.text());
+      if (!packObj.org || !Number.isInteger(packObj.pack_version))
+        throw 'pack thiếu org / pack_version int';
+      $('#pk-info').innerHTML =
+        `org <b>${esc(packObj.org)}</b> · pack_version <b>${packObj.pack_version}</b>`;
+      $('#pk-push').disabled = false;
+    } catch (x) { $('#pk-info').textContent = t('pkBad') + x; }
+  };
+  $('#pk-push').onclick = async () => {
+    try {
+      await api('api/packs', { method: 'POST',
+                               body: JSON.stringify(packObj) });
+      switchTab('packs');
+    } catch (e) { errBox(String(e)); }
+  };
+}
+
+/* ---------- đổi mật khẩu ---------- */
+$('#btn-pass').onclick = () => {
+  modal(t('pwTitle'), `
+    <div class="fld"><label>${esc(t('pwOld'))}</label>
+      <input id="pw-old" type="password"></div>
+    <div class="fld"><label>${esc(t('pwNew'))}</label>
+      <input id="pw-new" type="password"></div>
+    <div class="login-err" id="pw-err"></div>`,
+    `<button class="btn" data-close>${esc(t('cancel'))}</button>
+     <button class="btn btn--primary" id="pw-ok">${esc(t('pwBtn'))}</button>`);
+  $('#pw-ok').onclick = async () => {
+    try {
+      await api('api/password', { method: 'POST', body: JSON.stringify({
+        old: $('#pw-old').value, pass: $('#pw-new').value }) });
+      closeModal(); showLogin();
+    } catch (e) { $('#pw-err').textContent = String(e); }
+  };
+};
+
+/* ---------- click delegation ---------- */
+document.addEventListener('click', e => {
+  const d = e.target.dataset || {};
+  if (d.approve || d.revoke) {
+    api(d.approve ? 'api/pair-approve' : 'api/pair-revoke',
+        { method: 'POST',
+          body: JSON.stringify({ machine_id: d.approve || d.revoke }) })
+      .then(() => switchTab('fleet')).catch(x => errBox(String(x)));
+    return;
+  }
+  if (d.lic) {
+    licOrg = d.lic;
+    $('#og-lic-box').hidden = false;
+    $('#og-lic-title').textContent = t('licTitle', { o: licOrg });
+    $('#og-lic-box').scrollIntoView({ behavior: 'smooth' });
+    return;
+  }
+  if (d.closeLic !== undefined) { $('#og-lic-box').hidden = true; return; }
+  if (d.rot) {
+    const org = d.rot;
+    modal(t('rotTitle', { o: org }), `
+      <div class="out">
+        <div class="row">${esc(t('rotWarn'))}</div>
+        <div class="row"><label style="display:flex;gap:.5em;cursor:pointer">
+          <input type="checkbox" id="rot-kill"> ${esc(t('rotKill'))}
+        </label></div>
+        <div class="login-err" id="rot-err"></div>
+      </div>`,
+      `<button class="btn" data-close>${esc(t('cancel'))}</button>
+       <button class="btn btn--primary" id="rot-ok">${esc(t('rotGo'))}</button>`);
+    $('#rot-ok').onclick = async () => {
+      try {
+        const r = await api('api/orgs/' + encodeURIComponent(org)
+          + '/rotate-secret',
+          { method: 'POST',
+            body: JSON.stringify({ kill_machines: $('#rot-kill').checked }) });
+        const fj = JSON.stringify(r.fleet, null, 2);
+        modal(org + ' ' + t('rotDone'), `
+          <div class="out">
+            <div class="row"><b>fleet.json</b> — ${esc(t('ogFleet'))}:
+              <button class="btn btn--sm" id="cp-fleet">${esc(t('copy'))}</button>
+              <button class="btn btn--sm" id="dl-fleet">${esc(t('dl'))}</button></div>
+            <pre>${esc(fj)}</pre>
+            <div class="row"><b>admin_key</b> ${esc(t('ogKey'))}:
+              <button class="btn btn--sm" id="cp-key">${esc(t('copy'))}</button></div>
+            <pre>${esc(r.admin_key)}</pre>
+            ${r.machines_killed
+              ? `<div class="row">${esc(t('rotKilled', { n: r.machines_killed }))}</div>`
+              : ''}
+          </div>`,
+          `<button class="btn btn--primary" data-close>${esc(t('done'))}</button>`);
+        $('#cp-fleet').onclick = ev => copyTxt(fj, ev.target);
+        $('#dl-fleet').onclick = () => dlJson(r.fleet, 'fleet.json');
+        $('#cp-key').onclick = ev => copyTxt(r.admin_key, ev.target);
+      } catch (x) { $('#rot-err').textContent = String(x); }
+    };
+    return;
+  }
+  if (e.target.id === 'lic-issue') {
+    api('api/orgs/' + encodeURIComponent(licOrg) + '/license',
+        { method: 'POST', body: JSON.stringify({
+          seats: parseInt($('#lic-seats').value),
+          expiry: $('#lic-expiry').value }) })
+      .then(r => {
+        $('#og-lic-box').hidden = true;
+        modal('license.json — ' + licOrg, `
+          <pre class="mono" style="font-size:var(--text-xs);white-space:pre-wrap">${
+            esc(JSON.stringify(r.license, null, 2))}</pre>
+          <div style="font-size:var(--text-xs);color:var(--color-muted)">${esc(t('licDone'))}</div>`,
+          `<button class="btn" data-close>${esc(t('close'))}</button>
+           <button class="btn" id="lic-cp">${esc(t('copy'))}</button>
+           <button class="btn btn--primary" id="lic-dl">${esc(t('dl'))}</button>`);
+        $('#lic-cp').onclick = ev =>
+          copyTxt(JSON.stringify(r.license, null, 2), ev.target);
+        $('#lic-dl').onclick = () => dlJson(r.license, 'license.json');
+      }).catch(x => errBox(String(x)));
+    return;
+  }
+  if (d.toggleAdm) {
+    api('api/admins/' + d.toggleAdm, { method: 'POST',
+        body: JSON.stringify({ disabled: d.dis === '1' }) })
+      .then(() => switchTab('accounts')).catch(x => errBox(String(x)));
+    return;
+  }
+  if (d.resetPass) {
+    modal(t('rpTitle', { u: d.uname }), `
+      <div class="fld"><label>${esc(t('rpNew'))}</label>
+        <input id="rp-pass"></div>
+      <div class="login-err" id="rp-err"></div>`,
+      `<button class="btn" data-close>${esc(t('cancel'))}</button>
+       <button class="btn btn--primary" id="rp-ok">${esc(t('rpBtn'))}</button>`);
+    $('#rp-ok').onclick = async () => {
+      try {
+        await api('api/admins/' + d.resetPass, { method: 'POST',
+          body: JSON.stringify({ password: $('#rp-pass').value }) });
+        closeModal();
+      } catch (x) { $('#rp-err').textContent = String(x); }
+    };
+    return;
+  }
+  const tr = e.target.closest('tr[data-mid]');
+  if (tr) openDrawer(tr.dataset.mid);
+});
+
+/* ---------- go ---------- */
 chrome();
-if (!KEY) { $('#err').hidden = false; $('#err').textContent = t('noKey'); }
-load(); loadPending();
-setInterval(() => { load(); loadPending(); }, 30000);
+if (SS.getItem('fleet_token') || SS.getItem('fleet_admin_key')) boot();
+else showLogin();
+setInterval(() => { if (curTab === 'fleet' && ME) renderFleet(); }, 30000);
 </script>
 </body>
 </html>

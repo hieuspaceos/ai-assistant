@@ -24,3 +24,39 @@ CREATE TABLE IF NOT EXISTS usage(
 CREATE TABLE IF NOT EXISTS org_pings(
   org TEXT, ts INTEGER, payload TEXT);
 CREATE INDEX IF NOT EXISTS idx_machines_key ON machines(machine_key);
+
+-- v2: orgs + tài khoản admin thật chuyển vào D1 — ORGS_JSON secret giờ
+-- chỉ còn vai trò seed/fallback; org tạo trong UI master nằm ở đây
+CREATE TABLE IF NOT EXISTS orgs(
+  name           TEXT PRIMARY KEY,
+  beacon_secret  TEXT,
+  license_secret TEXT,
+  admin_key      TEXT,          -- key cty-admin kiểu cũ (link ?key= vẫn sống)
+  note           TEXT,
+  created_ts     INTEGER);
+
+CREATE TABLE IF NOT EXISTS admins(
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  username    TEXT UNIQUE,
+  pass_hash   TEXT,             -- PBKDF2-HMAC-SHA256 hex
+  salt        TEXT,
+  role        TEXT,             -- 'master' (vendor) | 'admin' (IT cty)
+  org         TEXT,             -- org của role=admin; master thì NULL
+  disabled    INTEGER DEFAULT 0,
+  created_ts  INTEGER);
+
+CREATE TABLE IF NOT EXISTS sessions(
+  token      TEXT PRIMARY KEY,
+  admin_id   INTEGER,
+  created_ts INTEGER,
+  expires_ts INTEGER);
+CREATE INDEX IF NOT EXISTS idx_sessions_exp ON sessions(expires_ts);
+
+CREATE TABLE IF NOT EXISTS audit(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  actor  TEXT,                  -- username, hoặc 'key:<org>' / 'vendor'
+  action TEXT,                  -- pair-approve | license-issue | ...
+  org    TEXT,                  -- org liên quan (admin chỉ đụng org mình)
+  target TEXT,                  -- machine_id / org / pack version
+  detail TEXT,
+  ts     INTEGER);

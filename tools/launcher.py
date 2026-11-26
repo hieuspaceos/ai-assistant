@@ -162,14 +162,15 @@ def bootstrap():
     return bool(applied) or (not fresh and src_ver != dst_ver)
 
 def ensure_token():
-    """Sinh 'chìa khoá nhà' một lần, TRƯỚC khi spawn child — cùng thiết kế
-    start.sh (child fallback vẫn có nhưng không bao giờ phải chạy)."""
+    """Sinh 'chìa khoá nhà' MỚI mỗi lần start, TRƯỚC khi spawn child —
+    audit 2-tầng: token trước đây persist mãi, same-user process đọc
+    được là lái mọi bridge. Rotate miễn phí vì child đọc file lúc
+    boot (chat/ext-bridge) hoặc lazy mỗi cycle (beacon); session
+    extension đang sống thì chết cùng restart — vốn đã reset state."""
     fp = os.path.join(DATA, ".devin", "bridge.token")
-    tok = _read(fp)
-    if not tok:
-        tok = secrets.token_hex(24)
-        fd = os.open(fp, os.O_CREAT | os.O_WRONLY, 0o600)
-        os.write(fd, tok.encode()); os.close(fd)
+    tok = secrets.token_hex(24)
+    fd = os.open(fp, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
+    os.write(fd, tok.encode()); os.close(fd)
     try:
         os.chmod(fp, 0o600)   # file từ bản cũ — siết lại perm
     except OSError:
@@ -360,14 +361,18 @@ def main():
         return
     # mặc định: `troly` hoặc `troly run`
     updated = bootstrap()
-    tok = ensure_token()
     try:
+        # health-check TRƯỚC rotate: instance cũ còn giữ token cũ trong
+        # memory — ghi đè file ở đây phá portal (?t=T2 vs bridge giữ T1
+        # → 401) và beacon (đọc lazy mỗi cycle → bridge_get fail mãi)
         urllib.request.urlopen("http://127.0.0.1:7682/api/health", timeout=1)
+        tok = _read(os.path.join(DATA, ".devin", "bridge.token"))
         webbrowser.open(f"http://localhost:8080/web/?t={tok}")
         print("Trợ Lý AI đang chạy sẵn — đã mở lại portal.")
         return                                     # instance khác đang chạy
     except Exception:
         pass
+    tok = ensure_token()    # chỉ rotate khi thật sự start mới
     if updated:
         print(f"Cập nhật phần mềm xong (v{_read(os.path.join(DATA, 'VERSION'))}).")
     print(f"Mở Trợ Lý AI… dữ liệu nằm ở {DATA}")

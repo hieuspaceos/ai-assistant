@@ -81,6 +81,8 @@ def fetch_pack(hint, base, key):
             urllib.parse.urlparse(base).netloc:
         raise ValueError("pack url host khác collector")
     req = urllib.request.Request(url)
+    # Cloudflare chặn UA "Python-urllib" (1010) — cần UA riêng
+    req.add_header("User-Agent", "TroLyAI-Pack/1")
     req.add_header("X-Beacon-Key", key)
     with urllib.request.urlopen(req, timeout=15) as r:
         data = r.read()

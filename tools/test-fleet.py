@@ -71,6 +71,27 @@ check('lic.get("org"), lic.get("seats"), lic.get("expiry")'
       in collector_src,
       "collector.py ghép cùng trường org|seats|expiry|issued")
 
+# collector.py (canonical) ↔ worker/index.js (port) — endpoint drift:
+# collector xoá/đổi endpoint nào là worker phải theo; worker thêm
+# endpoint ngoài danh sách admin 2-tầng là phải khai TƯỜNG MINH
+def api_names(src):
+    return set(re.findall(r'"(/api/[a-z][a-z-]*)', src))
+
+worker_src = read(os.path.join(ROOT, "worker", "src", "index.js"))
+col_eps, wrk_eps = api_names(collector_src), api_names(worker_src)
+# endpoint chỉ worker có — hệ thống tài khoản 2-tầng collector.py
+# (self-host, admin_key phẳng) không có và không cần
+WORKER_ONLY = {"/api/whoami", "/api/login", "/api/logout",
+               "/api/bootstrap", "/api/password", "/api/orgs",
+               "/api/admins", "/api/audit"}
+for e in sorted(col_eps - wrk_eps):
+    check(False, f"collector có {e} mà worker thiếu — port bị drift")
+for e in sorted(wrk_eps - col_eps - WORKER_ONLY):
+    check(False, f"worker có {e} chưa khai trong WORKER_ONLY")
+check(not (col_eps - wrk_eps) and not (wrk_eps - col_eps - WORKER_ONLY),
+      f"endpoint collector↔worker khớp ({len(col_eps & wrk_eps)} chung"
+      f" + {len(wrk_eps - col_eps)} worker-only đã khai)")
+
 # ---------- phần 2: integration với collector thật ----------
 
 def free_port():

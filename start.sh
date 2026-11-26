@@ -32,13 +32,27 @@ if ! command -v "$BRAIN_CMD" >/dev/null 2>&1; then
   echo "      Cai no, hoac mo portal roi doi sang nao khac trong muc thiet lap."
 fi
 
-# --- "Chia khoa nha" dung chung cho cac bridge — sinh 1 lan truoc khi
-# launch (tranh race giua cac process), export de ttyd/nao ke thua ---
+# --- "Chia khoa nha" dung chung cho cac bridge ---
 TOKEN_FILE="$ROOT/.devin/bridge.token"
 mkdir -p "$ROOT/.devin"
-if [ ! -s "$TOKEN_FILE" ]; then
-  (umask 077; python3 -c "import secrets;print(secrets.token_hex(24))" > "$TOKEN_FILE")
+
+# Dang chay san? → mo lai portal bang token CU ma bridge dang giu trong
+# memory. Rotate cho nay ghi de file → portal ?t=T2 vs bridge giu T1 =
+# 401, beacon doc lazy → bridge_get fail mai (regression audit v2).
+if curl -sf -o /dev/null http://127.0.0.1:7682/api/health 2>/dev/null; then
+  BRIDGE_TOKEN="$(cat "$TOKEN_FILE" 2>/dev/null)"
+  echo "  Tro Ly AI dang chay san — mo lai portal."
+  URL="http://localhost:8080/web/?t=$BRIDGE_TOKEN"
+  if command -v open >/dev/null 2>&1; then open "$URL";
+  elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$URL";
+  else echo "  Mo tay: $URL"; fi
+  exit 0
 fi
+
+# sinh MOI moi lan start that su (rotate mien phi, giam thoi gian song
+# neu token lo), truoc khi launch de tranh race giua cac process;
+# export de ttyd/nao ke thua ---
+(umask 077; python3 -c "import secrets;print(secrets.token_hex(24))" > "$TOKEN_FILE")
 BRIDGE_TOKEN="$(cat "$TOKEN_FILE")"
 export BRIDGE_TOKEN
 export BRAIN_TERM          # term-gate.sh lay nao tu env, khong qua argv

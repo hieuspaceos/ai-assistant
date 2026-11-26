@@ -63,6 +63,16 @@ function rateOk(ip, post) {
     for (const [k, v] of _rate) if (now - v.w > 300) _rate.delete(k);
   return e.n <= lim;
 }
+// login riêng: 10 lần/phút/IP — chống brute-force mật khẩu
+const _lr = new Map();
+function loginOk(ip) {
+  const now = Date.now() / 1000;
+  let e = _lr.get(ip);
+  if (!e || now - e.w > 60) e = { w: now, n: 0 };
+  e.n++;
+  _lr.set(ip, e);
+  return e.n <= 10;
+}
 
 // ---------- D1 helpers ----------
 const one = (env, s, ...a) => env.DB.prepare(s).bind(...a).first();
@@ -95,13 +105,63 @@ async function licenseStatus(lic, orgName, orgs) {
   return "ok";
 }
 
-// ---------- auth helpers ----------
-function adminOrg(req, orgs, vendorKey) {
+// ---------- orgs: env ORGS_JSON là fallback/seed, D1 là nguồn chính
+// (org tạo trong UI master nằm trong bảng orgs — D1 ghi đè env cùng tên)
+async function loadOrgs(env) {
+  const out = {};
+  try { Object.assign(out, JSON.parse(env.ORGS_JSON || "{}")); } catch {}
+  try {
+    for (const r of await allq(env, "SELECT * FROM orgs"))
+      out[r.name] = { beacon_secret: r.beacon_secret,
+                      license_secret: r.license_secret,
+                      admin_key: r.admin_key || undefined };
+  } catch {}                          // bảng chưa migrate → chỉ env
+  return out;
+}
+
+// ---------- admin accounts (PBKDF2-HMAC-SHA256) + sessions ----------
+async function passHash(pass, salt) {
+  const key = await crypto.subtle.importKey(
+    "raw", enc.encode(pass), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt: enc.encode(salt), iterations: 100000,
+      hash: "SHA-256" }, key, 256);
+  return hex(bits);
+}
+const SESSION_TTL = 7 * 86400;         // 7 ngày — đóng tab vẫn giữ,
+                                       // logout/expire mới mất
+
+// trả {role:'master'|'admin', org:'*'|<org>, name, id?} | null
+// ưu tiên Bearer session (tài khoản thật), fallback X-Admin-Key cũ
+// (vendor_key → master "*"; admin_key của org → admin org đó)
+async function authAdmin(req, env, orgs) {
+  const auth = req.headers.get("Authorization") || "";
+  if (auth.startsWith("Bearer ")) {
+    const row = await one(env,
+      `SELECT a.id,a.username,a.role,a.org FROM sessions s
+       JOIN admins a ON a.id=s.admin_id
+       WHERE s.token=? AND s.expires_ts>? AND a.disabled=0`,
+      auth.slice(7), nowSec());
+    if (row) return { role: row.role, name: row.username, id: row.id,
+                      via: "session",
+                      org: row.role === "master" ? "*" : row.org };
+  }
   const k = req.headers.get("X-Admin-Key") || "";
-  if (vendorKey && eq(k, vendorKey)) return "*";
+  if (env.VENDOR_KEY && eq(k, env.VENDOR_KEY))
+    return { role: "master", org: "*", name: "vendor", via: "key" };
   for (const [n, o] of Object.entries(orgs))
-    if (o.admin_key && eq(k, o.admin_key)) return n;
+    if (o.admin_key && eq(k, o.admin_key))
+      return { role: "admin", org: n, name: "key:" + n, via: "key" };
   return null;
+}
+
+// audit trail — ai vừa làm gì trên org nào (dashboard master xem lại)
+function audit(env, actor, action, org, target, detail) {
+  return run(env,
+    "INSERT INTO audit(actor,action,org,target,detail,ts) "
+    + "VALUES(?,?,?,?,?,?)",
+    actor.name || "?", action, org || "", target || "",
+    String(detail || "").slice(0, 500), nowSec()).catch(() => {});
 }
 const machineRow = (env, req) => one(env,
   "SELECT * FROM machines WHERE machine_key=? "
@@ -281,9 +341,50 @@ async function doGet(req, env, path, prefix, orgs, url) {
     u.pathname = path;
     return env.ASSETS.fetch(new Request(u.toString()));
   }
-  const org = adminOrg(req, orgs, env.VENDOR_KEY || "");
-  if (org === null)
-    return j({ err: "thiếu hoặc sai X-Admin-Key" }, 401);
+  if (path === "/api/whoami") {
+    const a = await authAdmin(req, env, orgs);
+    if (!a) return j({ err: "chưa đăng nhập" }, 401);
+    return j({ role: a.role, org: a.org, name: a.name, via: a.via });
+  }
+  const actor = await authAdmin(req, env, orgs);
+  if (!actor)
+    return j({ err: "thiếu hoặc sai credential" }, 401);
+  const org = actor.org;
+  if (path === "/api/orgs") {
+    // master xem danh sách cty: D1 orgs + org chỉ còn trong env (chưa migrate)
+    if (org !== "*") return j({ err: "chỉ master" }, 403);
+    const rows = await allq(env,
+      `SELECT o.name,o.note,o.created_ts,
+         (SELECT COUNT(*) FROM machines m WHERE m.org=o.name
+           AND approved=1 AND revoked=0) AS machines,
+         (SELECT MAX(m2.license_status) FROM machines m2
+           WHERE m2.org=o.name) AS license_worst
+       FROM orgs o ORDER BY o.name`);
+    const seen = new Set(rows.map(r => r.name));
+    for (const n of Object.keys(orgs)) {
+      if (seen.has(n)) continue;
+      const c = await one(env,
+        "SELECT COUNT(*) AS c FROM machines WHERE org=? "
+        + "AND approved=1 AND revoked=0", n);
+      rows.push({ name: n, machines: c ? c.c : 0, env_only: 1 });
+    }
+    return j({ orgs: rows });
+  }
+  if (path === "/api/admins") {
+    if (org !== "*") return j({ err: "chỉ master" }, 403);
+    const rows = await allq(env,
+      "SELECT id,username,role,org,disabled,created_ts FROM admins "
+      + "ORDER BY username");
+    return j({ admins: rows });
+  }
+  if (path === "/api/audit") {
+    const rows = org === "*"
+      ? await allq(env, "SELECT actor,action,org,target,detail,ts FROM audit "
+                      + "ORDER BY ts DESC LIMIT 200")
+      : await allq(env, "SELECT actor,action,org,target,detail,ts FROM audit "
+                      + "WHERE org=? ORDER BY ts DESC LIMIT 200", org);
+    return j({ audit: rows });
+  }
   if (path === "/api/fleet") {
     const rows = org === "*"
       ? await allq(env, "SELECT * FROM machines WHERE approved=1 "
@@ -297,6 +398,9 @@ async function doGet(req, env, path, prefix, orgs, url) {
       const u = await one(env,
         "SELECT counts FROM usage WHERE machine_id=? AND day=?",
         r.machine_id, day);
+      // conns gọn [{n,s}] — dashboard đếm kết nối/app cho cả fleet
+      // mà không phải tải full snapshot từng máy
+      const apps = ((snap.conns || {}).apps) || [];
       out.push({
         machine_id: r.machine_id, org: r.org, hostname: r.hostname,
         os: r.os, learner: r.learner, brain: r.brain,
@@ -304,6 +408,7 @@ async function doGet(req, env, path, prefix, orgs, url) {
         pack_version: r.pack_version, last_seen: r.last_seen,
         license_status: r.license_status,
         bot: (snap.bots || {}).active,
+        conns: apps.map(a => ({ n: a.name || a.id, s: a.status })),
         today: u ? JSON.parse(u.counts) : {},
       });
     }
@@ -391,7 +496,7 @@ async function doGet(req, env, path, prefix, orgs, url) {
 }
 
 // ---------- POST ----------
-async function doPost(req, env, path, prefix, orgs) {
+async function doPost(req, env, path, prefix, orgs, ip) {
   if (path === "/api/pair") {
     // org suy từ beacon_secret — máy không tự chọn org
     const key = req.headers.get("X-Beacon-Key") || "";
@@ -401,10 +506,230 @@ async function doPost(req, env, path, prefix, orgs) {
     return pair(req, env, orgs, pairOrg);
   }
   if (path === "/api/beacon") return beacon(req, env, orgs, prefix);
+
+  // --- public (chính nó là auth) ---
+  if (path === "/api/login") {
+    if (!loginOk(ip))
+      return j({ err: "quá nhiều lần thử — chờ 1 phút" }, 429);
+    const [b, err] = await body(req);
+    if (err) return err;
+    const u = await one(env,
+      "SELECT * FROM admins WHERE username=? AND disabled=0",
+      String(b.user || "").toLowerCase().trim());
+    if (!u || !u.salt ||
+        !eq(await passHash(String(b.pass || ""), u.salt), u.pass_hash))
+      return j({ err: "sai tài khoản hoặc mật khẩu" }, 401);
+    const tok = randHex(24);
+    await run(env, "INSERT INTO sessions(token,admin_id,created_ts,"
+                   + "expires_ts) VALUES(?,?,?,?)",
+              tok, u.id, nowSec(), nowSec() + SESSION_TTL);
+    await run(env, "DELETE FROM sessions WHERE expires_ts<?", nowSec());
+    return j({ token: tok, role: u.role, name: u.username,
+               org: u.role === "master" ? "*" : u.org });
+  }
+  if (path === "/api/logout") {
+    const a = req.headers.get("Authorization") || "";
+    if (a.startsWith("Bearer "))
+      await run(env, "DELETE FROM sessions WHERE token=?", a.slice(7));
+    return j({ ok: true });
+  }
+  if (path === "/api/bootstrap") {
+    // tạo master đầu tiên — chỉ khi CHƯA có tài khoản nào và cầm
+    // vendor_key; sau bootstrap endpoint này khoá vĩnh viễn
+    if (!(env.VENDOR_KEY &&
+          eq(req.headers.get("X-Admin-Key") || "", env.VENDOR_KEY)))
+      return j({ err: "thiếu hoặc sai vendor key" }, 401);
+    const n = await one(env, "SELECT COUNT(*) AS c FROM admins");
+    if (n && n.c > 0) return j({ err: "đã bootstrap" }, 409);
+    const [b, err] = await body(req);
+    if (err) return err;
+    const user = String(b.user || "").toLowerCase().trim(),
+          pass = String(b.pass || "");
+    if (!/^[a-z0-9_.@-]{3,64}$/.test(user) || pass.length < 8)
+      return j({ err: "user 3-64 ký tự (hoặc email), pass ≥ 8" }, 400);
+    const salt = randHex(16);
+    await run(env, "INSERT INTO admins(username,pass_hash,salt,role,"
+                   + "created_ts) VALUES(?,?,?,?,?)",
+              user, await passHash(pass, salt), salt, "master", nowSec());
+    await audit(env, { name: "bootstrap" }, "bootstrap", "*", user, "");
+    return j({ ok: true });
+  }
+
+  // --- admin gate: session hoặc key cũ đều qua đây ---
+  const actor = await authAdmin(req, env, orgs);
+  if (!actor) return j({ err: "thiếu hoặc sai credential" }, 401);
+  const org = actor.org;
+
+  if (path === "/api/password") {
+    if (!actor.id)
+      return j({ err: "key cũ không đổi pass — tạo tài khoản" }, 403);
+    const [b, err] = await body(req);
+    if (err) return err;
+    const u = await one(env, "SELECT * FROM admins WHERE id=?", actor.id);
+    if (!eq(await passHash(String(b.old || ""), u.salt), u.pass_hash))
+      return j({ err: "sai mật khẩu cũ" }, 403);
+    const pass = String(b.pass || "");
+    if (pass.length < 8) return j({ err: "pass ≥ 8 ký tự" }, 400);
+    const salt = randHex(16);
+    await run(env, "UPDATE admins SET pass_hash=?,salt=? WHERE id=?",
+              await passHash(pass, salt), salt, actor.id);
+    await run(env, "DELETE FROM sessions WHERE admin_id=?", actor.id);
+    await audit(env, actor, "password-change", u.org || "*", u.username, "");
+    return j({ ok: true, reauth: true });   // mọi session chết → login lại
+  }
+  if (path === "/api/orgs") {
+    // master tạo cty mới: sinh luôn bộ khoá; trả beacon_secret +
+    // admin_key để bàn giao cho IT (license_secret giữ server-side)
+    if (actor.role !== "master") return j({ err: "chỉ master" }, 403);
+    const [b, err] = await body(req);
+    if (err) return err;
+    const name = String(b.name || "").trim().toUpperCase();
+    if (!/^[A-Z0-9_-]{2,24}$/.test(name))
+      return j({ err: "tên org 2-24 ký tự [A-Z0-9_-]" }, 400);
+    if (orgs[name]) return j({ err: "org đã tồn tại" }, 409);
+    const bs = randHex(24), ls = randHex(24), ak = randHex(24);
+    await run(env, "INSERT INTO orgs(name,beacon_secret,license_secret,"
+                   + "admin_key,note,created_ts) VALUES(?,?,?,?,?,?)",
+              name, bs, ls, ak, String(b.note || "").slice(0, 200),
+              nowSec());
+    let acct = null;
+    if (b.admin_user && b.admin_pass) {
+      const u = String(b.admin_user).toLowerCase().trim(),
+            p = String(b.admin_pass);
+      if (!/^[a-z0-9_.@-]{3,64}$/.test(u) || p.length < 8)
+        return j({ err: "org đã tạo; user/pass admin không hợp lệ — "
+                        + "tạo lại trong tab Tài khoản", org: name }, 400);
+      const salt = randHex(16);
+      await run(env, "INSERT INTO admins(username,pass_hash,salt,role,"
+                     + "org,created_ts) VALUES(?,?,?,?,?,?)",
+                u, await passHash(p, salt), salt, "admin", name, nowSec());
+      acct = { username: u };
+    }
+    await audit(env, actor, "org-create", name, name, b.note || "");
+    return j({ ok: true, org: name, admin: acct, admin_key: ak,
+               fleet: { collector: "https://troly.hieuspace.com/fleet",
+                        org: name, beacon_secret: bs } });
+  }
+  if (path.startsWith("/api/orgs/") && path.endsWith("/rotate-secret")) {
+    // master xoay beacon_secret + admin_key của org — secret lộ hoặc
+    // luân chuyển định kỳ. Org chỉ còn trong env → migrate sang D1 với
+    // secret mới (D1 ghi đè env trong loadOrgs). kill_machines=true
+    // thì đá toàn bộ máy về pending — máy phải re-pair bằng secret
+    // mới (IT phát fleet.json mới), chỉ dùng khi secret thật sự lộ
+    if (actor.role !== "master") return j({ err: "chỉ master" }, 403);
+    const name = decodeURIComponent(
+      path.slice("/api/orgs/".length, -"/rotate-secret".length));
+    const cur = orgs[name];
+    if (!cur) return j({ err: "org không tồn tại" }, 404);
+    const [b, err] = await body(req);
+    if (err) return err;
+    const bs = randHex(24), ak = randHex(24);
+    const inD1 = await one(env, "SELECT name FROM orgs WHERE name=?", name);
+    if (inD1)
+      await run(env, "UPDATE orgs SET beacon_secret=?, admin_key=? "
+                     + "WHERE name=?", bs, ak, name);
+    else
+      // env-only org: license_secret không đổi — copy sang, máy đang
+      // chạy verify license vẫn đúng
+      await run(env, "INSERT INTO orgs(name,beacon_secret,license_secret,"
+                     + "admin_key,note,created_ts) VALUES(?,?,?,?,?,?)",
+                name, bs, cur.license_secret || "", ak,
+                "rotate từ env", nowSec());
+    let killed = 0;
+    if (b.kill_machines) {
+      const r = await run(env,
+        "UPDATE machines SET approved=0, revoked=0, machine_key=NULL "
+        + "WHERE org=?", name);
+      killed = (r.meta && r.meta.changes) || 0;
+    }
+    await audit(env, actor, "org-rotate-secret", name, name,
+                killed ? `đá ${killed} máy` : "chỉ đổi secret");
+    return j({ ok: true, org: name, admin_key: ak,
+               machines_killed: killed,
+               fleet: { collector: "https://troly.hieuspace.com/fleet",
+                        org: name, beacon_secret: bs } });
+  }
+  if (path.startsWith("/api/orgs/") && path.endsWith("/license")) {
+    // master ký license cho org — cùng payload HMAC của
+    // make-license.py nên máy con verify y hệt
+    if (actor.role !== "master") return j({ err: "chỉ master" }, 403);
+    const name = decodeURIComponent(
+      path.slice("/api/orgs/".length, -"/license".length));
+    const o = orgs[name];
+    if (!o || !o.license_secret)
+      return j({ err: "org không tồn tại" }, 404);
+    const [b, err] = await body(req);
+    if (err) return err;
+    const seats = parseInt(b.seats), expiry = String(b.expiry || "");
+    if (!(seats > 0) || !/^\d{4}-\d{2}-\d{2}$/.test(expiry))
+      return j({ err: "cần seats > 0 + expiry YYYY-MM-DD" }, 400);
+    const issued = dayVN();
+    const lic = { org: name, seats, expiry, issued,
+      sig: await hmacHex(o.license_secret,
+                         `${name}|${seats}|${expiry}|${issued}`) };
+    await audit(env, actor, "license-issue", name, name,
+                `${seats} ghế, hạn ${expiry}`);
+    return j({ license: lic });
+  }
+  if (path === "/api/admins") {
+    if (actor.role !== "master") return j({ err: "chỉ master" }, 403);
+    const [b, err] = await body(req);
+    if (err) return err;
+    const u = String(b.username || "").toLowerCase().trim(),
+          p = String(b.password || ""),
+          role = b.role === "master" ? "master" : "admin",
+          aorg = role === "admin" ? String(b.org || "") : null;
+    if (!/^[a-z0-9_.@-]{3,64}$/.test(u) || p.length < 8)
+      return j({ err: "username 3-64 ký tự (hoặc email), pass ≥ 8" }, 400);
+    if (role === "admin" && !orgs[aorg])
+      return j({ err: "org không tồn tại" }, 400);
+    if (await one(env, "SELECT id FROM admins WHERE username=?", u))
+      return j({ err: "username đã có" }, 409);
+    const salt = randHex(16);
+    const r = await run(env,
+      "INSERT INTO admins(username,pass_hash,salt,role,org,created_ts)"
+      + " VALUES(?,?,?,?,?,?)",
+      u, await passHash(p, salt), salt, role, aorg, nowSec());
+    await audit(env, actor, "admin-create", aorg || "*", u, role);
+    return j({ ok: true, id: r.meta && r.meta.last_row_id });
+  }
+  if (path.startsWith("/api/admins/")) {
+    // master đổi pass / disable-enable tài khoản — xoá session để
+    // thay đổi có hiệu lực ngay (máy kia phải login lại)
+    if (actor.role !== "master") return j({ err: "chỉ master" }, 403);
+    const id = parseInt(path.slice("/api/admins/".length));
+    const u = await one(env, "SELECT * FROM admins WHERE id=?", id);
+    if (!u) return j({ err: "not found" }, 404);
+    const [b, err] = await body(req);
+    if (err) return err;
+    if (b.disabled && u.role === "master") {
+      // chặn khoá master CUỐI CÙNG — bootstrap đã tự khoá, mất hết
+      // master = lockout vĩnh viễn (chỉ còn vendor_key đọc được)
+      const n = await one(env,
+        "SELECT COUNT(*) AS c FROM admins WHERE role='master' "
+        + "AND disabled=0 AND id!=?", id);
+      if (!n || n.c === 0)
+        return j({ err: "không thể khoá master cuối cùng" }, 400);
+    }
+    if (b.disabled !== undefined)
+      await run(env, "UPDATE admins SET disabled=? WHERE id=?",
+                b.disabled ? 1 : 0, id);
+    if (b.password) {
+      if (String(b.password).length < 8)
+        return j({ err: "pass ≥ 8" }, 400);
+      const salt = randHex(16);
+      await run(env, "UPDATE admins SET pass_hash=?,salt=? WHERE id=?",
+                await passHash(String(b.password), salt), salt, id);
+    }
+    await run(env, "DELETE FROM sessions WHERE admin_id=?", id);
+    await audit(env, actor, "admin-update", u.org || "*", u.username,
+                // [^"\\]|\\. — pass chứa " thì JSON.stringify escape
+                // thành \"; [^"]* thuần dừng sớm và LỘ phần đuôi pass
+                JSON.stringify(b).replace(/"password":"(?:[^"\\]|\\.)*"/g,
+                                          '"password":"***"'));
+    return j({ ok: true });
+  }
   if (path === "/api/pair-approve" || path === "/api/pair-revoke") {
-    const org = adminOrg(req, orgs, env.VENDOR_KEY || "");
-    if (org === null)
-      return j({ err: "thiếu hoặc sai X-Admin-Key" }, 401);
     const [b, err] = await body(req);
     if (err) return err;
     const mid = String(b.machine_id || "");
@@ -416,18 +741,20 @@ async function doPost(req, env, path, prefix, orgs) {
       const mk = randHex(24);
       await run(env, "UPDATE machines SET approved=1, revoked=0, "
                      + "machine_key=? WHERE machine_id=?", mk, mid);
+      await audit(env, actor, "pair-approve", r.org, mid, "");
       return j({ ok: true, machine_key: mk });
     }
     // GIỮ machine_key — máy bị revoke vẫn tra ra row → beacon thấy
     // status:"revoked" rõ, xoá key local và re-pair pending
     await run(env, "UPDATE machines SET approved=0, revoked=1 "
                    + "WHERE machine_id=?", mid);
+    await audit(env, actor, "pair-revoke", r.org, mid, "");
     return j({ ok: true });
   }
   if (path === "/api/org-ping") {
-    if (!(env.VENDOR_KEY &&
-          eq(req.headers.get("X-Admin-Key") || "", env.VENDOR_KEY)))
-      return j({ err: "thiếu hoặc sai key" }, 401);
+    // collector cty tự host ping về vendor — chỉ master cấp
+    if (actor.role !== "master")
+      return j({ err: "chỉ master" }, 403);
     const [b, err] = await body(req);
     if (err) return err;
     await run(env,
@@ -436,11 +763,11 @@ async function doPost(req, env, path, prefix, orgs) {
       JSON.stringify(b).slice(0, 8000));
     return j({ ok: true });
   }
-  // upload 2 bước như py: zip raw trước, manifest sau
+  // upload 2 bước như py: zip raw trước, manifest sau — chỉ master
+  // (release ảnh hưởng mọi org, không cho cty-admin đụng)
   if (path.startsWith("/api/releases/")) {
-    const org = adminOrg(req, orgs, env.VENDOR_KEY || "");
-    if (org === null)
-      return j({ err: "thiếu hoặc sai X-Admin-Key" }, 401);
+    if (actor.role !== "master")
+      return j({ err: "chỉ master đẩy release" }, 403);
     const fn = basename(path.slice("/api/releases/".length));
     if (!fn || fn === "." || fn === "..")
       return j({ err: "tên file lạ" }, 400);
@@ -453,9 +780,8 @@ async function doPost(req, env, path, prefix, orgs) {
     return j({ ok: true, file: fn, sha256: sha });
   }
   if (path === "/api/releases") {
-    const org = adminOrg(req, orgs, env.VENDOR_KEY || "");
-    if (org === null)
-      return j({ err: "thiếu hoặc sai X-Admin-Key" }, 401);
+    if (actor.role !== "master")
+      return j({ err: "chỉ master đẩy release" }, 403);
     const [b, err] = await body(req);
     if (err) return err;
     if (!(b.version && b.url && b.sha256 && b.sig))
@@ -466,12 +792,10 @@ async function doPost(req, env, path, prefix, orgs) {
     await env.BUCKET.put("releases/latest.json", JSON.stringify({
       version: String(b.version), url: fn, sha256: b.sha256,
       sig: b.sig, min_ver: String(b.min_ver || "0.0.0") }, null, 2));
+    await audit(env, actor, "release", "*", String(b.version), "");
     return j({ ok: true });
   }
   if (path === "/api/packs") {
-    const org = adminOrg(req, orgs, env.VENDOR_KEY || "");
-    if (org === null)
-      return j({ err: "thiếu hoặc sai X-Admin-Key" }, 401);
     const [b, err] = await body(req);
     if (err) return err;
     const porg = String(b.org || "");
@@ -479,13 +803,15 @@ async function doPost(req, env, path, prefix, orgs) {
         !Number.isInteger(b.pack_version))
       return j({ err: "pack cần org + pack_version int" }, 400);
     if (org !== "*" && porg !== org)
-      return j({ err: "admin_key chỉ đẩy pack org mình" }, 403);
+      return j({ err: "chỉ đẩy pack cho org mình" }, 403);
     const raw = JSON.stringify(b);
     await env.BUCKET.put(`packs/${porg}/${b.pack_version}.json`, raw);
     await env.BUCKET.put(`packs/latest-${porg}.json`, JSON.stringify({
       version: b.pack_version,
       sha256: hex(await crypto.subtle.digest("SHA-256", enc.encode(raw))),
     }));
+    await audit(env, actor, "pack-push", porg,
+                String(b.pack_version), "");
     return j({ ok: true });
   }
   return j({ err: "not found" }, 404);
@@ -522,7 +848,7 @@ async function mirror(env) {
 async function telemetry(env) {
   const url = env.TELEMETRY_URL, key = env.TELEMETRY_KEY;
   if (!url || !key) return;
-  const orgs = JSON.parse(env.ORGS_JSON || "{}");
+  const orgs = await loadOrgs(env);
   for (const name of Object.keys(orgs)) {
     const rows = await allq(env,
       `SELECT version,license_json FROM machines WHERE org=?
@@ -545,8 +871,7 @@ async function telemetry(env) {
 
 export default {
   async fetch(req, env, ctx) {
-    let orgs = {};
-    try { orgs = JSON.parse(env.ORGS_JSON || "{}"); } catch {}
+    const orgs = await loadOrgs(env);
     const url = new URL(req.url);
     // /fleet (không slash) → 301 về /fleet/ — dashboard fetch api/...
     // tương đối, URL không có trailing slash thì resolve ra /api/* ở
@@ -558,7 +883,7 @@ export default {
     const post = req.method === "POST";
     if (!rateOk(ip, post)) return j({ err: "quá nhiều request" }, 429);
     if (req.method === "GET") return doGet(req, env, path, prefix, orgs, url);
-    if (post) return doPost(req, env, path, prefix, orgs);
+    if (post) return doPost(req, env, path, prefix, orgs, ip);
     return j({ err: "not found" }, 404);
   },
   async scheduled(event, env, ctx) {
