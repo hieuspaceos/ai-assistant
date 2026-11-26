@@ -47,3 +47,30 @@ Ngày: 2026-11-26 (đợt 2). Environment reset sạch: `~/TroLyAI-e2e` + `~/lan
 - F-002: binary cần Apple Developer cert ký (owner đã có tài khoản)
 - D real apps: Zalo/Google/Outlook/Canva login trên Brave test (E1–E5)
 - Phase W trực quan: rà chữ trên screenshots từng màn (một phần đã qua headless)
+
+
+---
+
+# Run 3 — full reset lần 2 (2026-11-26 tối)
+
+Reset sạch `~/TroLyAI-e2e` + `~/lan-test-brave`, fixture lan-test về nguyên trạng. Install mới bằng `TROLY_DATA=~/TroLyAI-e2e launcher.py run` (supervisor foreground).
+
+## Kết quả
+
+| Phase | Run 3 |
+|---|---|
+| A cài đặt | ✅ Fresh install lên đủ 4 port, `/`→301→200, ensure-deps dựng venv ngay |
+| B onboarding | ✅ 7 bước trơn tru: tên "Lan" hiện ở portal ("Chào Lan!"), 2 thẻ duyệt qua dialog native, Hằng active, KHÔNG trùng bot (B10 của run 1 không tái hiện) |
+| C chat | ✅ C2 "Chào Lan, mình là Hằng — trợ lý marketing của bạn" đúng vai; warn "vừa nạp lại quyền mới" (F-015) hiện đúng sau khi cấp quyền |
+| D apps | ✅ partial+: Settings modal đủ, "Mở trang" Zalo mở được tab chat.zalo.me qua extension, probe tự cập nhật "đang mở sẵn — nhờ được ngay". **F-020 P3**: outlook/canva báo "trình duyệt chưa nối" trong khi ext đã nối |
+| E / phỏng vấn | ✅ **Flagship**: `/phong-van` nhận ra đã có khoá học → hỏi bài mới → Lan kêu "nén ảnh" → sinh trọn lesson-03: guide+exercise+13 slide+video.mp4 ~2 phút kèm .vtt+sample-files (6 ảnh ~47MB), manifest tự cập nhật, portal hiện sau reload. Agent còn tự quét "đơn giản/chỉ cần/dễ" để tuân AGENTS.md |
+| F bài học | ✅ Slide deck bài 3 render đẹp (dark theme, 1/13, nav ‹ ›) |
+| I đời thường | ✅ Kill chat-bridge → watchdog tự respawn (~3s), não sống, prompt sau chạy bình thường ("Pong! Mình vẫn đây") |
+| W | ✅ Settings modal + slide bài 3: sạch jargon, giải thích "chìa khoá nhà", chấm xanh/xám |
+| J suite | ✅ test-packs / test-gates / test-distribution đều PASS |
+
+## Findings mới run 3
+- F-020 (P3): hint "trình duyệt chưa nối" mâu thuẫn khi ext đã nối.
+
+## Ghi chú vận hành
+- Lần chạy `launcher.py run` đầu in "đang chạy sẵn" rồi thoát vì phát hiện orphans từ run trước → phải kill orphans + chạy lại. Nhỏ nhưng là trap khi reset thủ công.
