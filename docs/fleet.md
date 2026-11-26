@@ -37,6 +37,10 @@ khoá:
    mất máy) mà không ảnh hưởng fleet. Máy bị revoke → 403 `revoked` →
    xoá key local → re-pair hiện pending lần nữa (admin thấy, quyết).
 4. `machine.id` (hex 32) sinh lần đầu, KHÔNG rotate — định danh đếm ghế.
+5. **Re-pair máy đã duyệt** (mất `machine.key`): KHÔNG trả lại key chỉ
+   vì biết `beacon_secret` — máy về pending với cờ `repair`, admin
+   duyệt → cấp key MỚI (key cũ chết sau rotate — tự động rotate khi
+   cấp lại). `beacon_secret` một mình không đủ lấy key máy đã duyệt.
 
 Vì sao không dùng thẳng beacon_secret làm khoá beacon: một máy lộ
 secret → kẻ trong LAN giả mạo được mọi máy. Với pairing, revoke một
@@ -47,10 +51,12 @@ máy chỉ mất máy đó.
 | Khoá | Ai cầm | Mở được gì |
 |---|---|---|
 | `beacon_secret` → `machine_key` | máy NV | POST pair + beacon (ghi state chính mình) |
-| `admin_key` | IT cty | GET dashboard + `/api/fleet*` + duyệt/revoke máy |
+| `admin_key` | IT cty | GET dashboard + `/api/fleet*` + duyệt/revoke máy + đẩy pack org mình |
 | **session token** (Bearer 7 ngày) | admin đã login | giống `admin_key`, kèm role + org scope (hosted tier) |
 | `license_secret` | vendor + collector config | verify chữ ký license (không nằm trên máy NV) |
-| vendor key (`telemetry.key`) | vendor | nhận `/api/org-ping`, đọc `/api/org-pings`, bootstrap master đầu |
+| `telemetry.key` | máy khách → vendor | CHỈ ghi `POST /api/org-ping` — không quyền admin inbound |
+| `vendor_read_key` | vendor | đọc rollup org-level (`/api/org-pings`, `/api/license`, `/api/packs`) — chỉ đặt trên collector vendor |
+| `release_key` | vendor/maintainer | `POST /api/releases*` — không set = upload tắt (chỉ mirror/copy tay) |
 
 `admin_key` map về org trong `collector.json` → IT cty A không đọc
 được fleet cty B khi collector host nhiều org.
@@ -94,11 +100,15 @@ python3 tools/collector.py --config collector.json \
 {"orgs": {"IMA": {"beacon_secret": "…", "license_secret": "…",
                   "admin_key": "…"}},
  "telemetry": {"url": "https://troly.hieuspace.com/fleet/api/org-ping",
-               "key": "vendor-key"}}
+               "key": "vendor-key"},
+ "release_key": "…"}        // tuỳ chọn: bật POST /api/releases*;
+                            // vendor_read_key CHỈ đặt ở collector vendor
 ```
 
 - Bind `0.0.0.0` là **chủ đích** — máy NV trong LAN phải push tới được
-  (khác bridge loopback). Dashboard: `http://collector:8790/?key=<admin_key>`.
+  (khác bridge loopback). Dashboard: `http://collector:8790/` → ô
+  "Dán key" nhập `admin_key` (không dán key vào URL — rơi vào
+  history/proxy log).
 - SQLite `collector-data/fleet.db`, bảng `meta.schema_version` + migrate
   tuần tự (`MIGRATIONS` trong file — collector sống lâu ở máy khách).
 - Release/pack hint: đặt `collector-data/releases.json`
@@ -178,18 +188,18 @@ trong `test-fleet.py` khoá set này):
 | `POST /api/beacon` | machine_key | upsert snapshot + counts, trả `{update,pack}` |
 | `POST /api/pair-approve` | admin_key | cấp machine_key |
 | `POST /api/pair-revoke` | admin_key | thu hồi máy (giữ key để trả revoked rõ ràng) |
-| `GET /api/pending` | admin_key | máy chờ duyệt |
+| `GET /api/pending` | admin_key | máy chờ duyệt + máy `repair=1` chờ cấp lại key |
 | `GET /api/fleet` | admin_key | bảng máy + usage hôm nay + license_status + `conns` (app connections, chip tổng hợp) |
 | `GET /api/fleet/<id>` | admin_key | snapshot đầy đủ + usage 14 ngày |
 | `GET /api/license` | admin_key | seats vs active30 + status |
-| `POST /api/org-ping` | vendor key | nhận rollup org-level |
-| `GET /api/org-pings` | vendor key | meta-dashboard vendor |
+| `POST /api/org-ping` | telemetry.key | nhận rollup org-level |
+| `GET /api/org-pings` | vendor_read_key | meta-dashboard vendor |
 | `GET /` + static | — | dashboard (data vẫn đòi admin key/session) |
 | `GET /api/releases/latest` | machine_key | manifest release mới nhất |
 | `GET /releases/<file>` | machine_key | tải zip release đã ký |
 | `GET /packs/<org>/<ver>.json` | machine_key | tải pack — CHỈ cùng org |
-| `POST /api/releases/<file>` | admin (master ở hosted) | upload zip (bước 1) |
-| `POST /api/releases` | admin (master ở hosted) | upload manifest (bước 2) |
+| `POST /api/releases/<file>` | release_key (master ở hosted) | upload zip (bước 1) |
+| `POST /api/releases` | release_key (master ở hosted) | upload manifest (bước 2) |
 | `GET /api/packs` | admin_key | pack latest đang phát per org |
 | `POST /api/packs` | admin_key | đẩy pack mới (admin_key scope org) |
 

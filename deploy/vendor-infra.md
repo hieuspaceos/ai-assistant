@@ -15,7 +15,7 @@ troly.hieuspace.com
 └── /fleet/          → hosted collector = Cloudflare Worker
                        (worker/src/index.js — port của collector.py)
     ├── /            → dashboard (login account 2-role master/cty-admin,
-    │                  vẫn nhận admin_key qua "Dán key"/?key=)
+    │                  vẫn nhận admin_key qua tab "Dán key")
     ├── /api/pair    → máy xin vào
     ├── /api/beacon  → snapshot 15'
     └── /api/org-ping→ meta-telemetry cho vendor (1/ngày/collector)
@@ -94,9 +94,12 @@ Server chỉ là bưu điện — máy khách verify sha256 + chữ ký ed25519 
 
 ## Hosted collector per-cty
 
-`tools/collector.py --org <slug> --data /srv/fleet/<slug>` — một file
-SQLite mỗi cty, không multi-tenant DB. Mỗi cty một `beacon_secret` +
-`admin_key` riêng (cấp qua `make-license.py` cùng đợt license).
+`tools/collector.py --config /srv/fleet/<slug>.json --data /srv/fleet/<slug>` —
+một process + một file SQLite mỗi cty, không multi-tenant DB. Mỗi cty một `beacon_secret` +
+`admin_key` riêng (cấp qua `make-license.py` cùng đợt license). Config
+máy vendor thêm `vendor_read_key` (meta-dashboard đọc rollup — KHÔNG
+ship trong config khách) và `release_key` (đẩy release; bản khách
+không set → upload tắt, chỉ mirror từ vendor).
 
 `/fleet/api/org-ping` — collector (kể cả bản self-hosted của khách)
 gọi 1/ngày: `{org, machines_active, version_dist, license_expiry}`.

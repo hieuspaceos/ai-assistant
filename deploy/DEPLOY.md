@@ -53,6 +53,13 @@ Chọn 1 trong 3 tier — cùng một `tools/collector.py`:
 Cài (tier a/b): `python3 tools/collector.py --port 8790 --data DATA/`
 + cấu hình `DATA/config.json` `{"org","beacon_secret","admin_key"}`.
 Sau đó mở `http://<collector>/` (nhập admin_key) để xem dashboard.
+
+> ⚠ **Tier b đi HTTP trần** — `beacon_secret`, `machine_key`, `admin_key`
+> đều cleartext trên dây LAN. Chỉ dùng trên LAN tin cậy vật lý (switch/
+> wifi của cty — không guest-wifi, không VLAN lẫn máy lạ). Org nhạy cảm
+> hoặc có nhân viên remote → tier a (HTTPS cert thật). Khi collector đứng
+> sau nginx/proxy, bật `"trust_proxy": true` trong config để rate limit
+> theo IP thật (X-Forwarded-For) — đừng bật nếu client kết nối trực tiếp.
 Tier c không cần cài gì — vendor tạo org trên dashboard
 `troly.hieuspace.com/fleet/` và bàn giao `fleet.json` + tài khoản
 cty-admin (login bằng account, admin_key cũ vẫn nhận qua "Dán key").

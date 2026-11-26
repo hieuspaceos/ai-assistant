@@ -298,7 +298,8 @@ vẫn kẹp.
 - WS `ws://localhost:7684/ext` bắt `?token=` (xem mô hình khoá trên) —
   process local không còn chiếm được slot extension.
 - Nhóm action `t*` dùng CDP → banner "đang gỡ lỗi" xuất hiện trong
-  browser — `tdetach` để gỡ; không để debugger attach lâu hơn cần.
+  browser — `tdetach` để gỡ thủ công; tự detach sau ~2 phút idle
+  (timestamp theo lệnh dbg cuối, alarm sweep 30s).
 - Quyền `debugger` + `<all_urls>` là mặt tấn công lớn nhất — chỉ cài
   extension từ source của bộ trợ lý, và khi lên Web Store phải khai báo
   lý do dùng `debugger` (CDP cho nhóm `t*`).
@@ -421,3 +422,134 @@ Residual còn lại sau audit lại:
   chỉ reachable với token).
 - HOME unset (kèm pwd lookup fail) → mọi entry `~/` bị lọc isabs →
   `path_sensitive` fail-open — cực hiếm, ghi nhận.
+
+## Audit đợt 4 — collector.py + extension (đã vá phần không-gated)
+
+Vá — `tools/collector.py` (vẫn single-file — deployment contract):
+
+- **`porg` path traversal (PoC đã chạy)**: `POST /api/packs {"org":"../../x"}`
+  đưa thẳng vào `os.path.join` → ghi JSON ngoài `DATA/` (vendor key "*"
+  qua được scope check) + crash `latest-{porg}.json`. Fix: `porg in ORGS`
+  + `type(ver) is int` — pack cho org không-khai-báo là vô nghĩa.
+- **`_body` non-dict (PoC) + nested non-dict**: `[1,2,3]` qua `json.loads`
+  → `b.get` AttributeError → connection rớt; nested `{"snapshot":[1]}`
+  cũng crash trong `_beacon`. Fix: 400 non-dict + `_as_dict()` bọc
+  `snapshot/config/brain_health/counts`.
+- **Upload `latest.json` đè manifest** → fleet update hỏng. Fix: chặn
+  tên + regex `[A-Za-z0-9][A-Za-z0-9._-]*` + manifest ghi tmp+`os.replace`
+  (cả `/api/releases` lẫn `mirror_loop`).
+- **Rate limit sau proxy**: `trust_proxy` trong config → đọc
+  `X-Forwarded-For` bên trái nhất. Mặc định tắt (đúng cho LAN tier —
+  spoof được XFF thì ai cũng reset được bucket của người khác).
+- **Lost-update `counts`**: `_db_lock` → `RLock` + read-merge-write trong
+  một lock (RLock vì `q()` tự acquire).
+- **`license_status` tin `lic["org"]`** → license org B hợp lệ hiện "ok"
+  trên máy org A. Fix: ép `lic.get("org") == org_name` theo row;
+  `make-license.py` bắt buộc `--org` nên fail-closed.
+- **`org_pings` không trần** → prune 90 ngày mỗi insert.
+- **Boot message khuyên `?key=`** (token vào history/log) → chỉ hướng
+  "Dán key" gửi header.
+
+Vá — `extension/`:
+
+- **Ref `data-tlai` trang kiểm soát**: snapshot gắn attr lên DOM → trang
+  tự gắn ref giả lên nút mồi → agent bấm mục tiêu trang chọn. Fix:
+  `refMap` (Map ref→Element) trong isolated world — page JS không chạm
+  được; `isConnected` check chặn ref cũ; `data-tlai` còn trên DOM chỉ để
+  debug.
+- **Snapshot lộ giá trị form**: `labelOf` đọc `el.value` (trừ password)
+  → số thẻ/OTP/nháp tin lọt transcript. Fix: bỏ hẳn `.value`.
+- **`dom` action lộ secret**: clone giữ `input[type=hidden] value`
+  (CSRF token framework) + `meta name=csrf-token content`. Fix: strip
+  `value` mọi input + `content` của `meta[name]` khớp csrf/token/nonce/
+  secret.
+- **`r || {ok:true}` nuốt sự cố + `__proto__`**: fix `Object.hasOwn` +
+  trả `{ok:false,err}` khi r undefined; throw/reject trong handler tự trả
+  `err` rõ.
+- **`{action, ...params}`** — params đè action → `{...params, action}`.
+- **Debugger không tự detach** → `dbgLast` timestamp theo lệnh dbg +
+  alarm sweep detach sau ~2 phút idle + `onDetach` dọn map.
+- **`externally_connectable` mọi port** → siết `localhost:8080` (port
+  portal pin cứng trong launcher).
+- **Token sai → reconnect 3s vô hạn** → sau 3×close-chưa-mở nạp lại
+  token từ storage (storage chỉ ghi sau `onopen` → luôn đúng); reset đếm
+  khi mở thành công; `sock = ws` capture tránh nhầm socket mới.
+- **Thiếu URL assertion**: response `inTab` kèm `url`; `expectUrl` check
+  đầu `handle()` phủ mọi action (đặt trong `inTab` sẽ không bao giờ
+  chạy cho `t*` — params được recreate ở đó).
+
+Vá — quyết định design (phase 04–06, plan `261126-1255-audit-4-fix`):
+
+- **Vendor key god-mode → tách 3 key**: `telemetry.key` (trong
+  collector.json mọi khách) chỉ còn quyền `POST /api/org-ping` —
+  inbound không có quyền admin nào. `vendor_read_key` mới (chỉ đặt ở
+  collector vendor) → `"*"` = read-rollup-only: GET `/api/org-pings`,
+  `/api/license`, `/api/packs` — `/api/fleet`, `/api/pending`,
+  `/api/fleet/<mid>` đều 403 (machine-level PII), mọi POST write 403.
+- **Re-pair trả `machine_key` → repair flow**: re-pair máy approved chỉ
+  set `repair=1` + pending (migration v2: cột `repair`,`pending_key`).
+  Mọi approve ghi key vào `pending_key` — máy chỉ nhận key qua pair,
+  `machine_key` được set lúc phát (key cũ chết = rotate miễn phí).
+  `beacon_secret` một mình không đủ lấy key máy đã duyệt.
+- **`REL_DIR` global → `release_key` riêng**: cả hai route
+  `POST /api/releases*` đòi `release_key` top-level — admin_key org
+  không còn đẩy được release. Không set = upload tắt (chỉ
+  mirror_loop/copy tay), đúng cho collector khách nhận từ vendor.
+- **Worker port (`worker/src/index.js`)**: re-pair vẫn trả key cũ —
+  port D1 riêng, chưa vá trong đợt này; parity endpoint giữ nguyên,
+  cần đợt port riêng nếu muốn repair flow trên hosted tier.
+
+Accepted-risk còn lại:
+
+- Slow-loris: ~65 conn nhỏ giọt chiếm hết 64 slot × 30s — LAN tier chấp
+  nhận; hosted tier để proxy chịu.
+- Zip ≤200MB nạp RAM khi máy tải release — giới hạn bởi slot + LAN
+  trusted.
+- `/api/license` aggregate lấy license hợp lệ đầu tiên cho seats/expiry
+  — machines license khác nhau thì sai số (đếm-gentle, chấp nhận).
+- `tabs` trả url+title mọi tab vào agent context — by design.
+- `?key=` code path còn hoạt động (collector-web/index.html ~617) —
+  chỉ gỡ khỏi docs/message, giữ làm dự phòng.
+- Message params không schema-validate — bridge là nguồn lệnh duy nhất;
+  mở nguồn thứ hai thì cần schema.
+
+### Audit lại đợt vá — regression do chính vá gây ra (đã sửa)
+
+- **First-approve không bao giờ nhận key**: bản vá đầu chỉ ghi
+  `pending_key` khi `repair=1` — approve máy mới vẫn ghi `machine_key`
+  trực tiếp. Máy mới pair lần kế → rơi vào nhánh "re-pair máy approved"
+  → set `repair=1`, trả pending → mọi máy phải duyệt HAI lần và không
+  nhận key nào. Test lúc đó còn encode bug thành expected. Sửa: mọi
+  approve ghi `pending_key`, `machine_key` chỉ set khi máy pair nhận
+  — cấp mới lẫn cấp lại một đường. Bài học lặp lại của audit-3: vá
+  đường tấn công mà phá happy path — test phải đi qua ĐÚNG vòng đời.
+- **Revoke kẹt cờ repair**: máy `repair=1` bị revoke → approve chỉ ghi
+  `pending_key` mà không `approved=1` → máy kẹt revoked vĩnh viễn.
+  Sửa: approve luôn `approved=1, revoked=0`; revoke dọn `repair=0,
+  pending_key=NULL`.
+- **`latest.json` case-insensitive**: FS macOS/Windows (LAN tier) coi
+  `Latest.json` ≡ `latest.json` → upload đè manifest được. Sửa:
+  check `fn.lower()`.
+- **`background.js` stale-socket clobber** (pre-existing, vá luôn):
+  `onclose` socket cũ fire sau `connect()` mới → `ws = null` xoá
+  tham chiếu socket mới. Sửa: chỉ `ws === sock` mới được dọn.
+- **Sweep detach unhandled rejection**: `chrome.debugger.detach` trả
+  Promise — try/catch sync không bắt reject. Sửa: `.catch(() => {})`.
+
+### Audit lại lần 3 — thêm 3 phát hiện (đã sửa)
+
+- **`org-ping` payload JSON bị cắt → DoS dashboard vendor**:
+  `json.dumps(b)[:8000]` cắt giữa chuỗi → `GET /api/org-pings`
+  `json.loads` crash mỗi lần đọc. `telemetry.key` là semi-public
+  (trong collector.json mọi khách) nên ai cũng đầu độc được. Sửa:
+  payload >8000 byte thu về `{"org":..., "_truncated":true}` — JSON
+  luôn hợp lệ.
+- **`badTokenFails` đếm x2**: `ws.onclose = ws.onerror = <handler>` —
+  WebSocket fire cả error lẫn close cho một lần rớt → +2 mỗi attempt,
+  ngưỡng "3 lần" thực tế chỉ ~2. Sửa: `onerror` no-op, mọi dọn dẹp
+  trong `onclose`; đồng thời `return` sớm cho socket stale (trước đó
+  vẫn hẹn reconnect timer thừa — `connect()` có guard nên chỉ waste).
+- **`scroll` sN không qua `refMap`**: fallback đoán theo index
+  `scrollableEls()` trực tiếp → sau re-render index trỏ nhầm vùng.
+  Sửa: thử `byRef('sN')` trước (giữ element identity + `isConnected`),
+  index chỉ là phương án cuối.
