@@ -37,7 +37,7 @@ việc hoặc đổi ưu tiên.
 |---|---|
 | Devin Desktop/editor ACP thay stack nhúng | Portal giờ là vỏ — nâng cấp khi muốn trải nghiệm "app" hơn; đánh đổi: mất quyền kiểm soát UI |
 | Devin Cloud (app.devin.ai) | Sandbox an toàn cho người mới nhưng phải upload file + trả cloud credits |
-| `video.mp4` thật | `video-builder` chỉ chắc chắn ra kịch bản — quay kiểu Khan cần Edge headless + ffmpeg + TTS tiếng Việt |
+| `video.mp4` thật | `video-builder` chỉ chắc chắn ra kịch bản — quay kiểu Khan cần Edge headless + ffmpeg + VieNeu-TTS (local, Apache-2.0 — `tools/render-video.py` + `TTS_PY`/`TTS_VOICE`) |
 | Đa học viên trên một máy | Hiện một `my-course/` duy nhất — nếu cần profile thì manifest/config theo user |
 | Publish clone ra ngoài | File tĩnh up Netlify/GitHub Pages được, nhưng là việc kỹ thuật với học viên — chỉ làm khi có nhu cầu thật |
 

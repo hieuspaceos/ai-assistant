@@ -4,13 +4,18 @@
 Cách hoạt động (giải thích cho người không biết code):
   scene.json là "kịch bản phim" — liệt kê từng động tác: mở tab, gõ chữ,
   bấm nút, trợ lý trả lời. Script này:
-    1. Đọc giọng nói cho từng câu thoại (say trên macOS, System.Speech
-       trên Windows) để biết mỗi cảnh kéo dài bao lâu.
+    1. Đọc giọng nói cho từng câu thoại — ưu tiên VieNeu-TTS local
+       (TTS_PY = python của venv đã `pip install vieneu`, TTS_VOICE =
+       tên giọng preset), fallback `say` trên macOS / System.Speech
+       trên Windows — để biết mỗi cảnh kéo dài bao lâu.
     2. Dùng trình duyệt chạy ngầm chụp ảnh scene-player.html ở từng thời
        điểm — mỗi ảnh là một khung hình của phim.
-    3. ffmpeg ghép khung hình + giọng đọc thành video.mp4.
+    3. ffmpeg ghép khung hình + giọng đọc thành video.mp4, kèm phụ đề
+       .vtt cùng tên (cue = câu thoại, theo đúng offset timeline).
 
-Chạy:  python3 tools/render-video.py my-course/lesson-XX/scene.json
+Chạy:  python3 tools/render-video.py my-course/lesson-XX/scene.json [-o out.mp4]
+       TTS_PY=~/.local/share/vieneu-venv/bin/python TTS_VOICE="Trúc Ly" \
+         python3 tools/render-video.py <scene.json>
 """
 import base64, json, os, platform, re, shutil, socket, struct, subprocess, sys, tempfile, time
 from concurrent.futures import ThreadPoolExecutor

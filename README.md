@@ -225,7 +225,9 @@ the extension ships to the Web Store.
   cost of file uploads + cloud credits.
 - `video-builder` currently guarantees `video-script.md` only — real
   Khan-style recording uses that script + OBS; auto-rendered MP4 needs
-  headless Edge + ffmpeg + a Vietnamese TTS voice on the learner's
-  machine.
+  headless Edge + ffmpeg + VieNeu-TTS (`tools/tts-vieneu.py`, local
+  Apache-2.0 Vietnamese TTS — install `pip install vieneu` in a venv,
+  pass `TTS_PY`/`TTS_VOICE` to `tools/render-video.py`; falls back to
+  macOS `say` / Windows SAPI).
 - Subagents cost extra credits — consider pinning a cheaper `model:` in
   `.devin/agents/*.md` to save money.

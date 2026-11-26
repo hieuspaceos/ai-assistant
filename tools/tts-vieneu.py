@@ -3,7 +3,7 @@
 
 Dùng:  python3 tools/tts-vieneu.py "câu cần đọc" out.wav [voice]
 Cần:   venv đã `pip install vieneu` (chạy bằng python của venv đó).
-Giọng: truyền tên preset ở tham số 3, mặc định lấy TTS_VOICE env hoặc "Phạm Tuyên".
+Giọng: truyền tên preset ở tham số 3, mặc định lấy TTS_VOICE env hoặc "Trúc Ly".
 Danh sách giọng: python3 tools/tts-vieneu.py --voices
 """
 import os
@@ -21,7 +21,7 @@ def main():
         sys.exit(__doc__)
 
     text, out_wav = sys.argv[1], sys.argv[2]
-    voice = sys.argv[3] if len(sys.argv) > 3 else os.environ.get('TTS_VOICE', 'Phạm Tuyên')
+    voice = sys.argv[3] if len(sys.argv) > 3 else os.environ.get('TTS_VOICE', 'Trúc Ly')
 
     from vieneu import Vieneu
     t = Vieneu()

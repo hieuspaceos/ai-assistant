@@ -29,6 +29,7 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 | `ext-bridge.py` | HTTP `/api/browser` ↔ WS extension — lái trình duyệt thật; WS auth trước handshake, cap 64MB |
 | `clone-compare.py` | So clone vs nguồn: `harvest`/`styles`/`shot` — pha 4 của /clone-trang |
 | `scene-player.html` | Player cho `scene.json` của bài học (demo có điều khiển) |
+| `render-video.py` / `tts-vieneu.py` | Render `video.mp4` từ `scene.json`: chụp frame scene-player bằng trình duyệt headless + ghép ffmpeg, xuất kèm `.vtt` theo timing; giọng đọc ưu tiên VieNeu-TTS local (Apache-2.0, env `TTS_PY`/`TTS_VOICE`), fallback `say`/SAPI |
 | `test-bridges.py` | Smoke test endpoint: auth 401, save-page sandbox, brain whitelist — spawn bridge thật trên port động |
 | `test-parity.py` | Diff tập endpoint `/api/*` giữa chat-bridge `.py` ↔ `.ps1` — bắt drift |
 | `test-packs.py` | Diff `.devin/skills/` ↔ `skill-packs/` + kiểm recipes trỏ đúng skill — bắt "quên đồng bộ pack" |
