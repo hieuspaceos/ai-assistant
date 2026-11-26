@@ -5,6 +5,11 @@
       "path": "~/Downloads",
       "access": "read",
       "note": "noi thuong co file tai ve (anh Canva, file dinh kem)"
+    },
+    {
+      "path": "/tmp/troly-e2e-test",
+      "access": "read",
+      "note": ""
     }
   ]
 }
