@@ -14,7 +14,7 @@
 >   **Open** → **Open** thêm lần nữa.
 >
 > **Cập nhật sau này:** portal sẽ tự báo "Có bản mới" — bấm vào là ra
-> trang tải. Tải file mới chạy đè là xong, bài học và cài đặt giữ
+> trang tải. Tải file mới chạy đè là xong, công cụ và cài đặt giữ
 > nguyên. Extension báo "bản cũ" thì xoá và Load unpacked lại.
 >
 > Các bước thủ công bên dưới dành cho máy dev hoặc khi chưa có file `troly`
@@ -24,7 +24,7 @@
 
 File này hướng dẫn cài **Trợ lý AI** — một trợ lý làm việc thật trên
 máy bạn (đọc Zalo, xử lý file, cập nhật Sheet…) và tự dạy bạn dùng nó
-qua một khoá học riêng. Chỉ làm **một lần duy nhất**. Kẹt bước nào cứ
+qua bộ công cụ riêng. Chỉ làm **một lần duy nhất**. Kẹt bước nào cứ
 hỏi người phụ trách hoặc chụp màn hình gửi họ.
 
 > Máy công ty không cho cài phần mềm? Gửi file này cho IT, nhờ họ làm

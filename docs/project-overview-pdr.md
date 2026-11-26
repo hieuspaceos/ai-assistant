@@ -68,7 +68,7 @@ sửa tại chỗ → lưu về file. Chi tiết: `docs/clone-pipeline.md`.
 - **Không thay thế Devin** — portal là vỏ hiển thị; mọi suy luận do agent.
 - **Không clone backend** — bản clone chỉ tái hiện phần nhìn thấy; form,
   giỏ hàng, đăng nhập là khung giả lập.
-- **Không dạy lý thuyết chung** — bài học sinh ra từ nỗi đau thật học viên
+- **Không dạy lý thuyết chung** — công cụ sinh ra từ nỗi đau thật học viên
   kể, không phải giáo trình có sẵn.
 
 ## Durable Constraints

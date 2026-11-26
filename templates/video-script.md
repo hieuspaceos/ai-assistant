@@ -14,7 +14,7 @@ thao tác xảy ra 1-2 giây để người xem kịp nhìn.
 # Kịch bản video — Bài {{lesson_no}}: {{lesson_name}}
 
 **Độ dài mục tiêu:** {{x}} phút · **Format:** quay màn hình + giọng đọc
-**Setup quay:** mở sẵn terminal ở folder bài học + folder file bên cạnh (chia
+**Setup quay:** mở sẵn terminal ở folder công cụ + folder file bên cạnh (chia
 đôi màn hình), zoom chữ to, ẩn desktop lộn xộn.
 
 ---
@@ -25,7 +25,7 @@ thao tác xảy ra 1-2 giây để người xem kịp nhìn.
 > "{{greeting}} — VD: Có bao giờ bạn nhận được một cục file mà nhìn vào chỉ
 > muốn thở dài không? Hôm nay mình cho Devin lo việc đó trong hai phút."
 
-**MÀN HÌNH:** Slide tiêu đề bài học (`slides.html` trang 1). Chưa gõ gì.
+**MÀN HÌNH:** Slide tiêu đề (`slides.html` trang 1). Chưa gõ gì.
 
 ## Đoạn 2 — Nỗi đau (~{{t2}} giây)
 

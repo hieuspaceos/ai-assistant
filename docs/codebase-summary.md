@@ -28,7 +28,7 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 | `chat-terminal.ps1` | Chạy ttyd theme sáng font lớn (Windows), qua term-gate |
 | `ext-bridge.py` | HTTP `/api/browser` ↔ WS extension — lái trình duyệt thật; WS auth trước handshake, cap 64MB |
 | `clone-compare.py` | So clone vs nguồn: `harvest`/`styles`/`shot` — pha 4 của /clone-trang |
-| `scene-player.html` | Player cho `scene.json` của bài học (demo có điều khiển) |
+| `scene-player.html` | Player cho `scene.json` của bài (demo có điều khiển) |
 | `render-video.py` / `tts-vieneu.py` | Render `video.mp4` từ `scene.json`: chụp frame scene-player bằng trình duyệt headless + ghép ffmpeg, xuất kèm `.vtt` theo timing; giọng đọc ưu tiên VieNeu-TTS local (Apache-2.0, env `TTS_PY`/`TTS_VOICE`), fallback `say`/SAPI |
 | `test-bridges.py` | Smoke test endpoint: auth 401, save-page sandbox, brain whitelist — spawn bridge thật trên port động |
 | `test-parity.py` | Diff tập endpoint `/api/*` giữa chat-bridge `.py` ↔ `.ps1` — bắt drift |
@@ -74,7 +74,7 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 
 | File | Vai trò |
 |---|---|
-| `index.html` + `app.js` + `styles.css` | Portal chính: danh sách bài học từ manifest, tab Chat/Terminal, section Quy trình (workflow cards) |
+| `index.html` + `app.js` + `styles.css` | Portal chính: danh sách công cụ từ manifest, tab Chat/Terminal, section Quy trình (workflow cards) |
 | `chat.html` | Giao diện chat bong bóng (markdown) ↔ chat-bridge |
 | `clone-view.html` | Viewer trang clone: toàn màn hình, thanh sửa nội dung tại chỗ, Lưu/Tải về |
 | `onboarding.html` | Wizard lần đầu: ngôn ngữ, tên, folder, app kết nối |
@@ -118,14 +118,14 @@ prompt-optional + wait-run lặp gánh lượt hỏi lẻ giữa run.
 | `config.json` | `language`, `learner_name` — onboarding ghi |
 | `permissions.json` | Folder agent được đọc/ghi ngoài workspace |
 | `connections.json` | Trạng thái kết nối app/web + field bí mật (`secret:true`) |
-| `manifest.json` | Danh sách bài học — portal đọc để render |
+| `manifest.json` | Danh sách công cụ — portal đọc để render |
 | `tool-XX-<slug>/` | Một bài (luồng mới): walkthrough.json + guide.md — bài cũ có thể kèm slides.html/video.mp4/exercise.md |
 | `clone-work/<site>/` | Số liệu đo mỗi site clone: ref-dom, ref-styles, ref-css/, ref-assets, ref-shot-*, ref-states.md, tokens.md |
 | `trang-*.html` | File clone thành phẩm (mở trong clone-view hoặc trực tiếp) |
 
 ## intro/
 
-`slides.html` — deck giới thiệu tĩnh (Bài 0) trước khi có khoá học riêng.
+`slides.html` — deck giới thiệu tĩnh (Bài 0) trước khi có bộ công cụ riêng.
 
 ## site/ — landing page troly.hieuspace.com
 

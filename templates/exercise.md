@@ -1,5 +1,5 @@
 <!--
-TEMPLATE BÀI TẬP — mỗi bài học kèm đúng 1 file này.
+TEMPLATE BÀI TẬP — mỗi công cụ kèm đúng 1 file này.
 Nguyên tắc: bài tập phải là tình huống THẬT (có file mẫu đi kèm trong
 sample-files/ nếu cần), có đáp án tự chấm, không hỏi lý thuyết.
 -->

@@ -35,7 +35,7 @@ push-only ra collector bên ngoài (mục 7).
 |                            (đọc .devin/skills, gọi API
 |                             /api/browser để lái trình duyệt) |
 |                                                               |
-|   Đĩa: workspace/ (bài học, config, permissions, clone)       |
+|   Đĩa: workspace/ (công cụ, config, permissions, clone)       |
 +---------------------------------------------------------------+
           |  (chỉ máy fleet) beacon push-only HTTPS 15'
           v
@@ -50,15 +50,15 @@ extension = cánh tay trên trình duyệt · serve.py = file tĩnh.
 ## Các thành phần
 
 ### 1. Portal tĩnh — `tools/serve.py` / `serve.ps1` :8080
-- **Mục đích:** phục vụ `web/` (portal), `workspace/` (bài học, file clone),
+- **Mục đích:** phục vụ `web/` (portal), `workspace/` (công cụ, file clone),
   `intro/`, `templates/` — mọi thứ hiển thị được trong browser.
 - **Chặn dotfiles**: không phục vụ đường dẫn chứa `.devin`/`.git` (trong
   `.devin/` có secrets của học viên).
 - **Host check** chống DNS rebinding: chỉ `localhost`/`127.0.0.1`/`[::1]`.
 - **CSP `connect-src 'none'`** trên `.html` dưới `/workspace/`+`/intro/` —
-  nội dung clone/bài học không exfil được ra net. Slide trong portal nhúng
+  nội dung clone/công cụ không exfil được ra net. Slide trong portal nhúng
   qua iframe `sandbox="allow-scripts"` (opaque origin).
-- HTTP/1.1 keep-alive + `Range` (video bài học tua được); `/web/vendor/*`
+- HTTP/1.1 keep-alive + `Range` (video minh hoạ tua được); `/web/vendor/*`
   cache 1h.
 - Không build step — HTML/CSS/JS thuần.
 
