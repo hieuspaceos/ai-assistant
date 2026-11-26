@@ -35,6 +35,13 @@ EXTRA_MIME = {".woff": "font/woff", ".woff2": "font/woff2", ".ttf": "font/ttf"}
 # KHÔNG áp cho /web/ (portal phải gọi bridge được). clone-view sửa trang
 # qua srcdoc thay vì đọc DOM iframe vì trang giờ opaque.
 CSP_PATHS = ("/my-course/", "/intro/")
+# mọi loại file trình duyệt render thành DOCUMENT chạy được script —
+# không chỉ .html: .svg (image/svg+xml có <script>), .xml (XSLT),
+# .xhtml/.xht/.shtml/.mht. File độc .svg dưới my-course mở trực tiếp
+# chạy script trong origin :8080 → đọc localStorage.bridge_token →
+# gọi mọi API bridge (audit-5 N4)
+CSP_SUFFIXES = (".html", ".htm", ".svg", ".xml", ".xhtml", ".xht",
+                ".shtml", ".mhtml", ".mht")
 CSP = ("sandbox allow-scripts allow-top-navigation-by-user-activation "
        "allow-popups allow-modals; "
        "default-src 'self'; "
@@ -87,6 +94,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         # → lộ danh sách folder, tên học viên, trạng thái app). So hoa-
         # thường bắt buộc: FS macOS/Windows không phân biệt case.
         low = [p.lower() for p in parts]
+        # collector.json (org secrets: beacon_secret/admin/license) sống
+        # ở ROOT máy vendor — không nằm trong dot-folder nên lọt qua
+        # chặn dotfile; *.local.json (secrets/mcp_config) cũng là secret
+        # — chặn theo basename ở MỌI cấp (audit S7)
+        if low and (low[-1] == "collector.json"
+                    or low[-1].endswith(".local.json")):
+            return None
         if (len(low) == 2 and low[0] == "my-course" and low[1] in (
                 "permissions.json", "connections.json", "config.json",
                 "bots.json", "bot.md")) \
@@ -162,7 +176,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             raw_path = urllib.parse.unquote(
                 urllib.parse.urlparse(self.path).path)
             if raw_path.lower().startswith(CSP_PATHS) \
-                    and raw_path.lower().endswith((".html", ".htm")):
+                    and raw_path.lower().endswith(CSP_SUFFIXES):
                 self.send_header("Content-Security-Policy", CSP)
             self.end_headers()
             # CẠM BẪY: KHÔNG được `return f` — copyfile() của base class sẽ
@@ -192,7 +206,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         # /MY-COURSE/x.html resolve ra cùng file — nếu so case-sensitive thì
         # content độc chỉ cần location.href sang alias hoa là thoát CSP.
         if raw_path.lower().startswith(CSP_PATHS) \
-                and raw_path.lower().endswith((".html", ".htm")):
+                and raw_path.lower().endswith(CSP_SUFFIXES):
             self.send_header("Content-Security-Policy", CSP)
         self.end_headers()
         return f

@@ -487,7 +487,20 @@ def _native_confirm(rid):
         except Exception:
             pass
     if gui_failed:
-        return _native_fallback(rid)
+        # dialog spawn ĐƯỢC rồi chết giữa chừng (kill/crash —
+        # returncode≠0, stdout rỗng) KHÔNG phải "không có GUI" → hạ về
+        # đường Origin thì não tự forge duyệt (audit-5 N5). Deny luôn:
+        # rơi xuống tail — card đóng, không apply. Chỉ Popen-fail
+        # (headless thật, p is None ở trên) mới đi _native_fallback.
+        # Warn chỉ khi card CÒN pending: cancel/evict từ chat cũng
+        # terminate proc → gui_failed nhưng rec đã pop → không phải
+        # hỏng thật. Dùng type "warn" không phải "err" — "err" trong
+        # broadcast() kill toàn bộ perm_pending + nhả prompt_lock.
+        with store_lock:
+            alive = rid in local_pending
+        if alive:
+            broadcast({"t": "warn", "msg": "hộp thoại xin phép chết "
+                       "giữa chừng — coi như từ chối, thử lại nếu cần"})
     with store_lock:
         rec = local_pending.pop(rid, None)
     broadcast({"t": "perm_done", "id": rid})
@@ -548,7 +561,9 @@ def _perm_native_confirm(rid):
         # cho não ngay (agent đang chờ JSON-RPC reply — downgrade card bắt
         # họ bấm "Không" lần nữa trong chat thì não treo thêm vô ích).
         # Chỉ khi KHÔNG có output nào (osascript lỗi/bị terminate từ chat)
-        # mới coi là GUI hỏng → fallback về card Origin.
+        # mới coi là GUI hỏng — trước fallback về card Origin nhưng não
+        # forge Origin duyệt được → giờ xử như từ chối (audit-5 N5);
+        # chỉ spawn-fail (p is None, headless thật) mới fallback.
         declined = "button returned:Không" in out or "gave up:true" in out
         gui_failed = p.returncode != 0 and not approved and not declined
     except Exception:
@@ -559,7 +574,15 @@ def _perm_native_confirm(rid):
         except Exception:
             pass
     if gui_failed:
-        return _perm_native_fallback(rid)
+        # Như _native_confirm: deny thay vì _perm_native_fallback —
+        # não không được có đường tự duyệt bằng cách giết dialog (N5).
+        # "warn" + check pending: không trigger cleanup của "err",
+        # không báo khi chính ta cancel/evict card.
+        with store_lock:
+            alive = rid in perm_pending
+        if alive:
+            broadcast({"t": "warn", "msg": "hộp thoại xin phép chết "
+                       "giữa chừng — coi như từ chối"})
     with store_lock:
         rec = perm_pending.pop(rid, None)
     broadcast({"t": "perm_done", "id": rid})
@@ -1988,9 +2011,14 @@ class Handler(BaseHTTPRequestHandler):
                         if os.path.isdir(src) and not os.path.exists(dst):
                             shutil.copytree(src, dst)
         # Setup đã chạy rồi (config có language) mà bị gọi lại → agent
-        # có thể đang cố đè skills/config — qua card xác nhận. Lần đầu
-        # thật (onboarding) thì chạy luôn, không cần card.
-        if load_json(CONFIG_FP, {}).get("language"):
+        # có thể đang cố đè skills/config — qua card xác nhận. Máy FLEET
+        # (có .devin/fleet.json — bộ cài cty provision sẵn) thì LUÔN
+        # gate: skill/config trên máy cty do pack quản, agent không được
+        # tự ý chạy lại onboarding đè lên (audit-5 S3). Chỉ onboarding
+        # lần đầu thật trên máy cá nhân mới chạy luôn.
+        fleet = os.path.isfile(os.path.join(
+            os.path.abspath(CWD), ".devin", "fleet.json"))
+        if load_json(CONFIG_FP, {}).get("language") or fleet:
             rid = gate_local(
                 "Chạy lại thiết lập ban đầu — sẽ cài đè bộ skill?", _apply)
             self._gate_resp(rid, "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để chạy lại")

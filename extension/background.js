@@ -264,7 +264,12 @@ async function handle(action, p) {
         return { ok: true, tabs: tabs.map(t => ({ id: t.id, title: t.title, url: t.url, active: t.active })) };
       }
       case 'open': {
-        const t = await chrome.tabs.create({ url: p.url || 'about:blank', active: true });
+        // chỉ http(s) — data:/chrome:/javascript: mở trang phishing /
+        // trang nội bộ ngay trong trình duyệt thật (audit-5 N9)
+        const u = String(p.url || '');
+        if (u && !/^https?:\/\//i.test(u))
+          return { ok: false, err: 'chỉ mở được URL http(s)' };
+        const t = await chrome.tabs.create({ url: u || 'about:blank', active: true });
         return { ok: true, tabId: t.id };
       }
       case 'activate': {

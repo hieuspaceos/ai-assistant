@@ -17,7 +17,9 @@ CREATE TABLE IF NOT EXISTS machines(
   snapshot_json TEXT,
   license_json TEXT,
   license_status TEXT,
-  ev_stats     TEXT);
+  ev_stats     TEXT,
+  repair       INTEGER DEFAULT 0,
+  pending_key  TEXT);
 CREATE TABLE IF NOT EXISTS usage(
   machine_id TEXT, day TEXT, counts TEXT,
   PRIMARY KEY(machine_id, day));
@@ -60,3 +62,10 @@ CREATE TABLE IF NOT EXISTS audit(
   target TEXT,                  -- machine_id / org / pack version
   detail TEXT,
   ts     INTEGER);
+
+-- MIGRATION v2 (MIGRATIONS[2] của collector.py — repair flow):
+-- DB đã tồn tại trước khi có cột repair/pending_key thì worker tự
+-- ALTER lazy lần đầu dùng (ensureV2 trong index.js). Muốn migrate tay:
+--   wrangler d1 execute troly-fleet-db --command \
+--     "ALTER TABLE machines ADD COLUMN repair INTEGER DEFAULT 0;
+--      ALTER TABLE machines ADD COLUMN pending_key TEXT"

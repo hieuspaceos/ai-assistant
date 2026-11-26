@@ -37,8 +37,14 @@ MAX_CHARS = 24000            # quá dài → cắt, não đọc phần đầu + 
 
 def _fold(s):
     """NFKC đổ fullwidth/math-alphanum → ASCII thường; nháy góc ‹›«»
-    và ngoặc lạ → <>. Không đụng chữ Việt — NFKC giữ nguyên dấu."""
+    và ngoặc lạ → <>. Ký tự format vô hình (category Cf: ZWSP, ZWNJ,
+    ZWJ, BOM, WORD JOINER, soft hyphen…) bị strip — khoảng trắng trong
+    _MARKER_RE không khớp Cf nên marker chèn ZWSP từng
+    sống sót qua sanitize (audit-5 N2). Chi phí: emoji chuỗi ZWJ
+    (👨‍👩‍👧) rớt joiner — hiển thị tách glyph, chấp nhận được.
+    Không đụng chữ Việt — NFKC giữ nguyên dấu."""
     s = unicodedata.normalize("NFKC", s)
+    s = "".join(c for c in s if unicodedata.category(c) != "Cf")
     return (s.replace("‹", "<").replace("›", ">")
              .replace("«", "<").replace("»", ">")
              .replace("〈", "<").replace("〉", ">")
@@ -160,12 +166,15 @@ ENV_KEEP_WINDOWS = {
     "ProgramData", "ProgramFiles", "ProgramFiles(x86)", "PSModulePath",
     "NUMBER_OF_PROCESSORS", "OS", "PROCESSOR_ARCHITECTURE",
 }
-# macOS/Linux — XDG + session để não chạy ổn; proxy vars là cấu hình
-# mạng (không phải secret) — máy sau proxy cty mà drop thì não mất mạng
+# macOS/Linux — XDG để não chạy ổn; proxy vars là cấu hình
+# mạng (không phải secret) — máy sau proxy cty mà drop thì não mất mạng.
+# KHÔNG giữ SSH_AUTH_SOCK (đọc/ký SSH key agent — audit S1), DBUS_
+# SESSION_BUS_ADDRESS (Secret Service/keyring), DISPLAY/XAUTHORITY/
+# WAYLAND_DISPLAY (điều khiển input + đọc màn hình X11/Wayland — audit
+# N6): brain CLI headless không cần cả nhóm session/desktop này.
 ENV_KEEP_POSIX = {
     "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME",
-    "XDG_RUNTIME_DIR", "DISPLAY", "XAUTHORITY", "WAYLAND_DISPLAY",
-    "SSH_AUTH_SOCK", "DBUS_SESSION_BUS_ADDRESS",
+    "XDG_RUNTIME_DIR",
     "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY",
     "http_proxy", "https_proxy", "no_proxy", "all_proxy",
 }
@@ -215,13 +224,19 @@ def exec_allowed(cmd, patterns):
     apply-pack (phòng file allowlist bị sửa tay chứa pattern độc)."""
     import fnmatch
     from cmd_deny import pattern_cmd_denied, first_token
-    DENY = ("|", ">", "<", ";", "&&", "`", "$(")
-    c = " ".join(str(cmd).split())
-    # lệnh chứa metachar shell (chain/redirect/subst) KHÔNG được
-    # auto-duyệt dù khớp glob — `ls *` cũng khớp
-    # `ls ~ && rm -rf ~` vì * nuốt đuôi. Lệnh phức hợp → cứ gate.
-    if any(d in c for d in DENY):
+    DENY = ("|", ">", "<", ";", "&&", "`", "$(", "${", "&", "\n", "\r",
+            "(")
+    raw = str(cmd)
+    # lệnh chứa metachar shell (chain/redirect/subst/background/newline)
+    # KHÔNG được auto-duyệt dù khớp glob — `ls *` cũng khớp
+    # `ls ~ && rm -rf ~` vì * nuốt đuôi. Check trên RAW trước khi
+    # normalize: \n/\r là dấu tách lệnh thật trong sh mà split() nuốt
+    # mất; `&` đơn (background) tách lệnh như `;` — trước chỉ chặn `&&`
+    # nên `sleep 1 & whoami` và `sleep 1\nrm -rf x` lọt (audit-5 N3).
+    # Lệnh phức hợp → cứ gate.
+    if any(d in raw for d in DENY):
         return None
+    c = " ".join(raw.split())
     for p in patterns:
         pl = str(p).strip()
         if not pl or any(d in pl.lower() for d in DENY):

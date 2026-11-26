@@ -80,6 +80,27 @@ const allq = async (env, s, ...a) =>
   (await env.DB.prepare(s).bind(...a).all()).results || [];
 const run = (env, s, ...a) => env.DB.prepare(s).bind(...a).run();
 
+// MIGRATIONS[2] của py — repair flow. DB tạo từ schema.sql mới đã có
+// cột; DB cũ thì ALTER lazy một lần/isolate (PRAGMA rẻ, fail thì để
+// request kế thử lại — query đụng cột thiếu vẫn throw như cũ)
+let _v2done = false;
+async function ensureV2(env) {
+  if (_v2done) return;
+  try {
+    const cols = await allq(env, "PRAGMA table_info(machines)");
+    const names = new Set(cols.map(c => c.name));
+    // từng cột một cờ — ALTER 1 thành công rồi ALTER 2 lỗi (hoặc
+    // migrate tay thiếu) mà gate chung thì cột thiếu không bao giờ
+    // được thêm → query đụng pending_key throw mãi
+    if (!names.has("repair"))
+      await run(env, "ALTER TABLE machines ADD COLUMN repair "
+                     + "INTEGER DEFAULT 0");
+    if (!names.has("pending_key"))
+      await run(env, "ALTER TABLE machines ADD COLUMN pending_key TEXT");
+    _v2done = true;
+  } catch {}
+}
+
 // ---------- license (HMAC-SHA256 — đúng format payload của
 // make-license.py: "org|seats|expiry|issued") ----------
 async function hmacHex(sec, payload) {
@@ -107,7 +128,15 @@ async function licenseStatus(lic, orgName, orgs) {
 
 // ---------- orgs: env ORGS_JSON là fallback/seed, D1 là nguồn chính
 // (org tạo trong UI master nằm trong bảng orgs — D1 ghi đè env cùng tên)
-async function loadOrgs(env) {
+// Cache 30s/isolate — SELECT orgs mỗi request là N+1 vô ích; write
+// path (org-create/rotate) bust ngay nên secret mới có hiệu lực tức thì.
+// NHƯNG bust chỉ dọn isolate hiện tại: secret đã rotate còn sống ≤30s
+// trên isolate khác → đường SO SECRET (pair, admin_key) phải gọi
+// fresh=true đọc thẳng D1; cache chỉ cho consumer không-nhạy
+// (licenseStatus, danh sách org dashboard).
+let _orgs = { ts: 0, val: {} };
+async function loadOrgs(env, fresh = false) {
+  if (!fresh && Date.now() - _orgs.ts < 30e3) return _orgs.val;
   const out = {};
   try { Object.assign(out, JSON.parse(env.ORGS_JSON || "{}")); } catch {}
   try {
@@ -116,8 +145,10 @@ async function loadOrgs(env) {
                       license_secret: r.license_secret,
                       admin_key: r.admin_key || undefined };
   } catch {}                          // bảng chưa migrate → chỉ env
+  _orgs = { ts: Date.now(), val: out };
   return out;
 }
+const bustOrgs = () => { _orgs.ts = 0; };
 
 // ---------- admin accounts (PBKDF2-HMAC-SHA256) + sessions ----------
 async function passHash(pass, salt) {
@@ -149,7 +180,9 @@ async function authAdmin(req, env, orgs) {
   const k = req.headers.get("X-Admin-Key") || "";
   if (env.VENDOR_KEY && eq(k, env.VENDOR_KEY))
     return { role: "master", org: "*", name: "vendor", via: "key" };
-  for (const [n, o] of Object.entries(orgs))
+  // fresh: admin_key vừa rotate phải đúng/sai NGAY — cache 30s trên
+  // isolate khác chưa bust được (key cũ sống thêm 30s)
+  for (const [n, o] of Object.entries(await loadOrgs(env, true)))
     if (o.admin_key && eq(k, o.admin_key))
       return { role: "admin", org: n, name: "key:" + n, via: "key" };
   return null;
@@ -234,15 +267,32 @@ async function pair(req, env, orgs, pairOrg) {
   if (!org) return j({ err: "org không tồn tại" }, 401);
   const [b, err] = await body(req);
   if (err) return err;
-  const mid = String(b.machine_id || "");
+  const mid = String(b.machine_id || "").slice(0, 200);
   if (!mid) return j({ err: "thiếu machine_id" }, 400);
   const now = nowSec();
+  await ensureV2(env);               // repair/pending_key (MIGRATIONS[2])
   const row = await one(env,
     "SELECT * FROM machines WHERE machine_id=?", mid);
   // mid đã đăng ký org khác — secret org này không được đụng vào
   if (row && row.org !== pairOrg) return j({ status: "pending" });
-  if (row && row.approved && !row.revoked)
-    return j({ status: "approved", machine_key: row.machine_key });
+  if (row && row.approved && !row.revoked) {
+    if (row.pending_key) {
+      // admin đã duyệt (cấp mới hoặc cấp lại) — key LUÔN đi qua
+      // pending_key, máy chỉ nhận qua pair: phát key và set machine_key
+      // tại đây (rotate nếu key cũ tồn tại — kẻ cầm key cũ mất quyền)
+      const mk = row.pending_key;
+      await run(env, "UPDATE machines SET machine_key=?, repair=0, "
+        + "pending_key=NULL WHERE machine_id=?", mk, mid);
+      return j({ status: "approved", machine_key: mk });
+    }
+    // re-pair máy approved ĐÃ CÓ key (mất machine.key) → KHÔNG trả key
+    // chỉ vì biết beacon_secret — shared toàn org (N1). Flag repair →
+    // /api/pending hiện cho admin duyệt cấp lại
+    if (!row.repair)
+      await run(env, "UPDATE machines SET repair=1 "
+        + "WHERE machine_id=?", mid);
+    return j({ status: "pending" });
+  }
   if (row && row.revoked) return j({ status: "revoked" });
   await run(env,
     `INSERT INTO machines(machine_id,org,hostname,os,approved,
@@ -392,12 +442,18 @@ async function doGet(req, env, path, prefix, orgs, url) {
       : await allq(env, "SELECT * FROM machines WHERE approved=1 "
                         + "AND revoked=0 AND org=?", org);
     const day = dayVN();
+    // usage của CẢ fleet hôm nay trong 1 query — trước là N+1 (một
+    // SELECT mỗi máy → fleet 200 máy = 200 roundtrip D1)
+    const urows = await allq(env,
+      "SELECT machine_id,counts FROM usage WHERE day=?", day);
+    const usage = {};
+    for (const u of urows) {
+      try { usage[u.machine_id] = JSON.parse(u.counts); } catch {}
+    }
     const out = [];
     for (const r of rows) {
-      const snap = JSON.parse(r.snapshot_json || "{}");
-      const u = await one(env,
-        "SELECT counts FROM usage WHERE machine_id=? AND day=?",
-        r.machine_id, day);
+      let snap = {};
+      try { snap = JSON.parse(r.snapshot_json || "{}"); } catch {}
       // conns gọn [{n,s}] — dashboard đếm kết nối/app cho cả fleet
       // mà không phải tải full snapshot từng máy
       const apps = ((snap.conns || {}).apps) || [];
@@ -409,19 +465,23 @@ async function doGet(req, env, path, prefix, orgs, url) {
         license_status: r.license_status,
         bot: (snap.bots || {}).active,
         conns: apps.map(a => ({ n: a.name || a.id, s: a.status })),
-        today: u ? JSON.parse(u.counts) : {},
+        today: usage[r.machine_id] || {},
       });
     }
     return j({ machines: out, ts: nowSec() });
   }
   if (path === "/api/pending") {
+    // repair=1 = máy approved xin cấp lại key (re-pair sau khi mất
+    // machine.key) — admin phải thấy để duyệt, y hệt py
+    await ensureV2(env);
     const rows = org === "*"
       ? await allq(env, "SELECT machine_id,org,hostname,os,first_seen,"
-                        + "last_seen,license_status FROM machines "
-                        + "WHERE approved=0 AND revoked=0")
+                        + "last_seen,license_status,repair FROM machines "
+                        + "WHERE (approved=0 OR repair=1) AND revoked=0")
       : await allq(env, "SELECT machine_id,org,hostname,os,first_seen,"
-                        + "last_seen,license_status FROM machines "
-                        + "WHERE approved=0 AND revoked=0 AND org=?",
+                        + "last_seen,license_status,repair FROM machines "
+                        + "WHERE (approved=0 OR repair=1) AND revoked=0 "
+                        + "AND org=?",
                    org);
     return j({ pending: rows });
   }
@@ -477,8 +537,14 @@ async function doGet(req, env, path, prefix, orgs, url) {
     if (org !== "*") return j({ err: "chỉ vendor key" }, 403);
     const rows = await allq(env,
       "SELECT org,ts,payload FROM org_pings ORDER BY ts DESC LIMIT 500");
-    return j({ pings: rows.map(r =>
-      ({ org: r.org, ts: r.ts, data: JSON.parse(r.payload) })) });
+    return j({ pings: rows.map(r => {
+      // payload ghi bởi bản cũ có thể bị cắt giữa JSON → parse fail
+      // từng row, đừng để một row rác làm 500 cả dashboard
+      let data = null;
+      try { data = JSON.parse(r.payload); }
+      catch { data = { _corrupt: true }; }
+      return { org: r.org, ts: r.ts, data };
+    }) });
   }
   if (path === "/api/packs") {
     // latest-<org>.json của org mình — admin xem pack đang phát
@@ -498,12 +564,16 @@ async function doGet(req, env, path, prefix, orgs, url) {
 // ---------- POST ----------
 async function doPost(req, env, path, prefix, orgs, ip) {
   if (path === "/api/pair") {
-    // org suy từ beacon_secret — máy không tự chọn org
+    // org suy từ beacon_secret — máy không tự chọn org. FRESH orgs:
+    // secret vừa rotate phải chết ngay — cache 30s trên isolate khác
+    // vẫn nhận secret cũ. Pair hiếm (máy chỉ pair lúc thiếu key) nên
+    // SELECT này không tốn kém.
     const key = req.headers.get("X-Beacon-Key") || "";
     let pairOrg = null;
-    for (const [n, o] of Object.entries(orgs))
+    const freshOrgs = await loadOrgs(env, true);
+    for (const [n, o] of Object.entries(freshOrgs))
       if (eq(key, o.beacon_secret)) pairOrg = n;
-    return pair(req, env, orgs, pairOrg);
+    return pair(req, env, freshOrgs, pairOrg);
   }
   if (path === "/api/beacon") return beacon(req, env, orgs, prefix);
 
@@ -592,6 +662,7 @@ async function doPost(req, env, path, prefix, orgs, ip) {
                    + "admin_key,note,created_ts) VALUES(?,?,?,?,?,?)",
               name, bs, ls, ak, String(b.note || "").slice(0, 200),
               nowSec());
+    bustOrgs();                   // org mới phải thấy ngay, không chờ TTL
     let acct = null;
     if (b.admin_user && b.admin_pass) {
       const u = String(b.admin_user).toLowerCase().trim(),
@@ -635,11 +706,15 @@ async function doPost(req, env, path, prefix, orgs, ip) {
                      + "admin_key,note,created_ts) VALUES(?,?,?,?,?,?)",
                 name, bs, cur.license_secret || "", ak,
                 "rotate từ env", nowSec());
+    bustOrgs();                   // secret mới phải thấy ngay, không chờ TTL
     let killed = 0;
     if (b.kill_machines) {
+      // dọn cả pending_key/repair — máy bị đá re-pair như máy mới,
+      // key cũ đang chờ phát cũng phải chết theo
+      await ensureV2(env);
       const r = await run(env,
-        "UPDATE machines SET approved=0, revoked=0, machine_key=NULL "
-        + "WHERE org=?", name);
+        "UPDATE machines SET approved=0, revoked=0, machine_key=NULL, "
+        + "repair=0, pending_key=NULL WHERE org=?", name);
       killed = (r.meta && r.meta.changes) || 0;
     }
     await audit(env, actor, "org-rotate-secret", name, name,
@@ -732,22 +807,29 @@ async function doPost(req, env, path, prefix, orgs, ip) {
   if (path === "/api/pair-approve" || path === "/api/pair-revoke") {
     const [b, err] = await body(req);
     if (err) return err;
-    const mid = String(b.machine_id || "");
+    const mid = String(b.machine_id || "").slice(0, 200);
     const r = await one(env,
       "SELECT org FROM machines WHERE machine_id=?", mid);
     if (!r || (org !== "*" && r.org !== org))
       return j({ err: "not found" }, 404);
     if (path.endsWith("approve")) {
       const mk = randHex(24);
+      // key LUÔN vào pending_key — máy nhận qua pair lần kế (phát ở
+      // pair()). Cấp mới lẫn cấp lại (repair) đều một đường: response
+      // cho admin xem, beacon_secret một mình không lấy được key
+      await ensureV2(env);
       await run(env, "UPDATE machines SET approved=1, revoked=0, "
-                     + "machine_key=? WHERE machine_id=?", mk, mid);
+                     + "pending_key=? WHERE machine_id=?", mk, mid);
       await audit(env, actor, "pair-approve", r.org, mid, "");
       return j({ ok: true, machine_key: mk });
     }
     // GIỮ machine_key — máy bị revoke vẫn tra ra row → beacon thấy
-    // status:"revoked" rõ, xoá key local và re-pair pending
-    await run(env, "UPDATE machines SET approved=0, revoked=1 "
-                   + "WHERE machine_id=?", mid);
+    // status:"revoked" rõ, xoá key local và re-pair pending.
+    // Dọn cờ repair/pending_key cũ — revoke là reset sạch (như py).
+    await ensureV2(env);
+    await run(env, "UPDATE machines SET approved=0, revoked=1, "
+                   + "repair=0, pending_key=NULL WHERE machine_id=?",
+              mid);
     await audit(env, actor, "pair-revoke", r.org, mid, "");
     return j({ ok: true });
   }
@@ -757,10 +839,18 @@ async function doPost(req, env, path, prefix, orgs, ip) {
       return j({ err: "chỉ master" }, 403);
     const [b, err] = await body(req);
     if (err) return err;
+    // cắt thẳng .slice(0,8000) phá JSON giữa chừng → /api/org-pings
+    // parse rớt. Payload quá dài thì thu về bản tóm tắt hợp lệ (y py)
+    let payload = JSON.stringify(b);
+    if (payload.length > 8000)
+      payload = JSON.stringify(
+        { org: String(b.org || "?").slice(0, 80), _truncated: true });
     await run(env,
       "INSERT INTO org_pings(org,ts,payload) VALUES(?,?,?)",
-      String(b.org || "?").slice(0, 80), nowSec(),
-      JSON.stringify(b).slice(0, 8000));
+      String(b.org || "?").slice(0, 80), nowSec(), payload);
+    // prune như py — rollup gần nhất, giữ 90 ngày
+    await run(env, "DELETE FROM org_pings WHERE ts<?",
+              nowSec() - 90 * 86400);
     return j({ ok: true });
   }
   // upload 2 bước như py: zip raw trước, manifest sau — chỉ master
@@ -769,7 +859,12 @@ async function doPost(req, env, path, prefix, orgs, ip) {
     if (actor.role !== "master")
       return j({ err: "chỉ master đẩy release" }, 403);
     const fn = basename(path.slice("/api/releases/".length));
-    if (!fn || fn === "." || fn === "..")
+    // latest.json là manifest do POST /api/releases quản — upload đè
+    // trực tiếp = /api/releases/latest trả rác (py chặn y). Regex bắt
+    // đầu alnum cũng chặn dotfile
+    if (!fn || fn === "." || fn === ".." ||
+        fn.toLowerCase() === "latest.json" ||
+        !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(fn))
       return j({ err: "tên file lạ" }, 400);
     const cl = parseInt(req.headers.get("Content-Length") || "0") || 0;
     if (cl <= 0 || cl > REL_CAP) return j({ err: "kích thước zip lạ" }, 413);
@@ -869,6 +964,23 @@ async function telemetry(env) {
   }
 }
 
+// dọn bảng không giới hạn — py chỉ prune org_pings; worker có thêm
+// audit/usage/sessions (bảng riêng của worker) + pending-spam của máy
+// không ai duyệt. Chạy ở cron hàng ngày (telemetry slot).
+async function pruneDaily(env) {
+  const t = nowSec();
+  await run(env, "DELETE FROM org_pings WHERE ts<?", t - 90 * 86400);
+  await run(env, "DELETE FROM audit WHERE ts<?", t - 180 * 86400);
+  await run(env, "DELETE FROM usage WHERE day<?",
+            new Date((Date.now() + DAY_TZ) - 180 * 86400e3)
+              .toISOString().slice(0, 10));
+  await run(env, "DELETE FROM sessions WHERE expires_ts<?", t);
+  // pending-spam: máy pair nhưng không ai approve 30 ngày — máy thật
+  // sẽ tự pair lại tạo row mới; repair=1 không nằm trong nhóm này
+  await run(env, "DELETE FROM machines WHERE approved=0 AND revoked=0 "
+            + "AND first_seen<?", t - 30 * 86400);
+}
+
 export default {
   async fetch(req, env, ctx) {
     const orgs = await loadOrgs(env);
@@ -889,7 +1001,9 @@ export default {
   async scheduled(event, env, ctx) {
     if (event.cron === "7 */6 * * *")
       ctx.waitUntil(mirror(env).catch(() => {}));
-    if (event.cron === "30 2 * * *")
+    if (event.cron === "30 2 * * *") {
       ctx.waitUntil(telemetry(env).catch(() => {}));
+      ctx.waitUntil(pruneDaily(env).catch(() => {}));
+    }
   },
 };

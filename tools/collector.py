@@ -329,7 +329,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         b = self._body()
         if b is None:
             return
-        mid = str(b.get("machine_id") or "")
+        mid = str(b.get("machine_id") or "")[:200]
         if not mid:
             return self._json({"err": "thiếu machine_id"}, 400)
         now = int(time.time())

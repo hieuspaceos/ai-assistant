@@ -200,12 +200,45 @@ try:
     check(s == 200 and d.get("machine_key"),
           "cty-admin duyệt máy org mình")
     mk = d["machine_key"]
+    # approve ghi pending_key — máy chỉ nhận key qua pair kế (repair
+    # flow, parity collector.py). Beacon ngay = key chưa active
+    s, d = http("POST", base + "/api/beacon", {"X-Beacon-Key": mk},
+                body={"hostname": "m-test", "version": "1.0.0"})
+    check(s == 403, "beacon bằng pending_key trước pair → 403")
+    s, d = pair("m-test-1", BS_TSTCO)
+    check(s == 200 and d.get("status") == "approved"
+          and d.get("machine_key") == mk,
+          "pair sau duyệt → nhận machine_key")
     s, d = http("POST", base + "/api/beacon", {"X-Beacon-Key": mk},
                 body={"hostname": "m-test", "version": "1.0.0",
                       "snapshot": {"conns": {"apps": [
                           {"id": "zalo", "name": "Zalo",
                            "status": "connected"}]}}})
     check(s == 200 and d.get("ok"), "beacon máy đã duyệt → ok")
+
+    # repair flow (N1): re-pair máy ĐÃ CÓ key → KHÔNG trả key chỉ vì
+    # biết beacon_secret — flag repair, chờ admin duyệt cấp lại
+    s, d = pair("m-test-1", BS_TSTCO)
+    check(s == 200 and d.get("status") == "pending"
+          and "machine_key" not in d,
+          "re-pair máy đã duyệt → pending, không lộ key")
+    s, d = http("GET", base + "/api/pending", B(tok2))
+    check(any(p.get("repair") == 1 and p["machine_id"] == "m-test-1"
+              for p in d.get("pending") or []),
+          "máy repair hiện trong /api/pending")
+    s, d = http("POST", base + "/api/pair-approve", B(tok2),
+                body={"machine_id": "m-test-1"})
+    mk_new = d.get("machine_key")
+    check(s == 200 and mk_new and mk_new != mk,
+          "duyệt repair → key mới vào pending_key")
+    s, d = pair("m-test-1", BS_TSTCO)
+    check(d.get("status") == "approved"
+          and d.get("machine_key") == mk_new,
+          "pair kế nhận key mới sau duyệt repair")
+    s, d = http("POST", base + "/api/beacon", {"X-Beacon-Key": mk},
+                body={"hostname": "m-test", "version": "1.0.0"})
+    check(s == 403, "key cũ chết sau rotate qua repair")
+    mk = mk_new
     s, d = http("GET", base + "/api/fleet", B(tok2))
     row = [m for m in d.get("machines", []) if m["machine_id"] == "m-test-1"]
     check(row and row[0].get("conns") == [{"n": "Zalo", "s": "connected"}],

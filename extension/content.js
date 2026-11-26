@@ -324,7 +324,10 @@ const ACTIONS = {
         n.removeAttribute('content');
     });
     const html = c.outerHTML;
-    const cap = p.max || 300000;
+    // kẹp cap — p.max không giới hạn thì caller tự chọn frame WS vài
+    // chục MB qua bridge (audit-5 N10); 1MB đã quá đủ cho 1 trang
+    const cap = Math.min(Math.max(parseInt(p.max) || 300000, 1000),
+                         1000000);
     return { ok: true, html: html.slice(0, cap), truncated: html.length > cap };
   },
   // styles: computed style THẬT của các phần tử khớp selector (hoặc các

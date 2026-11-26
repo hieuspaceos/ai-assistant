@@ -23,7 +23,7 @@ Chuỗi tin cậy (theo thứ tự — một mắt xích gãy thì abort, không
 
   python3 tools/update.py [DATA_DIR] [--check]
 """
-import hashlib, json, os, shutil, subprocess, sys, time
+import hashlib, json, os, re, shutil, subprocess, sys, time
 import urllib.error, urllib.parse, urllib.request, zipfile
 
 ROOT = os.path.abspath(sys.argv[1] if len(sys.argv) > 1
@@ -43,6 +43,11 @@ from ed25519 import checkvalid            # noqa: E402
 ORIGIN = os.environ.get("TROLY_UPDATE_ORIGIN") or \
     "https://troly.hieuspace.com/releases/latest.json"
 TIMEOUT = 3 if QUICK else 8
+# trần đọc: manifest là JSON vài KB; zip ≤ REL_CAP phía collector
+# (200MB). Collector hostile trước đây đổ response không đáy xuống máy
+# — r.read() trọn = đầy disk/RAM (audit-5 N11)
+MAN_CAP = 1_000_000
+ZIP_CAP = 200_000_000
 
 # entry zip được phép có — mọi thứ ngoài tập này là đáng ngờ
 # phải khớp đúng danh sách zip của build-release.sh — thiếu dir nào
@@ -78,15 +83,21 @@ def _jload(fp):
         return None
 
 
-def fetch(url, key=None, timeout=TIMEOUT):
-    """GET bytes — không redirect, timeout ngắn. Lỗi → raise."""
+def fetch(url, key=None, timeout=TIMEOUT, cap=MAN_CAP):
+    """GET bytes — không redirect, timeout ngắn. `cap` = trần byte:
+    đọc cap+1 để PHÁT HIỆN vượt trần (server nói dối Content-Length
+    cũng bị bắt) — response quá trần → raise, không dùng dữ liệu cụt.
+    Lỗi → raise."""
     req = urllib.request.Request(url)
     # Cloudflare chặn UA "Python-urllib" (1010) — cần UA riêng
     req.add_header("User-Agent", "TroLyAI-Update/1")
     if key:
         req.add_header("X-Beacon-Key", key)
     with OPENER.open(req, timeout=timeout) as r:
-        return r.read()
+        data = r.read(cap + 1)
+    if len(data) > cap:
+        raise ValueError(f"response vượt trần {cap} bytes")
+    return data
 
 
 def manifest_sources():
@@ -108,17 +119,31 @@ def ver_tuple(s):
         return ()
 
 
+def _man_ok(man):
+    """Manifest hợp lệ HÌNH THỨC trước khi tin mà tải zip (audit-5 S4):
+    manifest nói dối format (version không phải x.y.z, sha256/sig không
+    đúng hex) thì bỏ nguồn NGAY — không tốn một zip fetch. Sig ed25519
+    = 64 bytes → 128 hex; sha256 = 32 bytes → 64 hex."""
+    try:
+        return bool(
+            re.fullmatch(r"\d+\.\d+\.\d+", str(man["version"]))
+            and isinstance(man.get("url"), str) and man["url"]
+            and re.fullmatch(r"[0-9a-fA-F]{64}", str(man["sha256"]))
+            and re.fullmatch(r"[0-9a-fA-F]{128}", str(man["sig"])))
+    except Exception:
+        return False
+
+
 def pick_manifest():
     """Trả (manifest, source_url, source_key) mới nhất hợp lệ —
-    manifest phải có đủ version/url/sha256/sig. key đi theo nguồn
-    (collector → machine.key, ORIGIN vendor → None) — zip fetch đính
-    đúng key nguồn đó, không đính machine.key cho host lạ (F16)."""
+    manifest phải qua _man_ok (đủ field + đúng format). key đi theo
+    nguồn (collector → machine.key, ORIGIN vendor → None) — zip fetch
+    đính đúng key nguồn đó, không đính machine.key cho host lạ (F16)."""
     best, best_url, best_key = None, None, None
     for url, key in manifest_sources():
         try:
             man = json.loads(fetch(url, key))
-            if all(man.get(k) for k in ("version", "url", "sha256",
-                                        "sig")):
+            if _man_ok(man):
                 if best is None or ver_tuple(man["version"]) \
                         > ver_tuple(best["version"]):
                     best, best_url, best_key = man, url, key
@@ -166,7 +191,8 @@ def main():
         print("update: zip ở host khác manifest — abort", flush=True)
         return
     try:
-        data = fetch(zip_url, man_key, timeout=max(TIMEOUT, 30))
+        data = fetch(zip_url, man_key, timeout=max(TIMEOUT, 30),
+                     cap=ZIP_CAP)
     except Exception as e:
         print(f"update: tải zip lỗi — {e}", flush=True)
         return

@@ -410,6 +410,9 @@ function handleEvent(ev) {
   }
   else if (ev.t === 'done') { flushBubble(); setBusy(false); curBubble = null; }
   else if (ev.t === 'err') { flushBubble(); addErr(ev.msg); setBusy(false); }
+  else if (ev.t === 'warn') addErr(ev.msg);   // cảnh báo bridge (VD hộp
+  // thoại xin phép chết giữa chừng) — hiển thị như lỗi nhưng KHÔNG
+  // setBusy(false): lượt não vẫn đang chạy
 }
 
 let since = 0;

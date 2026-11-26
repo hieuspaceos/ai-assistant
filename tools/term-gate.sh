@@ -50,6 +50,44 @@ case "$_bt" in
     echo "Lenh terminal khong hop le - chay devin."; BRAIN_TERM=devin ;;
 esac
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Env allowlist y content_guard.scrub_env — não terminal-mode trước
+# thừa hưởng TOÀN BỘ env của launcher (API key của user lọt vào não —
+# audit-5 N7). Giữ nhóm base + proxy + TROLY_* động + extras của
+# .devin/env-allowlist.json (parity load_env_extra); unset phần còn lại
+# trước khi exec não. `env -i` không gọn được nhóm động nên unset.
+_tg_keep=" PATH HOME USER USERNAME LOGNAME LANG LC_ALL LC_CTYPE TZ \
+TMPDIR TEMP TMP SHELL TERM BRIDGE_TOKEN BRAIN_TERM TROLY_DATA \
+XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_RUNTIME_DIR \
+HTTP_PROXY HTTPS_PROXY NO_PROXY ALL_PROXY \
+http_proxy https_proxy no_proxy all_proxy "
+# extras — python3 parse JSON đúng mọi format (parity load_env_extra;
+# sed chỉ bắt được "extra" trên 1 dòng), sed làm fallback khi thiếu py
+_tg_extras=$(python3 -c '
+import json, sys
+try:
+    d = json.load(open(sys.argv[1], encoding="utf-8"))
+    print(" ".join(str(k) for k in (d.get("extra") or [])
+                   if str(k).isidentifier()))
+except Exception:
+    pass' "$ROOT/.devin/env-allowlist.json" 2>/dev/null \
+|| sed -n 's/.*"extra"[[:space:]]*:[[:space:]]*\[\([^]]*\)\].*/\1/p' \
+     "$ROOT/.devin/env-allowlist.json" 2>/dev/null \
+     | tr ',' ' ' | tr -d "\"'[:blank:]")
+for _v in $_tg_extras; do
+  case "$_v" in
+    *[!A-Za-z0-9_]*|[0-9]*|"") ;;              # tên lạ → bỏ
+    *) _tg_keep="$_tg_keep$_v " ;;
+  esac
+done
+for _v in $(env | sed 's/=.*//'); do
+  case "$_v" in TROLY_*) continue ;; esac
+  # 2>/dev/null: SHELLOPTS/BASHOPTS readonly do bash export — unset
+  # fail nhưng không hại, im lỗi khỏi rác terminal
+  case "$_tg_keep" in *" $_v "*) ;; *) unset "$_v" 2>/dev/null ;; esac
+done
+unset _tg_keep _tg_extras _v
+
 SB="$ROOT/.devin/agent.sb"
 if [ "$(uname -s)" = "Darwin" ] && [ -f "$SB" ] \
    && command -v sandbox-exec >/dev/null 2>&1 \

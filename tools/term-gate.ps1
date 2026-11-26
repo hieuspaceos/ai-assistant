@@ -76,4 +76,33 @@ if ($brain -notmatch '^[A-Za-z0-9_.-]+$' -or
     Write-Host "Lenh terminal khong hop le - chay devin."
     $brain = "devin"
 }
+
+# Env allowlist y scrub_env của content_guard — não terminal-mode trước
+# thừa hưởng TOÀN BỘ env của launcher (API key của user lọt vào não —
+# audit-5 N7). Giữ nhóm base + biến hệ thống Windows + TROLY_* động +
+# extras của .devin/env-allowlist.json (parity load_env_extra).
+$root = Split-Path $PSScriptRoot
+$keep = [System.Collections.Generic.HashSet[string]]::new(
+    [System.StringComparer]::OrdinalIgnoreCase)
+foreach ($k in @('PATH','HOME','USER','USERNAME','LOGNAME','LANG',
+    'LC_ALL','LC_CTYPE','TZ','TMPDIR','TEMP','TMP','SHELL','TERM',
+    'BRIDGE_TOKEN','BRAIN_TERM','TROLY_DATA',
+    'SystemRoot','SystemDrive','WINDIR','APPDATA','LOCALAPPDATA',
+    'USERPROFILE','HOMEDRIVE','HOMEPATH','COMSPEC','PATHEXT',
+    'ProgramData','ProgramFiles','ProgramFiles(x86)','PSModulePath',
+    'NUMBER_OF_PROCESSORS','OS','PROCESSOR_ARCHITECTURE')) {
+    [void]$keep.Add($k)
+}
+try {
+    foreach ($e in @((Get-Content "$root\.devin\env-allowlist.json" -Raw |
+                      ConvertFrom-Json).extra)) {
+        if ("$e" -match '^[A-Za-z_][A-Za-z0-9_]*$') { [void]$keep.Add("$e") }
+    }
+} catch {}
+foreach ($v in @([System.Environment]::GetEnvironmentVariables().Keys)) {
+    if ($v -notmatch '^TROLY_' -and -not $keep.Contains($v)) {
+        [System.Environment]::SetEnvironmentVariable($v, $null)
+    }
+}
+
 & $brain

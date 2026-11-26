@@ -3,6 +3,104 @@
 Các quyết định kiến trúc và **tại sao** — để sau này không gỡ ngược lại
 vì quên lý do. Mới nhất lên đầu.
 
+## 2026 — Audit đợt 5: parity worker↔collector, marker Cf, consent mid-dialog
+
+**Worker port nguyên repair flow của collector (`pending_key`).** Vì:
+worker trả `machine_key` cho bất kỳ ai biết `beacon_secret` — bí mật
+shared toàn org — nên một nhân viên lấy được key của mọi máy trong org.
+Port nguyên semantics audit-4: re-pair máy approved chỉ `repair=1` +
+`pending`, admin duyệt → `pending_key`, máy nhận qua pair kế.
+`schema.sql` thêm 2 cột; DB cũ được `ensureV2` ALTER lazy một lần/
+isolate (không có migrations dir — schema.sql vẫn là nguồn chân thật,
+lệnh ALTER tay ghi chú cuối file).
+
+**`_fold` strip toàn bộ category Cf (ZWSP/ZWNJ/ZWJ/BOM/WJ/soft
+hyphen).** Vì: `\s*` trong `_MARKER_RE` không khớp ký tự format →
+`<<<​EXTERNAL_UNTRUSTED_END​>>>` chèn ZWSP sống sót qua sanitize,
+não nhìn thấy marker END giả y hệt thật = wrapper escape. Chi phí đã
+cân: emoji chuỗi ZWJ rớt joiner — chấp nhận được.
+
+**`exec_allowed` check DENY trên raw trước normalize; DENY thêm `&`,
+`\n`, `\r`, `${`, `(`.** Vì: `\n` bị `split()` nuốt thành space trước
+khi check, `&` đơn (background) chưa nằm trong DENY → pattern
+`sleep *` từng auto-duyệt cả `sleep 1 & whoami` lẫn
+`sleep 1\nrm -rf x`. Lệnh phức hợp phải rơi về card xác nhận, không
+được auto-duyệt.
+
+**CSP sandbox phủ mọi document-type scriptable, không chỉ `.html`.**
+Vì: `.svg` (image/svg+xml có `<script>`), `.xml` (XSLT), `.xhtml`…
+dưới `/my-course/` mở trực tiếp chạy script trong origin :8080 → đọc
+`localStorage.bridge_token` → gọi mọi API bridge. `CSP_SUFFIXES`
+liệt kê hết loại render-thành-document; media thuần không áp (ảnh
+trong `<img>` vốn không chạy script, áp sandbox chỉ làm Chrome ép
+download thay vì hiển thị).
+
+**Consent: dialog chết giữa chừng = deny, không fallback Origin.** Vì:
+`gui_failed` (spawn được rồi chết: returncode≠0, stdout rỗng) trước đây
+hạ card về đường Origin — não tự forge duyệt được. Giờ chỉ `Popen`
+fail (headless thật, `p is None`) mới fallback; chết giữa chừng xử như
+từ chối (`-32800` cho card ACP / đóng card cho card local). Lưu ý:
+`(allow process*)` của Seatbelt KHÔNG cho phép `signal` — não trong
+sandbox không kill được `osascript` (kiểm chứng trên Darwin 27); vector
+còn lại chỉ là resource-exhaustion làm `Popen` fail, nên phân biệt hai
+đường này là chặn hợp lý chứ không phải chặn khẩn cấp.
+
+**Bỏ `SSH_AUTH_SOCK`/`DBUS_*`/`DISPLAY`/`XAUTHORITY`/`WAYLAND_DISPLAY`
+khỏi env não — cả Terminal mode.** Vì: brain CLI headless không cần
+session/desktop bus; `SSH_AUTH_SOCK` cho đọc-ký SSH key, DBus nói
+chuyện keyring, X11 điều khiển input + đọc màn hình. `term-gate` (cả
+`.sh` lẫn `.ps1`) trước exec não thừa hưởng toàn bộ env launcher —
+giờ unset phần ngoài allowlist y `scrub_env` (+ extras của
+`.devin/env-allowlist.json`, parity `load_env_extra`).
+
+**`update.py`: `_man_ok` lọc manifest theo format TRƯỚC khi fetch zip;
+`fetch` có `cap`.** Vì: collector hostile ép máy tải zip rác (DoS
+disk/RAM — `r.read()` không đáy). Manifest sai format bỏ nguồn ngay;
+`fetch` đọc `cap+1` để phát hiện vượt trần (server nói dối
+Content-Length cũng không lọt — phần thừa nằm trong socket bị bỏ khi
+đóng).
+
+**`serve.py` blocklist `collector.json` + `*.local.json` theo
+basename.** Vì: `collector.json` ở ROOT máy vendor chứa org secrets —
+không nằm trong dot-folder nên lọt qua chặn dotfile; `*.local.json`
+(`secrets.local.json`, `mcp_config.local.json`) cũng là secret.
+
+**`/api/setup` gate khi có `fleet.json`.** Vì: máy cty provision sẵn
+có `.devin/fleet.json` — skill/config do pack quản; agent gọi setup
+đè onboarding trước đây chạy không card nếu `config.json` chưa có
+`language`.
+
+**Ghi nhận có chủ đích (không sửa): `devin_files` cho phép pack ghi
+`mcp_config.local.json`.** Pack CỐ Ý không ký (đợt 3) → org admin có
+thể khai MCP server mà brain CLI tự spawn ở lượt kế = kênh exec của
+admin trên máy học viên. Chấp nhận vì org admin vốn đã có quyền đẩy
+pack + license; trên macOS MCP process nằm trong Seatbelt profile của
+não (mitigate), trên máy chưa sandbox là đặc quyền đã-biết của pack —
+ghi ở đây để ai review pack sau này biết `devin_files` là rào duy nhất.
+
+**Worker housekeeping: `loadOrgs` cache 30s/isolate + bust khi write;
+`/api/fleet` gom usage một query; `pruneDaily` ở cron.** Vì: SELECT
+orgs mỗi request và N+1 usage là hai hot-path vô ích; bảng
+audit/usage/sessions/org_pings/pending-spam phình vô hạn nếu không
+prune. Cache bust ở org-create/rotate-secret nên secret mới có hiệu
+lực ngay, không chờ TTL. **Nhưng bust chỉ dọn isolate hiện tại** —
+rotate xong, secret cũ vẫn sống ≤30s trên isolate khác → mọi đường SO
+SECRET (`/api/pair` suy org từ `beacon_secret`, `authAdmin` nhánh
+`X-Admin-Key`) gọi `loadOrgs(env, fresh=true)` đọc thẳng D1: secret
+đã rotate chết ngay, secret mới dùng được ngay. Cache chỉ còn phục vụ
+consumer không-nhạy (`licenseStatus`, list org dashboard). `ensureV2`
+cũng phải kiểm TỪNG cột một — gate chung `repair` mà ALTER
+`pending_key` lỗi/migrate tay thiếu thì cột thiếu không bao giờ được
+thêm.
+
+**Consent warn dùng type event `"warn"` riêng, không phải `"err"`.**
+Vì: `broadcast()` coi `ready|done|err` là tín hiệu kết-lượt → kill
+toàn bộ `perm_pending` + nhả `prompt_lock`; dialog chết giữa lượt mà
+phát `err` sẽ đồng thời giết card khác đang chờ và nhả lock cho
+prompt kế chen giữa. `warn` render như lỗi trong chat nhưng giữ
+`setBusy` — và chỉ phát khi card CÒN pending (cancel/evict từ chat
+cũng `terminate()` proc → `gui_failed` giả nếu không check).
+
 ## 2026 — Audit đợt 4: tách 3 tầng key, repair flow, `*` rollup-only
 
 **`telemetry.key` là outbound-only, không phải key admin.** Vì: nó nằm
