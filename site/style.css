@@ -51,8 +51,11 @@
 
 /* ————— sections ————— */
 .section { padding-block: var(--section-gap-s); }
-.storyband { background: var(--color-accent-soft); }
+.storyband { background: var(--color-accent-2); }
 .storyband .headblock { max-width: 46rem; margin-inline: auto; text-align: center; }
+.storyband .headblock h2 { color: var(--color-accent-ink); }
+.storyband .headblock .lead { color: oklch(88% 0.04 155); }
+.storyband .loop-cap { color: oklch(82% 0.04 155); }
 .headblock { margin-bottom: var(--space-2xl); max-width: 40rem; }
 .headblock .lead { margin-top: var(--space-md); color: var(--color-ink-2); }
 
