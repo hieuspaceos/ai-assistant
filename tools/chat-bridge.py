@@ -190,6 +190,13 @@ BRAIN_CMD_DENY = {
     "r", "rscript", "tclsh", "groovy", "scala", "kotlin", "xcodebuild",
     "plutil", "go", "cargo", "julia", "ipython", "pypy", "micropython",
     "gjs", "qjs",
+    # runner đời mới còn sót (audit-lại): nodemon/tsx/ts-node chạy JS,
+    # uv/uvx/pipx/conda/poetry bọc python, jupyter/vitest/jest/mocha exec
+    # file test/notebook, clj/lein/stack/cabal chạy Clojure/Haskell —
+    # tất cả đều là exec-via-args y hệt python3.12 bị chặn.
+    "nodemon", "tsx", "ts-node", "bunx", "uv", "uvx", "pipx", "conda",
+    "poetry", "pdm", "jupyter", "vitest", "jest", "mocha", "clj",
+    "clojure", "lein", "stack", "cabal", "mise", "asdf",
 }
 
 # Interpreter/compiler có hậu tố VERSION (python3.12, perl5.40, php8.2,
@@ -1148,6 +1155,18 @@ def role_templates():
                 out.append(t)
     return out
 
+def _clean_recipes(raw):
+    """Chuẩn hoá recipes về đúng schema {command, meaning} + kẹp số
+    lượng lẫn độ dài — bot do agent tạo/import có thể nhồi payload hoặc
+    phình bots.json/manifest không trần (audit-3 M2). Schema phải khớp
+    skill-packs/recipes/*.json và chỗ app.js render c.meaning — ghi sai
+    tên field là mất dữ liệu lặng lẽ."""
+    if not isinstance(raw, list):
+        return []
+    return [{"command": str(r.get("command") or "")[:60],
+             "meaning": str(r.get("meaning") or "")[:120]}
+            for r in raw[:20] if isinstance(r, dict)]
+
 def write_bot_md(bot):
     cfg = load_json(CONFIG_FP, {})
     lang = cfg.get("language") or "vi"
@@ -1287,7 +1306,7 @@ def confirm_bot_bundle(sid):
                "skills": [s for s in map(str, raw.get("skills") or [])
                           if SKILL_NAME_RE.fullmatch(s)],
                "needs": [str(n)[:40] for n in raw.get("needs") or []],
-               "recipes": raw.get("recipes") if isinstance(raw.get("recipes"), list) else [],
+               "recipes": _clean_recipes(raw.get("recipes")),
                "instructions": raw.get("instructions")
                                if isinstance(raw.get("instructions"), (str, dict)) else "",
                "triggers": []}
@@ -1404,9 +1423,11 @@ class Handler(BaseHTTPRequestHandler):
         if path != "/api/health" and not self._authed():
             return self._json({"err": "thiếu hoặc sai mã kết nối"}, 401)
         # .get() trả None khi path lạ — getattr(name=None) raise TypeError
-        # (default chỉ tính khi attr name là string) → phải check trước
+        # (default chỉ tính khi attr name là string) → phải check trước;
+        # vẫn giữ default None cho trường hợp dict trỏ tới method không
+        # tồn tại → 404 chứ không để AttributeError giết handler thread
         mn = self.GET_ROUTES.get(path)
-        h = getattr(self, mn) if mn else None
+        h = getattr(self, mn, None) if mn else None
         if h is None:
             return self._json({"err": "not found"}, 404)
         h()
@@ -1436,7 +1457,7 @@ class Handler(BaseHTTPRequestHandler):
             # thì data.get(...) raise AttributeError → handler thread chết
             data = {}
         mn = self.POST_ROUTES.get(path)
-        h = getattr(self, mn) if mn else None
+        h = getattr(self, mn, None) if mn else None
         if h is None:
             return self._json({"err": "not found"}, 404)
         h(data)
@@ -2079,12 +2100,7 @@ class Handler(BaseHTTPRequestHandler):
                              (data.get("needs") if isinstance(data.get("needs"), list) else [])],
                    # recipes cap: trước nhận list tuỳ ý không trần →
                    # bot độc nhồi payload / phình bots.json (M2).
-                   "recipes": [{"command": str(r.get("command", ""))[:60],
-                                "label": str(r.get("label", ""))[:60]}
-                               for r in (data.get("recipes")
-                                         if isinstance(data.get("recipes"), list)
-                                         else [])[:20]
-                               if isinstance(r, dict)],
+                   "recipes": _clean_recipes(data.get("recipes")),
                    "instructions": ins,
                    "triggers": []}
             bots.append(bot)

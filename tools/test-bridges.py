@@ -1342,6 +1342,32 @@ def main():
               not pgm.path_sensitive(os.path.dirname(wd)))
         check("64c. sensitive thật vẫn bị chặn",
               pgm.path_sensitive(os.path.expanduser("~/.ssh")))
+
+        # Regression audit-lại #3: recipes schema là {command, meaning} —
+        # cap M2 từng ghi sai field "label" → portal render c.meaning ra
+        # "undefined" (mất dữ liệu lặng lẽ). _clean_recipes phải giữ
+        # đúng 2 field + kẹp độ dài + bỏ non-dict.
+        check("65. _clean_recipes giữ schema command+meaning",
+              cbm._clean_recipes([{"command": "/nen-anh",
+                                   "meaning": "Nén ảnh"},
+                                  {"command": "x"},
+                                  "rac", {"command": None,
+                                          "meaning": None}]) ==
+              [{"command": "/nen-anh", "meaning": "Nén ảnh"},
+               {"command": "x", "meaning": ""},
+               {"command": "", "meaning": ""}])
+        s, b, _ = http("POST", b3 + f"/api/bot?token={TOKEN}",
+                       {"action": "create", "name": "Bot Test 65",
+                        "recipes": [{"command": "/c1",
+                                     "meaning": "nghĩa một"}]})
+        bots65 = json.load(open(os.path.join(wd, "my-course",
+                                             "bots.json")))
+        r65 = next((x.get("recipes") or [{}])[0]
+                   for x in bots65.get("bots", [])
+                   if x.get("name") == "Bot Test 65")
+        check("65b. bot create qua HTTP giữ meaning trong bots.json",
+              r65.get("command") == "/c1"
+              and r65.get("meaning") == "nghĩa một", str(r65))
     finally:
         for p in procs:
             try:
