@@ -173,11 +173,12 @@
 /* company contact form */
 .cty-contact { margin-top: var(--space-xl); max-width: 40rem; margin-inline: auto; text-align: center; }
 .cty-note { margin-top: var(--space-sm); font-size: var(--text-sm); color: var(--color-muted); }
-.cty-form { margin-top: var(--space-lg); display: flex; flex-direction: column; gap: var(--space-sm); }
+.cty-form { margin-top: var(--space-lg); display: flex; flex-direction: column; gap: var(--space-sm); background: var(--color-paper); border: var(--rule-hair) solid var(--color-rule); border-radius: var(--radius-card); padding: var(--space-lg); box-shadow: 0 8px 30px oklch(40% 0.1 155 / 0.18), 0 2px 6px oklch(40% 0.1 155 / 0.1); }
+.cty-form .btn { align-self: center; min-width: 12rem; }
 .cty-form input, .cty-form textarea { font: inherit; font-size: var(--text-md); color: var(--color-ink); background: var(--color-paper); border: var(--rule-hair) solid var(--color-rule); border-radius: var(--radius-card); padding: var(--space-sm) var(--space-md); }
 .cty-form input:focus, .cty-form textarea:focus { outline: 2px solid var(--color-accent); outline-offset: 1px; border-color: transparent; }
 .cty-form textarea { resize: vertical; }
-.cty-form .btn { align-self: flex-start; cursor: pointer; }
+.cty-form .btn { cursor: pointer; }
 
 /* faq */
 .faq { border-top: var(--rule-hair) solid var(--color-rule); max-width: 48rem; }
