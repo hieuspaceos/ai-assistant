@@ -22,7 +22,7 @@ const STORY = {
     memoryLine: "Mình cập nhật theo mẫu báo giá của công ty bạn như lần trước nhé.",
     recipe: "/viec-sang",
     ready: [["zalo", "Zalo đã tóm tắt"], ["sheet", "Báo giá cập nhật"], ["img", "Ảnh đã nén, gốc nguyên"]],
-    payoff: "Không cần nhờ — nó tự chạy, mỗi sáng.",
+    payoff: "Không cần nhờ — trợ lý tự chạy, mỗi sáng.",
     saved: "~45 phút",
     savedCap: "mỗi sáng",
   },
@@ -188,7 +188,7 @@ function sceneTasks(c) {
 
 function sceneMemory(c) {
   const w = Math.max(6, [...c.teachWord].length);
-  return `<div class="scene scene--memory" role="group" aria-label="Nó nhớ việc của bạn">
+  return `<div class="scene scene--memory" role="group" aria-label="Trợ lý nhớ việc của bạn">
     <div class="askline">
       <span class="askline__type" style="--typew:${w}ch">${esc(c.teachWord)}</span>
       <span class="askline__done" aria-hidden="true">✓ xong</span>
@@ -202,7 +202,7 @@ function sceneMemory(c) {
 }
 
 function sceneAuto(c) {
-  return `<div class="scene scene--auto" role="group" aria-label="Tự chạy mỗi ngày">
+  return `<div class="scene scene--auto" role="group" aria-label="Trợ lý tự chạy mỗi ngày">
     <div class="cal beat" style="--i:0" aria-hidden="true">
       ${c.cal.map((d, i) => `<span class="cal__pg" style="--i:${i}">${esc(d)}</span>`).join("")}
     </div>
