@@ -172,6 +172,7 @@
 
 /* footer colophon */
 .colophon { border-top: var(--rule-hair) solid var(--color-rule); padding-block: var(--space-xl) var(--space-2xl); font-size: var(--text-sm); color: var(--color-muted); text-align: center; }
+.colophon p { max-width: none; }
 .colophon a { color: var(--color-ink-2); }
 .colophon .links { margin-top: var(--space-sm); display: flex; gap: var(--space-lg); flex-wrap: wrap; justify-content: center; }
 
