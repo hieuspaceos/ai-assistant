@@ -14,9 +14,14 @@ design — Google Sheets, WordPress, Canva, CapCut). Windows is the
 primary platform; macOS/Linux works via `start.sh`. Supports
 **Vietnamese and English** — first-run onboarding asks for a language.
 
-**Landing page:** https://troly.hieuspace.com — explains with a real
-demo video and has download buttons (single file per OS — `troly` for
-macOS, `TroLyAI.exe` for Windows, see `tools/build.sh`).
+**Landing page:** https://troly.hieuspace.com — an animated "ask once,
+the assistant remembers" story band, a real demo video, a B2B band
+with five clickable mock screens (fleet dashboard, employee machine,
+company pack, onboarding, offboarding), an FAQ, and download buttons
+(single file per OS — `troly` for macOS, `TroLyAI.exe` for Windows,
+see `tools/build.sh`). All screens are rendered in HTML/CSS — no
+screenshots — and every CSS change must bump the `style.css?v=N`
+query string (Cloudflare caches by URL).
 
 ## The learner experience
 
@@ -149,7 +154,7 @@ ai-assistant/
 ├── deploy/                    # company install kit: install.ps1/sh, DEPLOY.md, force-install.md, vendor-infra.md
 ├── packs/                     # per-org config packs (skills/workflows/rules — the "same codebase" differentiator)
 ├── intro/slides.html          # static intro deck (Lesson 0)
-├── site/                      # landing page troly.hieuspace.com (deployed via the gh-pages branch + CNAME)
+├── site/                      # landing page troly.hieuspace.com (deploy via gh-pages branch + CNAME; bump ?v=N on CSS change)
 ├── plans/                     # multi-phase work plans (executed and in-flight)
 ├── web/                       # portal: index.html + app.js + styles.css + clone-view.html (clone editor)
 ├── tools/clone-compare.py     # /clone-trang "compare" phase: style-diff + pixel-diff, no Pillow

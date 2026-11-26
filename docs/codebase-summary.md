@@ -114,9 +114,24 @@ Khung bài học: `lesson.md`, `exercise.md`, `video-script` template,
 
 ## site/ — landing page troly.hieuspace.com
 
-HTML/CSS/JS thuần (`index.html`, `privacy.html`, `*.css`, `assets/` —
-video demo + poster). Deploy = copy ra branch `gh-pages` (+ `CNAME`),
-GitHub Pages phục vụ. `.hallmark/` giữ ảnh chụp review, không deploy.
+HTML/CSS/JS thuần (`index.html`, `privacy.html`, `tokens/base/style/
+story.css`, `story.js`, `assets/` — video demo + poster). Deploy =
+copy ra branch `gh-pages` (+ `CNAME`), GitHub Pages phục vụ.
+`.hallmark/` giữ ảnh chụp review, không deploy.
+
+Bố cục hiện tại: masthead (wordmark giữa, nav tách 2 cánh) → hero +
+sơ đồ app (icon brand simple-icons inline SVG) → `#vong-quay`
+storyband xanh đậm full-bleed (animation nhờ→làm→nhớ→tự chạy trong
+`story.js`) → `#xem` switcher video → `#cho-cty` ctyband xanh nhạt:
+5 tab màn hình giả render bằng HTML (fleet dashboard, máy nhân viên,
+gói quy trình, người mới vào việc, người nghỉ việc) + 4 thẻ outcome +
+một dòng "Cho bạn IT" + form card → formsubmit.co → `#hoi` FAQ +
+bot SVG nhảy → `#tai` → footer căn giữa.
+
+Gotcha deploy: Cloudflare cache CSS theo query string — mọi thay đổi
+CSS phải bump `style.css?v=N` / `story.js?v=N` trong index.html, và
+kiểm lại giá trị `?v` bằng grep sau khi sed (sed trong lệnh lỗi
+syntax hoặc pattern không khớp sẽ âm thầm không chạy).
 
 ## plans/
 

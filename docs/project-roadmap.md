@@ -16,6 +16,8 @@ việc hoặc đổi ưu tiên.
   `troly.hieuspace.com/fleet/` với admin 2 tầng (master/cty-admin),
   release ký ed25519 + pack per-org — test `test-fleet`/`test-worker`
   chạy trong CI
+- Landing `troly.hieuspace.com` — storyband + ctyband 5 tab màn hình
+  giả HTML + FAQ; deploy gh-pages (nhớ bump `style.css?v=N` khi đổi CSS)
 
 ## Gần — công nghệ đã có, chỉ thiếu nối
 
