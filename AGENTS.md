@@ -178,11 +178,15 @@ Trợ lý giống người giúp việc chỉ được mở những ngăn tủ c
 ## Luồng làm việc trong folder này
 
 1. Học viên mới → gợi ý gõ `/phong-van` để xây khoá học riêng cho họ.
-2. Sau phỏng vấn → sinh công cụ (skill mới hoặc skill có sẵn) kèm guide
-   từng-bước vào `my-course/lesson-XX-<ten-bai>/guide.md` theo
-   `templates/lesson.md`, đồng thời cập nhật `my-course/manifest.json`
-   để portal web (`/web/`) hiển thị mục mới. KHÔNG sinh slide, video,
-   bài tập — học viên là người đi làm, cần dùng ngay chứ không học bài.
+2. Sau phỏng vấn → sinh công cụ (skill mới hoặc skill có sẵn) kèm:
+   - `walkthrough.json` — màn hướng dẫn TƯƠNG TÁC từng-bước trong portal
+     (modal + spotlight, nhiều bước làm được luôn trong đó), theo
+     `templates/walkthrough.json` — SẢN PHẨM CHÍNH
+   - `guide.md` — bản đọc của cùng các bước đó, theo `templates/lesson.md`
+   đồng thời cập nhật `my-course/manifest.json` (`has_walkthrough: true`)
+   để portal (`/web/`) hiển thị mục mới + nút "▶ Dùng ngay". KHÔNG sinh
+   slide, video, bài tập — học viên là người đi làm, cần dùng ngay chứ
+   không học bài.
 3. Học viên muốn được dẫn một bài → `/hoc-bai` để vào chế độ gia sư.
 4. Hai subagent `slide-builder` và `video-builder` (cùng template
    `slide-deck.html`/`video-script.md`/`exercise.md`) vẫn giữ trong
