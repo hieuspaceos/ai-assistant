@@ -16,18 +16,21 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
 <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 <link rel="stylesheet" href="story.css?v=8">
 </head>
 <body>
 
 <header class="masthead container">
-  <a class="wordmark" href="/" aria-label="Trợ lý AI">Trợ lý AI</a>
-  <span class="tagline">làm việc thật · dạy bạn tự làm</span>
-  <nav aria-label="Mục chính">
+  <nav class="masthead__side" aria-label="Mục chính">
     <a href="#vong-quay">Cách trợ lý học</a>
     <a href="#xem">Xem trợ lý làm</a>
-    <a href="#noi">Đấu nối</a>
+  </nav>
+  <div class="masthead__brand">
+    <a class="wordmark" href="/" aria-label="Trợ lý AI">Trợ lý AI</a>
+    <span class="tagline">làm việc thật · dạy bạn tự làm</span>
+  </div>
+  <nav class="masthead__side masthead__side--right" aria-label="Mục phụ">
     <a href="#cho-cty">Công ty</a>
     <a href="#tai">Tải về</a>
   </nav>
@@ -199,31 +202,6 @@
   </section>
 
 
-  <!-- dedicated integrations -->
-  <section class="section container" id="noi">
-    <div class="headblock">
-      <h2>Nối vào hệ thống đang có</h2>
-    </div>
-    <dl class="plugs">
-      <div class="plug">
-        <dt><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="5" width="22" height="18" rx="3"/><path d="M3 10h22"/><circle cx="7" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg>Extension trình duyệt</dt>
-        <dd>Zalo, Outlook, WordPress, Sheets: lái trang đang đăng nhập sẵn</dd>
-      </div>
-      <div class="plug">
-        <dt><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 8a2 2 0 0 1 2-2h5l2.5 3H23a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Quyền folder</dt>
-        <dd>Excel, Word, ảnh Canva: chỉ ngăn bạn cho phép</dd>
-      </div>
-      <div class="plug">
-        <dt><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="4" y="4" width="9" height="9" rx="2"/><rect x="15" y="15" width="9" height="9" rx="2"/><path d="M13 11l4 4M8.5 13v3a4 4 0 0 0 4 4h3"/></svg>Hệ thống riêng của công ty</dt>
-        <dd>CRM, sheet nội bộ — cần nối thêm thì IT cấu hình một lần</dd>
-      </div>
-      <div class="plug">
-        <dt><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="8" y="3" width="12" height="22" rx="3"/><path d="M12.5 21h3"/></svg>Điện thoại <span class="muted">(đang xây)</span></dt>
-        <dd>Máy ở nhà hay công ty làm việc — bạn nhắn việc từ điện thoại</dd>
-      </div>
-    </dl>
-  </section>
-
   <!-- for companies -->
   <section class="section container" id="cho-cty">
     <div class="headblock">
@@ -247,6 +225,25 @@
       <div class="plug">
         <dt><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 21h20M6 21V9h16v12M10 9V5h8v4"/></svg>Dữ liệu ở đâu, bạn chọn</dt>
         <dd>Chạy trên máy của công ty hoặc thuê sẵn — máy nhân viên chỉ gửi báo cáo ra ngoài</dd>
+      </div>
+    </dl>
+    <h3 class="plugs-sub">Nối vào hệ thống đang có</h3>
+    <dl class="plugs">
+      <div class="plug">
+        <dt><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="5" width="22" height="18" rx="3"/><path d="M3 10h22"/><circle cx="7" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg>Extension trình duyệt</dt>
+        <dd>Zalo, Outlook, WordPress, Sheets: lái trang đang đăng nhập sẵn</dd>
+      </div>
+      <div class="plug">
+        <dt><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 8a2 2 0 0 1 2-2h5l2.5 3H23a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Quyền folder</dt>
+        <dd>Excel, Word, ảnh Canva: chỉ ngăn bạn cho phép</dd>
+      </div>
+      <div class="plug">
+        <dt><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="4" y="4" width="9" height="9" rx="2"/><rect x="15" y="15" width="9" height="9" rx="2"/><path d="M13 11l4 4M8.5 13v3a4 4 0 0 0 4 4h3"/></svg>Hệ thống riêng của công ty</dt>
+        <dd>CRM, sheet nội bộ — cần nối thêm thì IT cấu hình một lần</dd>
+      </div>
+      <div class="plug">
+        <dt><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="8" y="3" width="12" height="22" rx="3"/><path d="M12.5 21h3"/></svg>Điện thoại <span class="muted">(đang xây)</span></dt>
+        <dd>Máy ở nhà hay công ty làm việc — bạn nhắn việc từ điện thoại</dd>
       </div>
     </dl>
     <div class="cty-contact">
