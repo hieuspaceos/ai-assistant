@@ -5,8 +5,8 @@
 *.local.json
 
 # Runtime artifacts
-my-course/.shots/
-my-course/bot.md
+workspace/.shots/
+workspace/bot.md
 .logs/
 __pycache__/
 *.pyc
@@ -26,7 +26,7 @@ troly-ext.zip
 .devin/agent.sb
 
 # DOM site thật của bên thứ 3 — privacy/IP, không push lên repo public
-my-course/clone-work/
+workspace/clone-work/
 
 # S4 — fake brain build tren CI + credential DPAPI user han che
 tools/fakebrain/

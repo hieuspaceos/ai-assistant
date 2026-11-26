@@ -69,7 +69,7 @@ the learner first.
 
 ### Path B1 — bulk write via the google-sheets MCP
 
-1. Read `my-course/connections.json` → app `google-sheets`; or
+1. Read `workspace/connections.json` → app `google-sheets`; or
    `POST /api/check-connection` `{"id":"google-sheets"}`.
 2. Not connected → guide: install the google-sheets MCP server into
    `.devin/mcp_config.local.json` + OAuth sign-in to Google (the

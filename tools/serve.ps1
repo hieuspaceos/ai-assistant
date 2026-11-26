@@ -23,7 +23,7 @@ $mime = @{
   '.woff'='font/woff'; '.woff2'='font/woff2'; '.ttf'='font/ttf'
 }
 
-# CSP cho .html duoi my-course/intro/ (noi dung agent sinh). Hai lop:
+# CSP cho .html duoi workspace/intro/ (noi dung agent sinh). Hai lop:
 # sandbox -> OPAQUE ORIGIN (khong doc duoc localStorage/iframe portal/
 # service worker; KHONG them allow-same-origin) + connect-src 'none' chan
 # moi fetch/XHR/WS. KHONG ap cho /web/ - portal phai goi bridge duoc.
@@ -64,7 +64,7 @@ $handler = {
     $hidden = $segments | Where-Object { $_.StartsWith('.') } | Select-Object -First 1
     # JSON điều khiển — blocklist case-insensitive (xem $blockedJson)
     $low = @($segments | ForEach-Object { $_.ToLower() })
-    $blocked = (($low.Count -eq 2 -and $low[0] -eq 'my-course' -and $blockedJson -contains $low[1]) -or
+    $blocked = (($low.Count -eq 2 -and $low[0] -eq 'workspace' -and $blockedJson -contains $low[1]) -or
         ($low.Count -eq 1 -and $low[0] -eq 'brain.json'))
 
     $file = Join-Path $root ($path.TrimStart('/') -replace '/', [IO.Path]::DirectorySeparatorChar)
@@ -85,7 +85,7 @@ $handler = {
       # ToLower BAT BUOC: FS Windows/macOS khong phan biet hoa-thuong nen
       # /MY-COURSE/x.html resolve ra cung file — so case-sensitive se lam
       # content doc thoat CSP qua alias viet hoa.
-      if (($path.ToLower().StartsWith('/my-course/') -or $path.ToLower().StartsWith('/intro/')) -and
+      if (($path.ToLower().StartsWith('/workspace/') -or $path.ToLower().StartsWith('/intro/')) -and
           ($ext -eq '.html' -or $ext -eq '.htm')) {
         $res.Headers.Add('Content-Security-Policy', $csp)
       }

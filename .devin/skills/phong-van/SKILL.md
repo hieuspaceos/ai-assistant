@@ -1,6 +1,6 @@
 ---
 name: phong-van
-description: Phỏng vấn học viên về công việc hằng ngày, rồi sinh bộ công cụ riêng (skill) kèm hướng dẫn dùng từng-bước trong my-course/. Dùng khi học viên mới muốn bắt đầu học.
+description: Phỏng vấn học viên về công việc hằng ngày, rồi sinh bộ công cụ riêng (skill) kèm hướng dẫn dùng từng-bước trong workspace/. Dùng khi học viên mới muốn bắt đầu học.
 triggers:
   - user
 allowed-tools:
@@ -39,7 +39,7 @@ Facebook Ads, Ahrefs, Notion, Gmail hay "file & thư mục trên máy").
 ## Giai đoạn 1.5 — Map công việc sang app/web
 
 Với mỗi nỗi đau nổi lên ở Giai đoạn 2, hỏi thêm 1 câu: *"việc này bạn làm
-trên app/web nào?"* → map sang connector trong `my-course/connections.json`:
+trên app/web nào?"* → map sang connector trong `workspace/connections.json`:
 
 | Họ nói | Connector |
 |---|---|
@@ -128,21 +128,21 @@ Trình bày danh sách dạng numbered list + hỏi `ask_user_question`: "Mình
 
 ## Giai đoạn 4 — Sinh công cụ + hướng dẫn từng-bước
 
-**Bài 0 "Kết nối" (lesson-00)**: nếu Giai đoạn 1.5 ghi nhận connector
-chưa kết nối mà các công cụ cần → sinh `my-course/lesson-00-ket-noi/`
+**Bài 0 "Kết nối" (tool-00)**: nếu Giai đoạn 1.5 ghi nhận connector
+chưa kết nối mà các công cụ cần → sinh `workspace/tool-00-ket-noi/`
 dạy setup đúng một lần:
 - trình duyệt → cài extension Trợ Lý AI (SETUP Bước 5)
 - wordpress → tạo App Password → ghi `.devin/secrets.local.json` → nút
   Kiểm tra trong portal
 - google-sheets → cài MCP + OAuth
 - outlook/zalo → đăng nhập web sẵn trên browser
-Bài này theo `templates/lesson.md`, đặt đầu manifest (`lesson-00`), và
+Bài này theo `templates/lesson.md`, đặt đầu manifest (`tool-00`), và
 skill sinh ra cho các mục sau phải tự kiểm tra `connections.json` trước —
 chưa kết nối thì dẫn học viên qua bài 0 trước.
 
-Với MỖI mục đã chốt (đánh số lesson-01, lesson-02...), sinh đúng HAI thứ:
+Với MỖI mục đã chốt (đánh số tool-01, tool-02...), sinh đúng HAI thứ:
 một công cụ (skill riêng / skill có sẵn / nhờ tự do) + một `guide.md`
-tutorial từng-bước trong `my-course/lesson-XX-<slug>/`.
+tutorial từng-bước trong `workspace/tool-XX-<slug>/`.
 
 **Quy trình sinh chi tiết nằm trong `/tao-cong-cu`** — đọc
 `.devin/skills/tao-cong-cu/SKILL.md` và làm theo đúng quy trình đó cho
@@ -154,7 +154,7 @@ KHÔNG tạo `exercise.md`, `video-script.md`, `sample-files/`, `slides.html`,
 
 ## Giai đoạn 5 — Cập nhật portal + chào
 
-Sau khi đi hết các bài, GHI `my-course/manifest.json` theo đúng schema:
+Sau khi đi hết các bài, GHI `workspace/manifest.json` theo đúng schema:
 
 ```json
 {
@@ -167,10 +167,10 @@ Sau khi đi hết các bài, GHI `my-course/manifest.json` theo đúng schema:
   ],
   "lessons": [
     {
-      "id": "lesson-01",
+      "id": "tool-01",
       "title": "<tên theo kết quả>",
       "description": "<1 câu nỗi đau nó giải quyết>",
-      "folder": "lesson-01-<slug>",
+      "folder": "tool-01-<slug>",
       "has_slides": false,
       "has_video": false,
       "has_exercise": false
@@ -197,7 +197,7 @@ cho trợ lý** — như thuê một nhân viên đã biết sẵn một nhóm v
    - `{action:"create", name, role:<id template>, avatar, skills, needs,
      recipes, instructions:<instructions theo ngôn ngữ>}`
    - `{action:"activate", id:<id vừa tạo>}` — bridge tự cài skill còn
-     thiếu và ghi `my-course/bot.md`.
+     thiếu và ghi `workspace/bot.md`.
 5. Báo học viên: *"Khoá học này sẽ dạy bạn dùng đúng trợ lý <tên> vừa
    tạo — từ giờ bạn nhắn cho <tên> là được."*
 

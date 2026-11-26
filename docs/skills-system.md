@@ -53,8 +53,9 @@ Phần thân = hướng dẫn theo phong cách "checklist + bẫy đã gặp":
 
 | vi | en | Việc |
 |---|---|---|
-| phong-van | interview | Phỏng vấn → giáo trình cá nhân |
-| hoc-bai | tutor | Chế độ gia sư dẫn từng bài |
+| phong-van | interview | Phỏng vấn → công cụ cá nhân (skill + walkthrough + guide) |
+| tao-cong-cu | make-tool | Gói việc lặp lại → skill /command + walkthrough.json + guide.md |
+| hoc-bai | tutor | Chế độ gia sư dẫn theo guide từng bước |
 | mo-web | open-web | Lái trình duyệt thật qua extension |
 | doc-zalo | read-zalo | Đọc/trả lời Zalo Web |
 | doc-outlook | read-outlook | Đọc Outlook Web |
@@ -78,19 +79,24 @@ Pipeline clone (`data-cs-*` markers): xem `clone-pipeline.md`.
 
 ## Contract dữ liệu xuyên skill
 
-- **Manifest**: `my-course/manifest.json` — `/phong-van` sinh bài, portal
-  đọc hiển thị. Format: danh sách `{id, title, folder, ...}`.
+- **Manifest**: `workspace/manifest.json` — `/phong-van`/`/tao-cong-cu`
+  sinh bài, portal đọc hiển thị. Format: danh sách `{id, title, folder,
+  has_slides, has_video, has_exercise, has_walkthrough, ...}` — tab
+  portal hiện/ẩn theo cờ; `has_walkthrough` → nút "▶ Dùng ngay".
+- **Walkthrough**: `tool-XX/walkthrough.json` — schema trong
+  `templates/walkthrough.json` (15 kinds + cond/optional/then_probe/
+  media); runner `web/app.js`, validator `tools/test-walkthrough.py`.
 - **`data-cs-*` markers** — contract giữa `clone-trang` (sinh),
   `clone-view.html` (sửa), `trang-moi` (nhân bản): `data-cs`,
   `data-cs-type`, `data-cs-text/img/link/bg`, `data-cs-page`,
   `data-cs-template`, `data-cs-ref`. Bảng đầy đủ: `clone-pipeline.md`.
-- **permissions.json** — mọi skill đụng folder ngoài `my-course/` phải
+- **permissions.json** — mọi skill đụng folder ngoài `workspace/` phải
   kiểm tra trước (xem `SECURITY.md`).
 
 ## Bot bundle — đơn vị chia sẻ "cả trợ lý"
 
 `gom-skill` (vi) / `pack-skill` (en) có mode gói bot: một bot trong
-`my-course/bots.json` + các skill nó tham chiếu → `bot-<slug>.zip`:
+`workspace/bots.json` + các skill nó tham chiếu → `bot-<slug>.zip`:
 
 ```
 bot-hang.zip

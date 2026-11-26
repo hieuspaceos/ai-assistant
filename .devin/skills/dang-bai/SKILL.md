@@ -16,7 +16,7 @@ diện.
 
 ## Kiểm tra kết nối (bắt buộc)
 
-1. Đọc `my-course/connections.json` → app `wordpress`.
+1. Đọc `workspace/connections.json` → app `wordpress`.
 2. `POST /api/check-connection` `{"id":"wordpress"}` → `ok: true` mới tiếp.
 3. `ok: false` / thiếu credentials → hướng dẫn setup:
    - Bảo học viên mở ⚙ **Cài đặt** → nút **Cài** cạnh WordPress → làm

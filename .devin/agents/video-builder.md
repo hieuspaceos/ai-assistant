@@ -64,7 +64,7 @@ bạn dừng êm và báo rõ cho parent.
    - Kết video bằng `card` mời học viên mở bài tập làm thử.
    - Tổng video nên 45–90 giây.
 
-   Tham khảo `my-course/lesson-02-anh-canva-web-ready/scene.json` làm mẫu.
+   Tham khảo `workspace/tool-02-anh-canva-web-ready/scene.json` làm mẫu.
 
 2. **Kiểm tra tool nhanh:**
    - `ffmpeg -version`

@@ -74,20 +74,17 @@ gì thêm; **Terminal** — dạng dòng lệnh cho ai muốn trải nghiệm CL
 thật — mới cần ttyd. Không cài thì bấm nút Terminal sẽ thấy hướng
 dẫn thay thế.)*
 
-## Bước 4 — Cài thêm để tạo video bài giảng (không bắt buộc)
+## Bước 4 — Cài Python (không bắt buộc, nhưng nên)
 
-Video hướng dẫn của mỗi bài được quay tự động lúc tạo khoá học.
-Việc đó cần 2 thứ: **Python** (chương trình dựng phim) và **ffmpeg**
-(chương trình ghép phim). Mở PowerShell, chạy lần lượt:
+Trợ lý dùng Python cho nhiều việc lặt vặt (đọc Excel, nén ảnh, gọi
+extension…). Mở PowerShell, chạy:
 
 ```powershell
 winget install --id Python.Python.3.12 -e
-winget install --id Gyan.FFmpeg -e
 ```
 
-*(Không cài thì khoá học vẫn tạo bình thường — chỉ là các bài không có
-video, xem slide và hướng dẫn thay thế. Khi nào cài xong, nhờ trợ lý
-"quay lại video cho bài X" là được.)*
+*(Không cài vẫn dùng được — trợ lý sẽ tự tìm cách khác, chỉ chậm hơn
+một chút.)*
 
 ## Bước 5 — Cài "cánh tay" trong trình duyệt (extension Trợ Lý AI, không bắt buộc)
 
@@ -133,7 +130,7 @@ gói (máy offline lúc mở app lần đầu chẳng hạn), chạy tay:
 python3 tools/ensure-deps.py     # Windows: py tools\ensure-deps.py
 ```
 
-## Bước 6 — Mở khoá học
+## Bước 6 — Mở portal
 
 Vào folder `ai-assistant`, **double-click `start.bat`** (macOS/Linux:
 `bash start.sh`).
@@ -142,9 +139,10 @@ Vào folder `ai-assistant`, **double-click `start.bat`** (macOS/Linux:
 điền tên → chọn folder trợ lý được đọc → chọn app muốn kết nối → xong.
 Từ lần sau vào thẳng portal.
 
-Trình duyệt sẽ mở trang web khoá học với danh sách bài bên trái.
-Xong! Bấm tab **💬 Hỏi trợ lý**, gõ `/phong-van` để nó tạo khoá học
-riêng cho bạn.
+Trình duyệt sẽ mở portal với danh sách bài/công cụ bên trái.
+Xong! Bấm tab **💬 Hỏi trợ lý**, gõ `/phong-van` để nó tạo bộ công cụ
+riêng cho bạn — mỗi công cụ đi kèm một màn hướng dẫn từng-bước làm thật
+(nút **▶ Dùng ngay**).
 
 ### Thông tin đăng nhập app (WordPress, Zalo OA...)
 
@@ -188,7 +186,7 @@ macOS).
 | Trợ lý bảo "không chạy được 'X'" | Não `X` chưa cài. Mở portal → ⚙ Cài đặt → Bộ não → chọn lại Devin hoặc não khác đã cài. |
 | Tab Chat trống trơn | Đóng rồi mở lại `start.bat` — cửa sổ "Tro ly AI chat" chạy nền phải còn nguyên. |
 | Chế độ Terminal trống | ttyd chưa chạy — chạy `tools\chat-terminal.ps1` trong PowerShell, hoặc dùng chế độ Chat. |
-| Bài học không có video | Thiếu Python hoặc ffmpeg — làm Bước 4 rồi nhờ trợ lý quay lại. |
+| Bài mới không thấy nút "▶ Dùng ngay" | Bài đó chưa có walkthrough — nhờ trợ lý "làm màn hướng dẫn từng bước cho bài X". |
 | Trợ lý bảo "không thấy trình duyệt" | Extension chưa cài hoặc trình duyệt chưa mở — làm Bước 5, mở Chrome/Edge lên. |
 | Trang web không mở | Mở tay `http://localhost:8080/web/` trong trình duyệt. |
 

@@ -67,7 +67,7 @@ Nhóm `t*` đưa tab lên trước — báo học viên trước khi chạy.
 
 ### Đường B1 — ghi hàng loạt qua MCP google-sheets
 
-1. Đọc `my-course/connections.json` → app `google-sheets`; hoặc
+1. Đọc `workspace/connections.json` → app `google-sheets`; hoặc
    `POST /api/check-connection` `{"id":"google-sheets"}`.
 2. Chưa kết nối → hướng dẫn: `devin mcp` cài server google-sheets vào
    `.devin/mcp_config.local.json` + OAuth đăng nhập Google (lần đầu trợ

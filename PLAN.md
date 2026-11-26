@@ -4,8 +4,8 @@ Mục tiêu cuối: mỗi học viên copy folder về máy, bấm `start.bat`, 
 
 ## Phase 0 — Nền tảng quyền & kết nối ✅ ĐÃ XONG (2025-11; chờ test Windows)
 
-Đã hiện thực (schema hơi khác bản nháp): `my-course/permissions.json` +
-`my-course/connections.json`; bridge endpoints `/api/permissions`, `/api/remove-permission`,
+Đã hiện thực (schema hơi khác bản nháp): `workspace/permissions.json` +
+`workspace/connections.json`; bridge endpoints `/api/permissions`, `/api/remove-permission`,
 `/api/connections`, `/api/remove-connection`, `/api/check-connection` (probe http/path/mcp/wp/tabs/zalo-oa);
 portal gom 2 mục quyền/kết nối vào panel **Cài đặt** (nút ⚙ cuối sidebar —
 sidebar chỉ còn Bài học + Công thức nhanh) + chip trạng thái extension trên
@@ -18,7 +18,7 @@ Nháp thiết kế gốc:
    - Schema: `{ "folders": [{"path": "...", "access": "read|read-write", "note": "..."}] }`
    - Bridge: `GET/POST/DELETE /api/permissions` (port cả `.py` lẫn `.ps1`)
    - Portal: mục "Folder trợ lý được đọc" trong sidebar (thêm/gỡ)
-   - Skill `phong-van` + AGENTS rules: agent chỉ đụng folder trong `permissions.json` + `my-course/`; khi cần folder mới → hỏi trong chat → đồng ý thì ghi vào `permissions.json`
+   - Skill `phong-van` + AGENTS rules: agent chỉ đụng folder trong `permissions.json` + `workspace/`; khi cần folder mới → hỏi trong chat → đồng ý thì ghi vào `permissions.json`
    - Xác nhận xoá/ghi file vẫn qua permission card ACP (lớp chặn thứ hai)
 
 2. **`connections.json` — trạng thái kết nối app**
@@ -62,7 +62,7 @@ Nháp thiết kế gốc:
 ## Phase 3 — Khoá học & phỏng vấn thế hệ mới ✅ ĐÃ XONG
 
 10. **`phong-van` v2** ✅ — Phase 1.5 "việc này bạn làm trên app/web nào?" → map
-    connector → **lesson-00 "Kết nối"** tự sinh (cả vi lẫn en)
+    connector → **tool-00 "Kết nối"** tự sinh (cả vi lẫn en)
 11. **Skill sinh ra tự kiểm tra `connections.json`** ✅ — mọi skill mới đều check
     connections trước + dẫn qua bài 0
 12. **`hoc-bai` cập nhật** — chưa cần (UI portal chưa đổi layout video)

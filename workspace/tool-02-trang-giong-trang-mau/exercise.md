@@ -26,14 +26,14 @@ Tự viết lời nhờ của bạn trước. Kẹt quá mới xem gợi ý dư�
 <summary>Gợi ý prompt (bấm để xem)</summary>
 
 ```
-/clone-trang — trang mẫu là my-course/lesson-02-trang-giong-trang-mau/sample-files/trang-mau.html. Nội dung của em: sản phẩm "<tên bạn tự chọn>", khẩu hiệu "<1 câu>", ưu điểm: <2-3 cái>, giá <số tiền + giá gốc gạch>, nút "<chữ nút>". Lưu ra my-course/trang-cua-em.html.
+/clone-trang — trang mẫu là workspace/tool-02-trang-giong-trang-mau/sample-files/trang-mau.html. Nội dung của em: sản phẩm "<tên bạn tự chọn>", khẩu hiệu "<1 câu>", ưu điểm: <2-3 cái>, giá <số tiền + giá gốc gạch>, nút "<chữ nút>". Lưu ra workspace/trang-cua-em.html.
 ```
 
 </details>
 
 ## Tự chấm — tích đủ là xong
 
-- [ ] Có file `trang-cua-em.html` trong `my-course/`, mở bằng trình duyệt
+- [ ] Có file `trang-cua-em.html` trong `workspace/`, mở bằng trình duyệt
   ra một trang hoàn chỉnh
 - [ ] Trang có đủ nhịp của mẫu: phần đầu ấn tượng → ô ưu điểm → giá →
   nút kêu gọi

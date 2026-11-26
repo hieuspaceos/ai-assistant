@@ -48,7 +48,7 @@ Python, chậm (~1s) nhưng chỉ verify một manifest mỗi lần update.
 - **Whitelist zip entry**: chỉ `tools/ web/ extension/ templates/
   collector-web/ .devin/skill-packs/` + file lõi (AGENTS.md, VERSION…);
   `..`, absolute, backslash → abort (zip-slip).
-- Trước khi stage: `backup.py` chụp `my-course/` + state `.devin/`.
+- Trước khi stage: `backup.py` chụp `workspace/` + state `.devin/`.
 
 ## Config-pack
 
@@ -71,7 +71,7 @@ Máy áp qua `apply-pack.py` (beacon gọi khi inbox có `pack`):
   user tự tạo id khác thì giữ).
 - bots/connections → **merge theo id**, không xoá cái user tự tạo;
   connections giữ `status`/probe hiện có.
-- workflows → `my-course/workflows/`; rules → `.devin/rules.local.md`
+- workflows → `workspace/workflows/`; rules → `.devin/rules.local.md`
   (AGENTS.md đọc, đứng trên lời dặn thường, dưới luật an toàn lõi).
 - `permissions_template` + `exec_allowlist` → **chỉ máy chưa onboard**
   (chưa có learner_name) — pack không được đè consent máy đang chạy.

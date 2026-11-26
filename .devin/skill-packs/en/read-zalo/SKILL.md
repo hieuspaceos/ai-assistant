@@ -85,7 +85,7 @@ that name in Zalo — could you check the spelling?"*
 
 - **Images**: `query` `sel`=`[class*=chat-message] img, [class*=message-view] img`,
   `attr`=`"src"` → signed `zadn.vn` CDN URLs → `curl -o` straight into
-  `my-course/`, no cookies needed.
+  `workspace/`, no cookies needed.
 - **Files** (.docx, .pdf, .xlsx): filename appears in the bubble with a
   download button → `click` the download text/icon so the browser saves
   to Downloads. Tell the learner it's there.

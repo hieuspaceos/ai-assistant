@@ -10,23 +10,23 @@ command -v pyinstaller >/dev/null || {
   echo "Chưa có pyinstaller: python3 -m pip install pyinstaller"; exit 1; }
 
 # Payload "bung" ra ~/TroLyAI lần chạy đầu — toàn bộ phần mềm + seed
-# my-course/brain.json. KHÔNG bundle secrets, token, skills active,
+# workspace/brain.json. KHÔNG bundle secrets, token, skills active,
 # plans, git. clone-work/ bị loại: DOM site thật của bên thứ 3 — phình
 # binary + rủi ro IP/privacy khi phân phối.
 SEP=":"; [ "$(uname -s)" = "MINGW64_NT"* ] && SEP=";"   # win dùng ;
 # Stage trong repo, path tương đối: mktemp /tmp trả MSYS path (/tmp/...)
 # mà PyInstaller (native binary) không resolve được trên Windows.
 STAGE="$(mktemp -d ./.build-stage.XXXXXX)"; trap 'rm -rf "$STAGE"' EXIT
-cp -R my-course "$STAGE/my-course"
+cp -R workspace "$STAGE/workspace"
 # clone-work: DOM site thật của bên thứ 3 (IP/privacy). .shots: screenshot
 # tab của máy build — có thể chứa tin nhắn học viên. .bak: bản nháp undo.
 # .trash: bài học viên vừa xoá — là dữ liệu làm việc, không seed.
 # bot.md: trợ lý đang active của máy build — không seed cho học viên mới.
 # (troly.spec _collect lọc y hệt — giữ 2 đường build đồng nhất.)
-rm -rf "$STAGE/my-course/clone-work" "$STAGE/my-course/.shots" \
-       "$STAGE/my-course/.trash"
-rm -f "$STAGE/my-course/bot.md"
-find "$STAGE/my-course" -name '*.bak' -delete
+rm -rf "$STAGE/workspace/clone-work" "$STAGE/workspace/.shots" \
+       "$STAGE/workspace/.trash"
+rm -f "$STAGE/workspace/bot.md"
+find "$STAGE/workspace" -name '*.bak' -delete
 # hidden-import: child "vai" chạy qua runpy TRONG cùng frozen interpreter —
 # PyInstaller chỉ thấy import tĩnh của launcher nên phải khai tay module
 # mà tools/*.py cần, không thì child chết ModuleNotFoundError
@@ -59,7 +59,7 @@ pyinstaller --onefile --name troly --clean \
   --add-data "templates${SEP}templates" \
   --add-data "docs${SEP}docs" \
   --add-data ".devin/skill-packs${SEP}.devin/skill-packs" \
-  --add-data "$STAGE/my-course${SEP}my-course" \
+  --add-data "$STAGE/workspace${SEP}workspace" \
   --add-data "AGENTS.md${SEP}." \
   --add-data "CLAUDE.md${SEP}." \
   --add-data "SETUP.md${SEP}." \

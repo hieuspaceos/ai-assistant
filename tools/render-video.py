@@ -13,7 +13,7 @@ Cách hoạt động (giải thích cho người không biết code):
     3. ffmpeg ghép khung hình + giọng đọc thành video.mp4, kèm phụ đề
        .vtt cùng tên (cue = câu thoại, theo đúng offset timeline).
 
-Chạy:  python3 tools/render-video.py my-course/lesson-XX/scene.json [-o out.mp4]
+Chạy:  python3 tools/render-video.py workspace/tool-XX/scene.json [-o out.mp4]
        TTS_PY=~/.local/share/vieneu-venv/bin/python TTS_VOICE="Trúc Ly" \
          python3 tools/render-video.py <scene.json>
 """
@@ -402,7 +402,7 @@ def main():
                     self.send_error(404)
                     return
                 low = [p.lower() for p in parts]
-                if (len(low) == 2 and low[0] == "my-course" and low[1] in (
+                if (len(low) == 2 and low[0] == "workspace" and low[1] in (
                         "permissions.json", "connections.json", "config.json",
                         "bots.json", "bot.md")) or low == ["brain.json"]:
                     self.send_error(404)

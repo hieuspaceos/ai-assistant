@@ -1070,7 +1070,7 @@ acp = None   # spawn_brain() gần cuối file gán instance thật (load_json
 
 # ---------- permissions.json + connections.json (Phase 0) ----------
 
-MC_DIR = os.path.join(os.path.abspath(CWD), "my-course")
+MC_DIR = os.path.join(os.path.abspath(CWD), "workspace")
 PERM_FP = os.path.join(MC_DIR, "permissions.json")
 CONN_FP = os.path.join(MC_DIR, "connections.json")
 CONFIG_FP = os.path.join(MC_DIR, "config.json")
@@ -1694,10 +1694,12 @@ class Handler(BaseHTTPRequestHandler):
             _pick_folder_lock.release()
 
     def _h_reveal(self, data):
-        """Nút 'Mở trong Finder' của walkthrough — `open <path>` để học
-        viên thấy folder kết quả thay vì phải tự lần path. Cùng chống-
-        oracle của check-path: chỉ dưới ~, không đụng .devin, không
-        vùng nhạy (deny-list)."""
+        """Nút 'Mở trong Finder' của walkthrough — `open -R <path>` =
+        REVEAL trong Finder (chọn sẵn item), KHÔNG phải `open` thường:
+        `open` thực thi .app/.command → agent (có sẵn token) gọi endpoint
+        là chạy được file ngoài sandbox. -R không bao giờ chạy file.
+        Cùng chống-oracle của check-path: chỉ dưới ~, không đụng .devin,
+        không vùng nhạy (deny-list)."""
         if sys.platform != "darwin":
             return self._json({"ok": False, "err": "không hỗ trợ"})
         p = os.path.abspath(os.path.expanduser(str(data.get("path") or "")))
@@ -1709,7 +1711,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": False, "err": "path này không mở được"})
         if not os.path.exists(p):
             return self._json({"ok": False, "err": "chưa thấy path này"})
-        subprocess.Popen(["open", p],
+        subprocess.Popen(["open", "-R", p],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self._json({"ok": True})
 
@@ -2057,12 +2059,12 @@ class Handler(BaseHTTPRequestHandler):
         folder = str(data.get("folder", ""))
         if not re.fullmatch(r"[a-zA-Z0-9_-]+", folder):
             self._json({"err": "tên folder lạ"}, 400); return
-        course = os.path.realpath(os.path.join(os.path.abspath(CWD), "my-course"))
+        course = os.path.realpath(os.path.join(os.path.abspath(CWD), "workspace"))
         target = os.path.realpath(os.path.join(course, folder))
         if not target.startswith(course + os.sep) or not os.path.isdir(target):
             self._json({"err": "không thấy folder bài"}, 404); return
         def _apply(target=target, folder=folder, course=course):
-            # không xoá hẳn — move vào my-course/.trash/ để khôi phục
+            # không xoá hẳn — move vào workspace/.trash/ để khôi phục
             # được (bấm nhầm Đồng ý vẫn cứu lại bài); tên kèm timestamp
             # + hex ngắn tránh đụng khi xoá lại folder cùng tên
             trash = os.path.join(course, ".trash")
@@ -2094,21 +2096,21 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 pass
         # xoá bài là hành động phá nhưng hoàn tác được — qua card xác
-        # nhận của học viên, bài nằm lại trong my-course/.trash/
+        # nhận của học viên, bài nằm lại trong workspace/.trash/
         rid = gate_local(f"Xoá bài học {folder}? (vào thùng rác — khôi phục được)", _apply)
         self._gate_resp(rid, "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để xoá (bài giữ trong thùng rác)")
 
     def _h_save_page(self, data):
         # clone-view.html lưu bản đã chỉnh — chỉ cho ghi file .html
-        # trong my-course/, chặn path ra ngoài
+        # trong workspace/, chặn path ra ngoài
         rel = str(data.get("file", "")).strip().lstrip("/")
         html = str(data.get("html", ""))
-        course = os.path.realpath(os.path.join(os.path.abspath(CWD), "my-course"))
+        course = os.path.realpath(os.path.join(os.path.abspath(CWD), "workspace"))
         target = os.path.realpath(os.path.join(os.path.abspath(CWD), rel))
-        if not rel.startswith("my-course/") or ".." in rel or \
+        if not rel.startswith("workspace/") or ".." in rel or \
            not target.startswith(course + os.sep) or \
            not re.search(r"\.html?$", target, re.I):
-            self._json({"err": "chỉ lưu file .html trong my-course/"}, 400); return
+            self._json({"err": "chỉ lưu file .html trong workspace/"}, 400); return
         if not html:
             self._json({"err": "trang trống"}, 400); return
         os.makedirs(os.path.dirname(target), exist_ok=True)

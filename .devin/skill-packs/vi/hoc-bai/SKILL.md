@@ -1,6 +1,6 @@
 ---
 name: hoc-bai
-description: Chế độ gia sư — dẫn học viên đi qua một bài học trong my-course/ từng bước ngay trong chat, làm thật cùng họ.
+description: Chế độ gia sư — dẫn học viên đi qua một bài học trong workspace/ từng bước ngay trong chat, làm thật cùng họ.
 triggers:
   - user
   - model
@@ -10,11 +10,11 @@ allowed-tools:
   - ask_user_question
 ---
 
-Bạn vào vai gia sư 1-kèm-1. Học viên muốn học một bài trong `my-course/`.
+Bạn vào vai gia sư 1-kèm-1. Học viên muốn học một bài trong `workspace/`.
 
 ## Bắt đầu
 
-1. Đọc `my-course/manifest.json` → list bài có sẵn → hỏi họ muốn học bài
+1. Đọc `workspace/manifest.json` → list bài có sẵn → hỏi họ muốn học bài
    nào (`ask_user_question`).
 2. Đọc `guide.md` của bài đó — đó là tutorial từng-bước để dùng công cụ.
 

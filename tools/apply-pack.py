@@ -18,10 +18,10 @@ Pack đi qua rào:
 Luật ghi:
   - skills/ → ghi đè `.devin/skills/<id>/` (pack là nguồn sự thật cty;
     skill user tự tạo có id khác thì giữ).
-  - bots → merge theo `id` vào my-course/bots.json — update hoặc
+  - bots → merge theo `id` vào workspace/bots.json — update hoặc
     append; KHÔNG xoá bot user tự tạo.
   - connections → merge theo `id`, giữ `status`/probe hiện có.
-  - workflows → `my-course/workflows/`.
+  - workflows → `workspace/workflows/`.
   - rules.local.md → `.devin/rules.local.md` (AGENTS.md đọc nếu có).
   - permissions_template + exec_allowlist → CHỈ áp máy chưa onboard
     (learner_name rỗng) — không đè consent máy đang chạy.
@@ -36,7 +36,7 @@ ROOT = os.path.abspath(sys.argv[1] if len(sys.argv) > 1
                        and not sys.argv[1].startswith("-") else
                        os.environ.get("TROLY_DATA") or os.getcwd())
 DEVIN = os.path.join(ROOT, ".devin")
-MYC = os.path.join(ROOT, "my-course")
+MYC = os.path.join(ROOT, "workspace")
 TOOLS = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, TOOLS)
 from path_guard import path_sensitive, rw_grant_ok   # noqa: E402
@@ -293,7 +293,7 @@ def apply(pack):
             have[cid] = merged
         cj["apps"] = list(have.values())
         _jwrite(CONN_FP, cj)
-    # workflows → my-course/workflows/
+    # workflows → workspace/workflows/
     for name, wf in (pack.get("workflows") or {}).items():
         wdir = os.path.join(MYC, "workflows")
         os.makedirs(wdir, exist_ok=True)
@@ -303,7 +303,7 @@ def apply(pack):
         with open(os.path.join(DEVIN, fn), "w", encoding="utf-8") as f:
             f.write(content if isinstance(content, str)
                     else json.dumps(content, ensure_ascii=False, indent=2))
-    # mycourse_files → my-course/ CHỈ máy mới — file cá nhân (rules của
+    # mycourse_files → workspace/ CHỈ máy mới — file cá nhân (rules của
     # tôi, feedback log) là của user, pack không đè lần hai
     if new_machine:
         for fn, content in (pack.get("mycourse_files") or {}).items():

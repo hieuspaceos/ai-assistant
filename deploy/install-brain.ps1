@@ -45,7 +45,7 @@ if ($Brain -eq "gemini") {
 
 # Không đè brain.json nếu máy đã onboard (learner_name có rồi = não là
 # lựa chọn của user). Máy mới → ghi sẵn để onboarding auto-chọn.
-$cfg = Join-Path $Dest "my-course\config.json"
+$cfg = Join-Path $Dest "workspace\config.json"
 $onboarded = $false
 try {
     $onboarded = [bool]((Get-Content $cfg -Raw | ConvertFrom-Json).learner_name)

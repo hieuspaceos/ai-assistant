@@ -13,7 +13,7 @@ onefile — payload (web/, tools/, extension/, templates/, skill-packs…) đi
 kèm trong binary rồi "bung" ra folder user lần chạy đầu.
 
 Update path: binary mới có VERSION khác ~/TroLyAI/VERSION → chỉ đè phần
-CODE (CODE_DIRS/CODE_FILES), không đụng my-course/, brain.json, .devin/
+CODE (CODE_DIRS/CODE_FILES), không đụng workspace/, brain.json, .devin/
 skills, secrets, token — "update = tải exe mới rồi mở lại".
 """
 import json, os, platform, runpy, secrets, shutil, signal, subprocess, sys
@@ -33,7 +33,7 @@ CODE_DIRS = ["web", "tools", "extension", "templates", "docs",
 CODE_FILES = ["AGENTS.md", "CLAUDE.md", "SETUP.md", "README.md",
               "requirements.txt", "VERSION", "start.sh", "start.bat"]
 # Phần "dữ liệu": chỉ đổ vào lần đầu, update KHÔNG bao giờ đè
-SEED_DIRS = ["my-course"]
+SEED_DIRS = ["workspace"]
 SEED_FILES = ["brain.json"]
 
 def _read(fp, default=""):
@@ -133,6 +133,36 @@ def bootstrap():
     """Áp staged update (nếu có), rồi bung payload vào DATA + đè code
     khi VERSION nguồn đổi. Trả về bool 'đã update code'."""
     os.makedirs(DATA, exist_ok=True)
+    # migrate: folder dữ liệu đổi tên my-course → workspace (sản phẩm
+    # không còn là "khoá học" mà là bộ công cụ). Cả hai cùng có thì gom
+    # phần thiếu vào workspace rồi bỏ my-course.
+    old = os.path.join(DATA, "my-course")
+    new = os.path.join(DATA, "workspace")
+    if os.path.isdir(old):
+        if not os.path.isdir(new):
+            os.rename(old, new)
+        else:
+            _copy_tree(old, new, overwrite=False)
+            shutil.rmtree(old, ignore_errors=True)
+        # file text trong DATA có thể trỏ "my-course" (agent.sb quyền
+        # ghi, permissions.json, html clone…) — rewrite cho khỏi lệch
+        for dp, dns, fns in os.walk(DATA):
+            dns[:] = [d for d in dns if d not in
+                      (".logs", "node", ".trash", "__pycache__")]
+            for fn in fns:
+                if not fn.endswith((".json", ".md", ".sb", ".html",
+                                    ".js", ".txt", ".jsonl")):
+                    continue
+                fp = os.path.join(dp, fn)
+                try:
+                    if os.path.getsize(fp) > 1_000_000:
+                        continue
+                    s = open(fp, encoding="utf-8").read()
+                    if "my-course" in s:
+                        open(fp, "w", encoding="utf-8").write(
+                            s.replace("my-course", "workspace"))
+                except (OSError, UnicodeDecodeError):
+                    continue
     applied = apply_pending()
     src_ver, dst_ver = _read(os.path.join(SRC, "VERSION"), "0"), \
                        _read(os.path.join(DATA, "VERSION"), "")

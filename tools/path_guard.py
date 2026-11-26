@@ -90,7 +90,7 @@ def rw_grant_ok(p, cwd):
     """read-write chỉ hợp lệ NGOÀI vùng mã nguồn: grant RW trên folder chứa
     project (~/Desktop…) hay folder code bên trong (tools/, web/…) = ghi
     được tools/*.py, brain.json, .git/hooks → spawn/exec kế chạy code
-    NGOÀI Seatbelt. Path nằm trong vùng đã writable sẵn (my-course/,
+    NGOÀI Seatbelt. Path nằm trong vùng đã writable sẵn (workspace/,
     .devin/skills/, .logs/) thì cho qua — grant thừa nhưng vô hại."""
     try:
         rpl = os.path.realpath(os.path.expanduser(p)).lower()
@@ -101,5 +101,5 @@ def rw_grant_ok(p, cwd):
             or cwdl.startswith(rpl + os.sep)):
         return True                       # ngoài project — bình thường
     wdirs = [os.path.realpath(os.path.join(cwdl, *d.split("/")))
-             for d in ("my-course", ".devin/skills", ".logs")]
+             for d in ("workspace", ".devin/skills", ".logs")]
     return any(rpl == w or rpl.startswith(w + os.sep) for w in wdirs)

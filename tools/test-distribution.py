@@ -78,10 +78,10 @@ open(os.path.join(mdata, "VERSION"), "w").write("1.0.2")
 json.dump({"collector": "", "org": "TST", "beacon_secret": SEC_B},
           open(os.path.join(mdata, ".devin", "fleet.json"), "w"))
 open(os.path.join(mdata, ".devin", "machine.id"), "w").write("m-dist-1")
-# my-course tối thiểu để apply-pack/backup có chỗ ghi
-os.makedirs(os.path.join(mdata, "my-course"))
+# workspace tối thiểu để apply-pack/backup có chỗ ghi
+os.makedirs(os.path.join(mdata, "workspace"))
 json.dump({"language": "vi"}, open(
-    os.path.join(mdata, "my-course", "config.json"), "w"))
+    os.path.join(mdata, "workspace", "config.json"), "w"))
 
 # --- collector thật ---
 cfg_fp = os.path.join(tmp, "collector.json")
@@ -270,7 +270,7 @@ try:
                          "status": "connected"}],
         "workflows": {"wf1.json": {"id": "wf1", "steps": []}},
         "rules_local_md": "# Luat cty test\n",
-        "permissions_template": [{"path": "my-course",
+        "permissions_template": [{"path": "workspace",
                                   "access": "read-write"}],
         "exec_allowlist": ["ls *", "df -h"],
     }
@@ -306,13 +306,13 @@ try:
     check(os.path.isfile(os.path.join(
         mdata, ".devin", "rules.local.md")), "rules.local.md đã cài")
     check(os.path.isfile(os.path.join(
-        mdata, "my-course", "workflows", "wf1.json")),
-        "workflow vào my-course/workflows/")
+        mdata, "workspace", "workflows", "wf1.json")),
+        "workflow vào workspace/workflows/")
     check(json.load(open(os.path.join(
-        mdata, "my-course", "bots.json")))["bots"][0]["id"] == "tst-bot",
+        mdata, "workspace", "bots.json")))["bots"][0]["id"] == "tst-bot",
         "bots merge theo id")
     conn = json.load(open(os.path.join(
-        mdata, "my-course", "connections.json")))
+        mdata, "workspace", "connections.json")))
     check(conn["apps"][0]["id"] == "tst-conn",
           "connections merge theo id")
     # máy ĐÃ onboard (config có learner? — config vi không learner_name

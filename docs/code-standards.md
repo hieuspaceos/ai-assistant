@@ -58,7 +58,7 @@ chỉ có Python chuẩn + PowerShell + browser** — mọi file mới phải ch
 - ❌ Framework/router/component library cho portal hay file clone.
 - ❌ Tách file clone thành nhiều file — viewer sửa một file.
 - ❌ Server bind `0.0.0.0` hay auth bằng cách "không ai biết port".
-- ❌ Ghi file ngoài `my-course/` khi chưa có trong `permissions.json`.
+- ❌ Ghi file ngoài `workspace/` khi chưa có trong `permissions.json`.
 - ❌ Log/in ra secrets, token, app password.
 - ❌ Comment giải thích điều code đã nói — comment cho "tại sao", bẫy
   thật, số đo từ site nguồn.

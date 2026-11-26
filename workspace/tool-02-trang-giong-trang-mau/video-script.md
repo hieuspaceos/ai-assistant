@@ -33,7 +33,7 @@ cards, bảng giá, nút. Dùng chuột chỉ từng phần khi nói tới.
 
 **MÀN HÌNH:** Gõ chậm prompt vào khung chat:
 ```
-Đọc trang my-course/lesson-02-trang-giong-trang-mau/sample-files/trang-mau.html rồi dựng cho em một trang web giống về bố cục và phong cách — nội dung của em: sản phẩm "Trà thảo mộc Thanh Lọc", khẩu hiệu "Ngủ ngon mỗi đêm", ưu điểm: nguyên liệu tự nhiên, không caffeine, túi lọc tiện dụng, giá 149.000đ gạch giá cũ 220.000đ, nút "ĐẶT NGAY". Lưu ra my-course/trang-cua-em.html rồi mở cho em xem.
+Đọc trang workspace/tool-02-trang-giong-trang-mau/sample-files/trang-mau.html rồi dựng cho em một trang web giống về bố cục và phong cách — nội dung của em: sản phẩm "Trà thảo mộc Thanh Lọc", khẩu hiệu "Ngủ ngon mỗi đêm", ưu điểm: nguyên liệu tự nhiên, không caffeine, túi lọc tiện dụng, giá 149.000đ gạch giá cũ 220.000đ, nút "ĐẶT NGAY". Lưu ra workspace/trang-cua-em.html rồi mở cho em xem.
 ```
 Để Devin chạy thật — KHÔNG cắt. Khi nó phân tích trang mẫu và báo sẽ làm
 gì, đọc to đoạn đó.

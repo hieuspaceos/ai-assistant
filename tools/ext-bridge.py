@@ -328,7 +328,7 @@ def handle_api(method, path, body):
         res = ext_call(action, d, timeout=timeout)
         # screenshot lớn → ghi file, trả đường dẫn cho gọn
         if res.get("ok") and res.get("png_b64"):
-            d2 = os.path.join(os.path.abspath(CWD), "my-course", ".shots")
+            d2 = os.path.join(os.path.abspath(CWD), "workspace", ".shots")
             os.makedirs(d2, exist_ok=True)
             fp = os.path.join(d2, f"shot-{int(time.time()*1000)}.png")
             with open(fp, "wb") as f:

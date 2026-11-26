@@ -35,7 +35,7 @@ push-only ra collector bên ngoài (mục 7).
 |                            (đọc .devin/skills, gọi API
 |                             /api/browser để lái trình duyệt) |
 |                                                               |
-|   Đĩa: my-course/ (bài học, config, permissions, clone)       |
+|   Đĩa: workspace/ (bài học, config, permissions, clone)       |
 +---------------------------------------------------------------+
           |  (chỉ máy fleet) beacon push-only HTTPS 15'
           v
@@ -50,12 +50,12 @@ extension = cánh tay trên trình duyệt · serve.py = file tĩnh.
 ## Các thành phần
 
 ### 1. Portal tĩnh — `tools/serve.py` / `serve.ps1` :8080
-- **Mục đích:** phục vụ `web/` (portal), `my-course/` (bài học, file clone),
+- **Mục đích:** phục vụ `web/` (portal), `workspace/` (bài học, file clone),
   `intro/`, `templates/` — mọi thứ hiển thị được trong browser.
 - **Chặn dotfiles**: không phục vụ đường dẫn chứa `.devin`/`.git` (trong
   `.devin/` có secrets của học viên).
 - **Host check** chống DNS rebinding: chỉ `localhost`/`127.0.0.1`/`[::1]`.
-- **CSP `connect-src 'none'`** trên `.html` dưới `/my-course/`+`/intro/` —
+- **CSP `connect-src 'none'`** trên `.html` dưới `/workspace/`+`/intro/` —
   nội dung clone/bài học không exfil được ra net. Slide trong portal nhúng
   qua iframe `sandbox="allow-scripts"` (opaque origin).
 - HTTP/1.1 keep-alive + `Range` (video bài học tua được); `/web/vendor/*`
@@ -87,8 +87,8 @@ extension = cánh tay trên trình duyệt · serve.py = file tĩnh.
   (`osascript display dialog`) do bridge spawn — nút "Đồng ý" HTTP bị
   chặn vì agent giả được Origin nhưng không exec/bấm được GUI ngoài
   sandbox; quyết định phát event `perm_done` đóng card trong chat.
-- Sandbox ghi file: chỉ `.html` dưới `my-course/`; tự tạo `.bak` trước
-  khi ghi đè; "xoá bài" là move vào `my-course/.trash/` chứ không xoá
+- Sandbox ghi file: chỉ `.html` dưới `workspace/`; tự tạo `.bak` trước
+  khi ghi đè; "xoá bài" là move vào `workspace/.trash/` chứ không xoá
   hẳn. Chi tiết endpoint: `api-reference.md`.
 
 ### 3. ttyd — :7681 (tuỳ chọn)
@@ -151,7 +151,7 @@ extension = cánh tay trên trình duyệt · serve.py = file tĩnh.
   đọc-được-không-ghi; `secrets*.json` deny-read. **Windows: não chạy
   dưới user hạn chế `troly-agent`** — `tools/setup-agent-user.ps1`
   (admin, một lần) tạo user + đặt NTFS ACL tương đương Seatbelt (RX
-  toàn project, ghi chỉ `my-course/`+`.devin/skills/`+`.logs/`, deny
+  toàn project, ghi chỉ `workspace/`+`.devin/skills/`+`.logs/`, deny
   tools/brain.json/secrets) + lưu credential DPAPI vào
   `.devin/agent-user.cred`; `chat-bridge.ps1` spawn não qua
   `CreateProcessWithLogonW` (`TroLy.AgentSpawn`, C# Add-Type) với

@@ -40,11 +40,12 @@ GATED = {
 OPEN_OK = {
     "/api/prompt":           "chức năng chính — gửi tin cho não",
     "/api/respond":          "tự vệ: pending-id + optionId + Origin + one-shot",
-    "/api/save-page":        "ghi .html dưới my-course/; CSP sandbox đè lên",
+    "/api/save-page":        "ghi .html dưới workspace/; CSP sandbox đè lên",
     "/api/check-connection": "chỉ ghi status probe vào connections.json",
     "/api/bot-import":       "stage zip vào temp + trả preview; ghi thật ở -confirm",
     "/api/emit-event":       "append-only, whitelist event type — chỉ inflate được đếm dashboard",
     "/api/pick-folder":      "mở hộp chọn folder native (dialog macOS) — chỉ trả path user tự chọn; serialized + 1 dialog/lần, không ghi gì",
+    "/api/reveal":           "`open -R` = chỉ highlight trong Finder, không thực thi file; path giới hạn dưới ~ + deny-list nhạy cảm như check-path",
 }
 
 fail = False

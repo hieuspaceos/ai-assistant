@@ -107,7 +107,7 @@ def _deny_siblings(allowed):
 
 def _grant_ok(p, access, cwd):
     """Grant chỉ emit khi path còn đúng như lúc học viên duyệt — chặn
-    TOCTOU symlink (audit-3 CAO-2): agent grant my-course/x (hợp lệ) rồi
+    TOCTOU symlink (audit-3 CAO-2): agent grant workspace/x (hợp lệ) rồi
     rmdir + ln -s ~/Library/LaunchAgents x trước spawn → request-time
     check đã qua nhưng realpath ở ĐÂY (enforcement point) bắt được.
 
@@ -115,7 +115,7 @@ def _grant_ok(p, access, cwd):
     - path_sensitive: realpath đích rơi vào folder nhạy cảm → chặn.
     - Divergence: realpath khác normpath = có symlink component TRÊN
       đường đi — kể cả đích KHÔNG nhạy cảm (ln -s ~/Documents x) vẫn
-      chặn, vì card chỉ hiện "my-course/x" chứ sandbox lại được quyền
+      chặn, vì card chỉ hiện "workspace/x" chứ sandbox lại được quyền
       ~/Documents. Cho qua duy nhất canonicalization /private của macOS
       (/tmp,/var,/etc → /private/*). So .lower(): APFS không phân biệt
       hoa-thường, grant gõ "~/documents" không bị drop oan.
@@ -161,7 +161,7 @@ def build_profile(cwd):
          _sub("file-read*", ["/"])]
 
     # --- vùng WRITE (whitelist thuần) — CHỈ 3 vùng, đúng luật AGENTS.md:
-    # "file cho học viên chỉ trong my-course/ hoặc folder được cấp quyền".
+    # "file cho học viên chỉ trong workspace/ hoặc folder được cấp quyền".
     # Trước đây rw={cwd} → não bị lừa ghi được tools/*.py, brain.json,
     # permissions.json = tự cấp quyền + đặt payload chạy NGOÀI sandbox.
     tmps = {"/tmp", "/private/tmp", "/var/tmp"}
@@ -170,7 +170,7 @@ def build_profile(cwd):
         tmps.add(os.path.realpath(t))
     sysw = {os.path.join(home, d) for d in (
         ".npm", ".cache", ".pnpm-store", "Library/Caches")}
-    rw = {os.path.join(cwd, "my-course"),
+    rw = {os.path.join(cwd, "workspace"),
           os.path.join(cwd, ".devin", "skills"),
           os.path.join(cwd, ".logs")} | tmps | sysw
 
@@ -202,7 +202,7 @@ def build_profile(cwd):
 
     # permissions.json — đúng semantics access=read|read-write
     try:
-        perm = json.load(open(os.path.join(cwd, "my-course",
+        perm = json.load(open(os.path.join(cwd, "workspace",
                                            "permissions.json"),
                               encoding="utf-8"))
         for f in perm.get("folders", []):
@@ -260,7 +260,7 @@ def build_profile(cwd):
     # — não ghi trực tiếp = tự cởi còng (ghi permissions.json "/" rồi
     # respawn = profile phình toàn ổ). bot.md cố ý KHÔNG deny — skill
     # phong-van ghi nó khi onboarding.
-    mc = os.path.join(cwd, "my-course")
+    mc = os.path.join(cwd, "workspace")
     for f in ("permissions.json", "connections.json", "bots.json",
               "config.json"):
         for lit in _emit_paths([os.path.join(mc, f)]):

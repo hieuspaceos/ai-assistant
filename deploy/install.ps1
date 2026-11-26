@@ -44,27 +44,27 @@ foreach ($d in $dirs) {
         @("/E","/XD","__pycache__",".shots","clone-work")
 }
 Rc (Join-Path $src ".devin\skill-packs") (Join-Path $Dest ".devin\skill-packs") @("/E")
-# my-course: 6 file state la du lieu hoc vien — reinstall KHONG de
+# workspace: 6 file state la du lieu hoc vien — reinstall KHONG de
 # (mat learner_name → may thanh "moi" → pack re-ap exec_allowlist +
 # permissions_template; mat bots/consent da duyet). Seed con lai di
 # qua /XO: ghi de chi khi goi cai moi hon — chinh sua cua hoc vien
 # trong bai hoc khong bi ban cu de len. (audit-5 F7)
 $stateFiles = @("config.json","manifest.json","bots.json","permissions.json",
     "connections.json","bot.md")
-$mcDest = Join-Path $Dest "my-course"
+$mcDest = Join-Path $Dest "workspace"
 if (Test-Path $mcDest) {
-    Rc (Join-Path $src "my-course") $mcDest `
+    Rc (Join-Path $src "workspace") $mcDest `
         @("/E","/XO","/XD","__pycache__",".shots","clone-work",".trash") `
         + @("/XF") + $stateFiles
     foreach ($sf in $stateFiles) {
-        $sfSrc = Join-Path (Join-Path $src "my-course") $sf
+        $sfSrc = Join-Path (Join-Path $src "workspace") $sf
         $sfDst = Join-Path $mcDest $sf
         if ((Test-Path $sfSrc) -and -not (Test-Path $sfDst)) {
             Copy-Item $sfSrc $sfDst
         }
     }
 } else {
-    Rc (Join-Path $src "my-course") $mcDest `
+    Rc (Join-Path $src "workspace") $mcDest `
         @("/E","/XD","__pycache__",".shots","clone-work",".trash")
 }
 $files = @("AGENTS.md","CLAUDE.md","SETUP.md","README.md","requirements.txt",
@@ -76,7 +76,7 @@ foreach ($f in $files) {
         exit 1
     }
 }
-# user thuong chay app can GHI .devin\ (token/key/state), my-course\,
+# user thuong chay app can GHI .devin\ (token/key/state), workspace\,
 # .logs\ — C:\<dir> mac dinh chi cho BUILTIN\Users RX nen app chet khi
 # non-elevated (audit-5 F1). Grant M cho user local (-ForUser khi can
 # chi dinh dung chu nhan thay vi moi Users); troly-agent cung thuoc
@@ -89,9 +89,9 @@ Write-Host "  ok — copy xong"
 # cạm bẫy: learner_name khác rỗng trong bộ cài = mọi máy NV bị coi là
 # "máy cũ" → mycourse_files của pack cty không bao giờ áp
 try {
-    $cfg = Get-Content "$Dest\my-course\config.json" -Raw | ConvertFrom-Json
+    $cfg = Get-Content "$Dest\workspace\config.json" -Raw | ConvertFrom-Json
     if ($cfg.learner_name) {
-        Write-Host "  !! my-course/config.json có learner_name — mycourse_files"
+        Write-Host "  !! workspace/config.json có learner_name — mycourse_files"
         Write-Host "     của pack sẽ KHÔNG áp trên máy NV. Để trống trước khi cài."
     }
 } catch {}

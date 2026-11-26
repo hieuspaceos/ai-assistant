@@ -82,7 +82,7 @@ tên đó trong Zalo, bạn kiểm tra lại tên giúp mình nhé"*.
 
 - **Ảnh**: `query` `sel`=`[class*=chat-message] img, [class*=message-view] img`,
   `attr`=`"src"` → được URL CDN `zadn.vn` (đã ký sẵn) → `curl -o` tải về
-  `my-course/` trực tiếp, không cần cookie.
+  `workspace/` trực tiếp, không cần cookie.
 - **File** (.docx, .pdf, .xlsx): thấy tên file trong bong bóng +
   nút "Tải về" → `click` theo chữ `"Tải về để xem lâu dài"` (hoặc icon
   tải) để trình duyệt lưu về Downloads. Nói cho học viên biết file

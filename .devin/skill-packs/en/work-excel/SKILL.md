@@ -46,7 +46,7 @@ about 30 seconds."*
 2. Announce in plain words: *"I'll read file X, do Y, write to new file
    Z — the original stays untouched. OK?"*
 3. Run a Python script inside the working folder (no scattered scripts —
-   write into `my-course/` or the current lesson folder).
+   write into `workspace/` or the current lesson folder).
 4. Verify the result (row count, sample rows) before reporting.
 5. Report SHORT and human: *"done — 3,000 rows filtered to 412 in
    `hanoi-customers-new.xlsx`"*. Open the result folder for them.

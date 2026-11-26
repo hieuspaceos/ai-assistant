@@ -61,7 +61,7 @@ already logged in when needed.
   opening a file in the browser). If the extension can do it, do it
   yourself; only ask for their hands when truly needed, with
   click-by-click instructions naming exactly what's on their screen.
-- Create a working folder `clone-work/<site-slug>/` under `my-course/`
+- Create a working folder `clone-work/<site-slug>/` under `workspace/`
   — ONE FOLDER PER SITE (e.g. `clone-work/mekongtouch/`). Using a
   shared `clone-work/` makes the second site's measurements overwrite
   the first's. The folder holds: `ref-dom.html`, `ref-styles.json`,
@@ -394,7 +394,7 @@ and nobody saw it until comparing block by block.
 
 - Open the result in the **app's viewer** (not a bare file): `open`
   or lead them to
-  `http://localhost:8080/web/clone-view.html?src=/my-course/<file>.html`
+  `http://localhost:8080/web/clone-view.html?src=/workspace/<file>.html`
   — the page shows FULL-SCREEN inside the app with a toolbar:
   **Edit content** → click straight on text/images/buttons/blocks to
   change in place → **Save page** (writes back to the file) or

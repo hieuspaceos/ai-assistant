@@ -244,7 +244,7 @@ def load_allowlist(devin_dir):
         return list(DEFAULT_ALLOWLIST)
 
 def exec_allowed(cmd, patterns):
-    """Glob match — pattern như 'ls *', 'ls -la', 'cat my-course/**'.
+    """Glob match — pattern như 'ls *', 'ls -la', 'cat workspace/**'.
     Trả pattern khớp đầu tiên hoặc None. Lọc qua cùng lint denylist của
     apply-pack (phòng file allowlist bị sửa tay chứa pattern độc)."""
     import fnmatch

@@ -16,7 +16,7 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 
 | File | Vai trò |
 |---|---|
-| `serve.py` / `serve.ps1` | Static server: chặn dotfiles, Host check chống rebinding, CSP `sandbox` opaque-origin `/my-course/`+`/intro/`, Range, keep-alive |
+| `serve.py` / `serve.ps1` | Static server: chặn dotfiles, Host check chống rebinding, CSP `sandbox` opaque-origin `/workspace/`+`/intro/`, Range, keep-alive |
 | `chat-bridge.py` / `.ps1` | Chat portal ↔ não ACP (`brain.json` chọn não, `/api/brain` đổi nóng); API config/permissions/connections/secrets/save-page; long-poll + prompt_lock + respond-gate; spawn não qua Seatbelt (macOS) |
 | `term-gate.sh` / `.ps1` | Cửa gác giữa ttyd và não — đòi mã kết nối (từ `?arg=`) trước khi exec não; macOS bọc sandbox-exec. `.cmd` chỉ là forwarder không-arg (batch không đọc argv an toàn) |
 | `read-brain.ps1` | Đọc `brain.json` → in `cmd|terminal` ĐÃ validate (charset + deny-list) — `start.bat`/`chat-terminal.ps1` dùng chung, tránh expansion injection trong batch |
@@ -44,7 +44,7 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 | `build-release.sh` | Release-readiness gate: test suite + secret-scan zip + changelog + git sạch |
 | `sync-fork.sh` | Hút phần IMA-only từ `../ima-assistant` → `packs/ima/pack.json` (skill diff, config, workflows, rules) |
 | `content_guard.py` | Lớp ranh giới: wrap UNTRUSTED (sanitize marker + NFKC fold + id hash), detect_injection advisory, scrub_env allowlist spawn, exec_allowed glob |
-| `backup.py` | Snapshot `.devin/`+`my-course/` trước update/pack-apply — giữ 5 bản |
+| `backup.py` | Snapshot `.devin/`+`workspace/` trước update/pack-apply — giữ 5 bản |
 | `build-ext.sh` | Zip `extension/` → `dist/troly-ext-<ver>.zip` upload Web Store — lint giữ `key` (EXT_ID), connectable localhost-only |
 | `test-fleet.py` | GATE plan 1: collector thật, đủ vòng đời pair→approve→beacon→revoke + parity endpoint-set collector↔worker (`WORKER_ONLY` khai rõ) |
 | `test-worker.py` | Integration worker: `wrangler dev` + D1 local — bootstrap lock, login/session, orgs+license HMAC, cross-org 403/404, rotate-secret, audit, last-master lock |
@@ -85,26 +85,41 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 | Đường | Vai trò |
 |---|---|
 | `skills/<tên>/SKILL.md` | Skill đang active — onboarding copy từ skill-packs |
-| `skill-packs/vi/` | 20 skill tiếng Việt (/phong-van /hoc-bai /doc-zalo /clone-trang …) |
-| `skill-packs/en/` | 20 skill English tương ứng (/interview /tutor /read-zalo /clone-page …) |
+| `skill-packs/vi/` | 21 skill tiếng Việt (/phong-van /hoc-bai /doc-zalo /tao-cong-cu …) |
+| `skill-packs/en/` | 21 skill English tương ứng (/interview /tutor /read-zalo /make-tool …) |
 | `skill-packs/recipes/` | `<lang>.json` — recipes sidebar theo ngôn ngữ, `/api/setup` ghi vào manifest |
-| `agents/slide-builder.md` | Subagent dựng `slides.html` từ nội dung bài |
-| `agents/video-builder.md` | Subagent: `video-script.md` (luôn) + `video.mp4` (bonus) |
+| `agents/slide-builder.md` | Subagent dựng `slides.html` — GIỮ LẠI cho sau này, luồng phỏng vấn không gọi |
+| `agents/video-builder.md` | Subagent `video-script.md` + `video.mp4` — GIỮ LẠI, luồng không gọi |
 
 ## templates/
 
-Khung bài học: `lesson.md`, `exercise.md`, `video-script` template,
-`slide-deck.html` (slide-builder nhân bản rồi đổ nội dung).
+`walkthrough.json` — schema màn hướng dẫn tương tác (15 step kinds:
+say/prompt/input/choice/pick-file/open-url/wait-perm/wait-run/auto/
+spotlight/open/watch/download/check/copy/done + cond/optional/
+then_probe/media). `lesson.md` — khung guide.md (bản đọc của
+walkthrough). `exercise.md`/`video-script`/`slide-deck.html` giữ lại
+cho slide-builder/video-builder — luồng mặc định không dùng.
 
-## my-course/ — dữ liệu của học viên
+## Walkthrough (portal)
+
+`web/app.js` render walkthrough.json thành modal từng-bước (overlay +
+spotlight + widget theo kind): `prompt` POST `/api/prompt`, `wait-*`/
+`auto` poll `/api/poll` tự qua bước, `open` gọi `/api/reveal` mở
+Finder, `cond` probe `/api/check-connection`+`/api/check-path`,
+`optional` nút Bỏ qua, tiến trình lưu localStorage. Validator
+`tools/test-walkthrough.py`. Runner là renderer câm — trí tuệ sinh
+nội dung nằm trong skill `/tao-cong-cu` (en: `/make-tool`), kèm pattern
+prompt-optional + wait-run lặp gánh lượt hỏi lẻ giữa run.
+
+## workspace/ — dữ liệu của học viên
 
 | Đường | Vai trò |
 |---|---|
 | `config.json` | `language`, `learner_name` — onboarding ghi |
-| `permissions.json` | Folder agent được đọc/ghi ngoài my-course |
+| `permissions.json` | Folder agent được đọc/ghi ngoài workspace |
 | `connections.json` | Trạng thái kết nối app/web + field bí mật (`secret:true`) |
 | `manifest.json` | Danh sách bài học — portal đọc để render |
-| `lesson-XX-<slug>/` | Một bài: guide.md, exercise.md, video-script.md, slides.html, video.mp4, scene.json, sample-files/ |
+| `tool-XX-<slug>/` | Một bài (luồng mới): walkthrough.json + guide.md — bài cũ có thể kèm slides.html/video.mp4/exercise.md |
 | `clone-work/<site>/` | Số liệu đo mỗi site clone: ref-dom, ref-styles, ref-css/, ref-assets, ref-shot-*, ref-states.md, tokens.md |
 | `trang-*.html` | File clone thành phẩm (mở trong clone-view hoặc trực tiếp) |
 

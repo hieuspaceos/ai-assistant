@@ -6,6 +6,24 @@ phải có mục riêng — `tools/build-release.sh` fail nếu thiếu.
 ## [Unreleased]
 
 ### Thêm
+- **Interactive walkthrough** — sản phẩm mới của `/phong-van`: mỗi công
+  cụ sinh ra kèm `walkthrough.json` trong folder bài → portal hiện nút
+  **"▶ Dùng ngay"** mở modal hướng dẫn từng-bước làm thật (gõ lệnh gửi
+  thẳng vào chat, chờ quyền/run tự qua bước, spotlight sáng đúng chỗ
+  bấm, mở kết quả trong Finder). 15 step kinds (say/prompt/input/
+  choice/pick-file/open-url/wait-perm/wait-run/auto/spotlight/open/
+  watch/download/check/copy/done) + flow (cond/optional/then_probe/
+  media) + resume localStorage. Schema: `templates/walkthrough.json`;
+  runner: `web/app.js`; validator: `tools/test-walkthrough.py`.
+- Skill **`/tao-cong-cu`** (en: `/make-tool`) — gói một việc lặp lại
+  thành skill `/command` + walkthrough + guide; `/phong-van` gọi lại
+  nó, học viên cũng gọi trực tiếp được.
+- `POST /api/reveal` (chat-bridge) — `open <path>` cho nút "Mở trong
+  Finder"; chống-oracle giống check-path.
+- Guide có `### Bước N` tự render thành wizard đọc (Bước N/M + Xem
+  hết/Xem từng bước); tab portal hiện/ẩn theo cờ manifest
+  (`has_slides/has_video/has_exercise`).
+
 - **Kho công thức (skill bank)** — bàn giao skill khi nhân viên nghỉ
   việc, đúng màn "Người nghỉ việc" trên landing: beacon báo danh mục
   skill metadata trong snapshot → dashboard hiện cột "Công thức";
@@ -121,7 +139,7 @@ phải có mục riêng — `tools/build-release.sh` fail nếu thiếu.
   áp khi mở app, rollback bằng `troly --rollback`; config-pack per-cty
   (skills/bots/connections/workflows/rules/allowlist) qua apply-pack.py —
   "một code base, khác biệt là pack".
-- `tools/backup.py`: snapshot my-course + state .devin trước update/pack.
+- `tools/backup.py`: snapshot workspace + state .devin trước update/pack.
 - `tools/sync-fork.sh`: trích khác biệt từ fork cũ sang `packs/<org>/`.
 - `build-release.sh`: cổng phát hành — git sạch, test suite, CHANGELOG,
   secret-scan zip, ký, xuất manifest.

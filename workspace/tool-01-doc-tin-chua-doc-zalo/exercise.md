@@ -31,7 +31,7 @@ Với Zalo thật:
 Với file mô phỏng:
 
 ```
-Đọc file my-course/lesson-01-doc-tin-chua-doc-zalo/sample-files/zalo-hop-thu-demo.txt, liệt kê các hội thoại có tin chưa đọc kèm xem trước nội dung, rồi gợi ý em nên trả lời ai trước.
+Đọc file workspace/tool-01-doc-tin-chua-doc-zalo/sample-files/zalo-hop-thu-demo.txt, liệt kê các hội thoại có tin chưa đọc kèm xem trước nội dung, rồi gợi ý em nên trả lời ai trước.
 ```
 
 </details>

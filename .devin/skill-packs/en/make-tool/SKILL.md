@@ -1,6 +1,6 @@
 ---
 name: make-tool
-description: Package a repeated task into a personal tool — generate a new /command skill plus walkthrough.json (interactive step-by-step guide in the portal) and a readable guide.md in my-course/, and update the manifest. Use when the learner describes work they want turned into a recipe, or wants to "save what you just did as a tool for next time".
+description: Package a repeated task into a personal tool — generate a new /command skill plus walkthrough.json (interactive step-by-step guide in the portal) and a readable guide.md in workspace/, and update the manifest. Use when the learner describes work they want turned into a recipe, or wants to "save what you just did as a tool for next time".
 triggers:
   - user
   - model
@@ -61,7 +61,7 @@ AT MOST 2 questions first: which files/app does this work on? what does
    questions mid-run (confirmations, data meaning) and you can't predict
    how many; this loop absorbs them all.
    Open with a `say` intro, close with `done` ("next time just type …").
-   Put it in `my-course/lesson-XX-<slug>/` (XX = next manifest number).
+   Put it in `workspace/tool-XX-<slug>/` (XX = next manifest number).
 4. **Write guide.md** per `templates/lesson.md` — the readable version
    of the same walkthrough (same steps, page form for re-reading/print).
 5. **Self-check before finishing**:
@@ -72,7 +72,7 @@ AT MOST 2 questions first: which files/app does this work on? what does
    - guide.md: every `### Step` has ONE action + ONE ✅ line, no banned
      words ("simply", "just", "obviously", "easy")
    Fix whatever's off before moving to step 6.
-6. **Update `my-course/manifest.json`**: add the lesson entry with
+6. **Update `workspace/manifest.json`**: add the lesson entry with
    `"has_slides": false, "has_video": false, "has_exercise": false,
    "has_walkthrough": true`; for a new skill also add to `recipes`:
    `{"command": "/<name>", "meaning": "<one-line meaning>"}`.

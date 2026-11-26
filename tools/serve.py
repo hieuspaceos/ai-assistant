@@ -34,10 +34,10 @@ EXTRA_MIME = {".woff": "font/woff", ".woff2": "font/woff2", ".ttf": "font/ttf"}
 #  - connect-src 'none' → script không fetch/XHR/WS được đâu cả.
 # KHÔNG áp cho /web/ (portal phải gọi bridge được). clone-view sửa trang
 # qua srcdoc thay vì đọc DOM iframe vì trang giờ opaque.
-CSP_PATHS = ("/my-course/", "/intro/")
+CSP_PATHS = ("/workspace/", "/intro/")
 # mọi loại file trình duyệt render thành DOCUMENT chạy được script —
 # không chỉ .html: .svg (image/svg+xml có <script>), .xml (XSLT),
-# .xhtml/.xht/.shtml/.mht. File độc .svg dưới my-course mở trực tiếp
+# .xhtml/.xht/.shtml/.mht. File độc .svg dưới workspace mở trực tiếp
 # chạy script trong origin :8080 → đọc localStorage.bridge_token →
 # gọi mọi API bridge (audit-5 N4)
 CSP_SUFFIXES = (".html", ".htm", ".svg", ".xml", ".xhtml", ".xht",
@@ -101,7 +101,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if low and (low[-1] == "collector.json"
                     or low[-1].endswith(".local.json")):
             return None
-        if (len(low) == 2 and low[0] == "my-course" and low[1] in (
+        if (len(low) == 2 and low[0] == "workspace" and low[1] in (
                 "permissions.json", "connections.json", "config.json",
                 "bots.json", "bot.md")) \
                 or low == ["brain.json"]:

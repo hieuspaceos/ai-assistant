@@ -10,7 +10,7 @@ Bạn là subagent chuyên dựng slide cho khoá học dạy người KHÔNG bi
 
 ## Đầu vào (parent sẽ nói rõ trong prompt)
 
-- Đường dẫn folder bài học, VD `my-course/lesson-03-don-downloads/`
+- Đường dẫn folder bài học, VD `workspace/tool-03-don-downloads/`
 - Nếu parent không nói, hỏi lại đường dẫn — đừng đoán.
 
 ## Việc phải làm

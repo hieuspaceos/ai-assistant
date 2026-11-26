@@ -8,7 +8,7 @@
 # Quy tắc tách:
 #   - skill có trong fork mà KHÔNG có trong .devin/skill-packs/vi/
 #     → skill riêng của org → vào pack (kèm mọi file trong skill dir)
-#   - my-course/{connections,bots,permissions}.json của fork → pack
+#   - workspace/{connections,bots,permissions}.json của fork → pack
 #   - AGENTS.md của fork → rules_local_md (luật cty đọc kèm AGENTS lõi)
 #   - phần code (tools/web/extension) khác biệt → CHỈ BÁO, không đưa
 #     vào pack — code khác biệt phải merge về repo hoặc bỏ, không pack
@@ -60,8 +60,8 @@ if os.path.isdir(sk_dir):
         pack["skills"][sid] = files
         only.append(sid)
 
-# state org trong my-course → pack
-myc = os.path.join(fork, "my-course")
+# state org trong workspace → pack
+myc = os.path.join(fork, "workspace")
 for name, key in (("bots.json", "bots"),
                   ("connections.json", "connections"),
                   ("permissions.json", "permissions_template")):

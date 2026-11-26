@@ -5,9 +5,11 @@ updates Google Sheets, processes files, posts to WordPress, builds web
 pages — using your own signed-in browser, no code required.
 
 And it's the only assistant that **teaches you how to use it**: on first
-run it interviews you about your actual job → designs a personal course
-→ generates lessons (guide + exercises + slides + video script) that
-solve your real pain points, served through a local web portal.
+run it interviews you about your actual job → builds the **tools**
+(skills) that solve your real pain points → and writes each one an
+**interactive walkthrough** — a step-by-step modal in the portal where
+every step does the real action (type the command, approve the dialog,
+open the result) — served through a local web portal.
 
 Audience: office workers who don't code (marketing, content, SEO,
 design — Google Sheets, WordPress, Canva, CapCut). Windows is the
@@ -32,7 +34,7 @@ query string (Cloudflare caches by URL).
 3. **First-run onboarding**: pick a language (vi/en) → enter your name
    → pick an AI **"brain"** (see below) → choose folders the assistant
    may read → choose apps to connect. Writes
-   `my-course/config.json` + `permissions.json`; installs the matching
+   `workspace/config.json` + `permissions.json`; installs the matching
    skill pack (`/phong-van` for vi, `/interview` for en) and writes the
    language's recipes into `manifest.json`.
 4. Open the **💬 Ask the assistant** tab → type `/phong-van`.
@@ -41,15 +43,21 @@ query string (Cloudflare caches by URL).
    via ttyd). Chat goes through `tools/chat-bridge.ps1` → the ACP brain
    picked by `brain.json` (`tools/chat-bridge.py` on macOS/Linux).
 5. The agent asks: which tools do you use? What repetitive work eats
-   your time? → drafts a syllabus → the learner approves it.
-6. The agent generates each lesson into `my-course/lesson-XX-*/`:
-   `guide.md`, `exercise.md`, `video-script.md`, `sample-files/`; two
-   background subagents build `slides.html` (`slide-builder`) and
-   `video.mp4` when the tools exist (`video-builder`).
-7. `manifest.json` updates → refresh the portal and the personal course
-   is there.
-8. Learn: watch slides → read the guide → do the exercise → when
-   stuck, ask in the chat tab (`/hoc-bai` = tutor mode, step by step).
+   your time? → drafts a plan → the learner approves it.
+6. For each pain point it packages a **tool**: a new skill
+   (`/command`) or an existing one + a lesson folder
+   `workspace/tool-XX-*/` containing **`walkthrough.json`** (the
+   interactive product) and `guide.md` (the readable version). No
+   slides, no exercises, no videos — the learner works, not studies.
+7. `manifest.json` updates → refresh the portal → each lesson shows a
+   **▶ Use it now** button that opens the walkthrough modal: one step
+   at a time, typed prompts send straight into the chat, permission/
+   run waits advance on their own, result folders open in Finder. A
+   coach-mark **spotlight** can light up the exact portal element to
+   click. `guide.md` stays there as the printable recap.
+8. Learn = do: run the walkthrough once with real work → next time
+   just type the `/command` → when stuck, ask in the chat tab
+   (`/hoc-bai` = tutor mode, step by step).
 
 ## Swapping the assistant's "brain" (brain.json)
 
@@ -137,7 +145,7 @@ an automated compare loop (`tools/clone-compare.py`: style-diff by
   portal, click **Edit content** then click directly on text/images/
   buttons to edit in place (thanks to `data-cs-*` markers); **Save
   page** writes back to the source file and auto-creates a `.bak`.
-- Measurements stay in `my-course/clone-work/<site-name>/` so later
+- Measurements stay in `workspace/clone-work/<site-name>/` so later
   edits don't need re-measuring.
 
 ## Folder structure
@@ -164,7 +172,7 @@ ai-assistant/
 ├── tools/apply-pack.py        # apply org pack (skills/workflows/rules) — lint pack phía máy: exec_allowlist first-token deny, open_url http(s)-only, drive/env paths, permissions_template qua path_guard; never overrides consent
 ├── tools/make-license.py      # vendor: sign license.json (HMAC org|seats|expiry|issued)
 ├── tools/sign-release.py + ed25519.py  # vendor: sign release offline (private key never in repo)
-├── tools/backup.py            # snapshot .devin/ + my-course/ before update/pack-apply
+├── tools/backup.py            # snapshot .devin/ + workspace/ before update/pack-apply
 ├── tools/content_guard.py     # UNTRUSTED-content wrapper, injection detect, env allowlist scrub
 ├── tools/test-*.py            # stdlib smoke tests: bridge endpoints, .py↔.ps1 parity, fleet lifecycle, worker 2-tier, packs sync
 ├── worker/                    # port of collector.py → Cloudflare Workers + D1 + R2 (hosted tier, /fleet/)
@@ -176,7 +184,9 @@ ai-assistant/
 ├── plans/                     # multi-phase work plans (executed and in-flight)
 ├── web/                       # portal: index.html + app.js + styles.css + clone-view.html (clone editor)
 ├── tools/clone-compare.py     # /clone-trang "compare" phase: style-diff + pixel-diff, no Pillow
-├── templates/                 # lesson / exercise / video-script / slide-deck scaffolds
+├── templates/                 # walkthrough.json (15 step kinds) + lesson.md guide scaffold
+│   │                          #   (+ exercise/video-script/slide-deck kept for the builders — unused by default)
+├── tools/test-walkthrough.py  # validator: kinds/fields/{{var}}/cond/media exists/banned words — generator must run it
 ├── .devin/
 │   ├── skills/                # active skills — copied from skill-packs by onboarding
 │   ├── skill-packs/
@@ -184,10 +194,10 @@ ai-assistant/
 │   │   ├── en/                # English skills (/interview /tutor /read-zalo /clone-page …)
 │   │   └── recipes/           # <lang>.json — sidebar recipes written to manifest on setup
 │   └── agents/
-│       ├── slide-builder.md   # subagent that builds slides.html from lesson content
-│       └── video-builder.md   # subagent: shooting script (always) + video.mp4 (bonus)
+│       ├── slide-builder.md   # subagent that builds slides.html — kept for later, not called by default
+│       └── video-builder.md   # subagent: shooting script + video.mp4 — kept for later, not called by default
 ├── extension/                 # "Trợ Lý AI" MV3 extension — drives the real browser
-└── my-course/                 # the personalized course + config/permissions/connections + clone-work/<site>/ (gitignored — local DOM refs)
+└── workspace/                 # the personalized course + config/permissions/connections + clone-work/<site>/ (gitignored — local DOM refs)
 ```
 
 ## Design philosophy
@@ -210,10 +220,10 @@ ai-assistant/
   brain's own ACP permission cards (the agent can't self-approve: on
   macOS the "Allow" button lives in a native OS dialog the
   sandboxed agent can't fake or click), "delete lesson" moves the
-  folder to `my-course/.trash/` so a misclick is recoverable,
+  folder to `workspace/.trash/` so a misclick is recoverable,
   course/clone pages run sandboxed to an opaque origin (can't read the connection code or frame the portal), and on macOS the
   brain runs inside a Seatbelt sandbox generated from
-  `permissions.json` — write-allowlist (`my-course/` only) plus hard
+  `permissions.json` — write-allowlist (`workspace/` only) plus hard
   deny-write on the assistant's own code (`tools/`, `brain.json`,
   `.git/`…), so even a granted or hand-edited `read-write` on a parent
   folder can't plant code that runs outside the sandbox. On Windows
@@ -232,7 +242,7 @@ ai-assistant/
 
 **Updates:** the portal checks GitHub Releases on open — a new version
 shows a banner linking to the download; the new `troly` file overwrites
-code only, never touches `~/TroLyAI` (my-course, brain, secrets). Fleet
+code only, never touches `~/TroLyAI` (workspace, brain, secrets). Fleet
 machines update over the collector channel instead: ed25519-signed
 zips staged by `update.py` and applied at next boot with rollback. The
 extension reports "outdated" in the top-right pill → update the app,

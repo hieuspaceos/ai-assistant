@@ -24,7 +24,7 @@ writing `.html` files — use python via exec for precision.
 
 Ask (batch it in one go, use ask_user_question when possible):
 
-- **Which site**: scan every `my-course/*.html`, count files having
+- **Which site**: scan every `workspace/*.html`, count files having
   `data-cs-template`. Only 1 file → use it, no need to ask. MULTIPLE
   files (learner cloned several sites) → **must ask** "add to which
   site?" with the site names — never guess, wrong site means breaking
@@ -40,7 +40,7 @@ Ask (batch it in one go, use ask_user_question when possible):
   joined with `-` (strip Vietnamese accents, unusual chars → `-`).
   Have them confirm the slug.
 - **Main content**: short description (excerpt), body (a few
-  paragraphs), image (link or a file in `my-course/` — they can send
+  paragraphs), image (link or a file in `workspace/` — they can send
   it later, use a placeholder meanwhile).
 
 ### 2. Duplicate the template
@@ -93,7 +93,7 @@ After inserting, check by script right away — don't trust your eyes:
 ### 6. Deliver
 
 - Open the viewer:
-  `http://localhost:8080/web/clone-view.html?src=/my-course/<file>.html`
+  `http://localhost:8080/web/clone-view.html?src=/workspace/<file>.html`
   → click the new route in the menu (or type the hash `#/route/slug`)
   → see the new page rendered in the right frame.
 - Report briefly: *"done — your new post has its own page and a card

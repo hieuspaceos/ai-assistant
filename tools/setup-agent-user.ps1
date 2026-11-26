@@ -6,9 +6,9 @@
 #
 # Mo hinh tuong duong Seatbelt tren macOS:
 #   - project: READ+EXECUTE toan cay (agent doc AGENTS.md, skills…)
-#   - GHI duoc: my-course\, .devin\skills\, .logs\
+#   - GHI duoc: workspace\, .devin\skills\, .logs\
 #   - DENY-W: tools\, web\, extension\, .git\, brain.json, 4 file JSON
-#     dieu khien trong my-course\, bot.md — agent ghi duoc = tu leo
+#     dieu khien trong workspace\, bot.md — agent ghi duoc = tu leo
 #     quyen (tools\*.ps1 chay duoi quyen CHU).
 #     LUU Y: deny-write tren file .exe cung chan EXECUTE (quirk Windows,
 #     khac macOS) — day la TINH NANG: agent khong chay duoc PE dat trong
@@ -25,7 +25,7 @@
 #
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-$PermFp = Join-Path $Root "my-course\permissions.json"
+$PermFp = Join-Path $Root "workspace\permissions.json"
 $AgentUser = "troly-agent"
 
 # --- can admin ---
@@ -99,7 +99,7 @@ Write-Host "Cap ACL project:"
 # .devin khien agent khong tu tao duoc dir nay neu chua co.
 New-Item -ItemType Directory -Force (Join-Path $Root ".devin\skills") | Out-Null
 Grant-Item $Root "RX"                                   # doc toan cay
-Grant-Item (Join-Path $Root "my-course") "M"            # ghi bai hoc, files
+Grant-Item (Join-Path $Root "workspace") "M"            # ghi bai hoc, files
 Grant-Item (Join-Path $Root ".devin\skills") "M"        # agent tu viet skill
 Grant-Item (Join-Path $Root ".logs") "M"                # log
 
@@ -109,9 +109,9 @@ Grant-Item (Join-Path $Root ".logs") "M"                # log
 # exec; update-stage+update-pending = RCE quyen chu; start.bat…).
 # Deny W ke thua toan cay (file state tao SAU NAY cung bi chan), roi
 # go deny trong dung 3 dir agent duoc ghi. /remove:d PHAI chay truoc
-# Deny-Write le ben duoi vi no go ca deny san co trong my-course.
+# Deny-Write le ben duoi vi no go ca deny san co trong workspace.
 icacls $Root /deny "${AgentUser}:(OI)(CI)W" /Q | Out-Null
-foreach ($d in @("my-course", ".devin\skills", ".logs")) {
+foreach ($d in @("workspace", ".devin\skills", ".logs")) {
     icacls (Join-Path $Root $d) /remove:d "${AgentUser}" /T /Q | Out-Null
 }
 
@@ -120,12 +120,12 @@ foreach ($p in @(
     (Join-Path $Root "tools"), (Join-Path $Root "web"),
     (Join-Path $Root "extension"), (Join-Path $Root ".git"),
     (Join-Path $Root "brain.json"),
-    (Join-Path $Root "my-course\permissions.json"),
-    (Join-Path $Root "my-course\connections.json"),
-    (Join-Path $Root "my-course\config.json"),
-    (Join-Path $Root "my-course\bots.json"),
-    (Join-Path $Root "my-course\manifest.json"),
-    (Join-Path $Root "my-course\bot.md"))) { Deny-Write $p }
+    (Join-Path $Root "workspace\permissions.json"),
+    (Join-Path $Root "workspace\connections.json"),
+    (Join-Path $Root "workspace\config.json"),
+    (Join-Path $Root "workspace\bots.json"),
+    (Join-Path $Root "workspace\manifest.json"),
+    (Join-Path $Root "workspace\bot.md"))) { Deny-Write $p }
 
 # bridge.token: nao DOC duoc (can de goi bridge) nhung khong GHI —
 # agent bi lua khong doi duoc chia khoa.

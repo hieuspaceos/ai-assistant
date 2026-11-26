@@ -29,7 +29,7 @@ khi check, `&` đơn (background) chưa nằm trong DENY → pattern
 
 **CSP sandbox phủ mọi document-type scriptable, không chỉ `.html`.**
 Vì: `.svg` (image/svg+xml có `<script>`), `.xml` (XSLT), `.xhtml`…
-dưới `/my-course/` mở trực tiếp chạy script trong origin :8080 → đọc
+dưới `/workspace/` mở trực tiếp chạy script trong origin :8080 → đọc
 `localStorage.bridge_token` → gọi mọi API bridge. `CSP_SUFFIXES`
 liệt kê hết loại render-thành-document; media thuần không áp (ảnh
 trong `<img>` vốn không chạy script, áp sandbox chỉ làm Chrome ép
@@ -297,7 +297,7 @@ Credential `troly-agent` ngẫu nhiên, giữ DPAPI trong
 cũng vô dụng.
 
 **ACL mirror Seatbelt, không phải "cấp full project".** RX toàn cây +
-ghi chỉ `my-course/`, `.devin/skills/`, `.logs/` + deny-write tường minh
+ghi chỉ `workspace/`, `.devin/skills/`, `.logs/` + deny-write tường minh
 `tools/`, `web/`, `extension/`, `.git/`, `brain.json`, JSON điều khiển,
 `bot.md` — agent ghi được mã nguồn bridge là code chạy quyền chủ.
 Secrets deny-F. `bridge.token` deny-W (vẫn đọc được để gọi bridge).
@@ -335,7 +335,7 @@ Origin cũ — degrade về đúng mức an toàn trước đây chứ không k�
 Windows giữ đường Origin: agent full quyền inject được input nên dialog
 native ở đó không phải proof — chờ sandbox Windows (S4).
 
-**`/api/delete-lesson` move vào `my-course/.trash/` thay vì `rmtree`.**
+**`/api/delete-lesson` move vào `workspace/.trash/` thay vì `rmtree`.**
 Vì: đây là hành động phá duy nhất bấm nhầm "Đồng ý" là không cứu được
 — học viên không-coder dễ bấm vội. Tên trong trash kèm
 `timestamp-hex` tránh đụng khi xoá lại cùng tên; manifest vẫn gỡ entry
@@ -405,7 +405,7 @@ cho thấy `ttyd -O` chỉ so hostname bỏ qua port — `localhost:3000` vẫn
 (bản đóng gói — đường dễ sót nhất). Độc lập protocol ttyd, chặn cả
 rebinding.
 
-**CSP chỉ trên `/my-course/` + `/intro/`, không phải toàn server.** Vì:
+**CSP chỉ trên `/workspace/` + `/intro/`, không phải toàn server.** Vì:
 portal `/web/` phải gọi bridge — cùng origin thì CSP chặt sẽ giết chat.
 Nội dung agent/clone sinh ra mới là vùng không tin cậy; `connect-src
 'none'` cắt mọi kênh về bridge còn `img-src` mở cho ảnh bài học.
@@ -466,7 +466,7 @@ PyInstaller không đóng được nhiều "chương trình" — một exe dispa
 `serve|chat-bridge|ext-bridge` cho ta supervisor + watchdog miễn phí.
 User dir giữ đúng layout project nên không phải đổi một dòng code bridge
 nào. Update = exe mới thấy VERSION khác → chỉ đè CODE_DIRS/CODE_FILES,
-không đụng my-course/brain/secrets — "update = tải file mới mở lại".
+không đụng workspace/brain/secrets — "update = tải file mới mở lại".
 
 **Child chạy qua `runpy` trong frozen exe + hidden-imports.** Vì: không
 có Python trên máy học viên nên không spawn `python tools/x.py` được.
@@ -493,7 +493,7 @@ thi hành động, bắt token là portal chết hoàn toàn.
 **GET `serve :8080` vẫn mở trên loopback.** Vì: `<img>` trong clone
 không gắn được token, và process local đọc file trên disk được anyway —
 khoá HTTP không thêm gì. Nhưng ghi cứng trong SECURITY: **khi có relay,
-`/my-course/` phải qua token và `/.shots/` chặn** (screenshot tab có thể
+`/workspace/` phải qua token và `/.shots/` chặn** (screenshot tab có thể
 chứa tin nhắn).
 
 **Extension auto-pair qua `externally_connectable`, ô dán làm dự
@@ -544,8 +544,8 @@ viên (bản quyền). Skill ghi rõ ngoại lệ này.
 
 ## 2026 — Siết bảo mật đợt 5 (audit chéo component)
 
-**CSP `sandbox` cho `/my-course/` + `/intro/`, không `allow-same-origin`.**
-Vì: trang clone nằm trong `my-course/` là nội dung bên thứ 3 (mục tiêu
+**CSP `sandbox` cho `/workspace/` + `/intro/`, không `allow-same-origin`.**
+Vì: trang clone nằm trong `workspace/` là nội dung bên thứ 3 (mục tiêu
 prompt injection), mà lại chạy cùng origin portal — script trong đó đọc
 được `localStorage.bridge_token` rồi iframe/`window.open` portal để
 `fetch` bridge trong context không-CSP. `sandbox` đẩy trang sang opaque
@@ -559,8 +559,8 @@ lọc script ra store riêng, khôi phục khi lưu — tính năng giữ nguyê
 script của trang clone không bao giờ thực thi trong origin portal.
 
 **`bfetch` chỉ gắn token cho port 7682/7684.** Vì: gắn cho mọi loopback
-khiến request tới `/my-course/` trên `:8080` cũng kèm `X-Bridge-Token` —
-một service worker đăng ký dưới scope `my-course/` đọc được header đó
+khiến request tới `/workspace/` trên `:8080` cũng kèm `X-Bridge-Token` —
+một service worker đăng ký dưới scope `workspace/` đọc được header đó
 rồi lái bridge trong context không chịu page-CSP.
 
 **Consent gate cho `/api/setup` re-run, batch `paths` cho
@@ -590,7 +590,7 @@ lúc `POST /api/brain` — `brain.json` sửa tay ghi `cmd:"powershell"` vẫn
 spawn thẳng. List mở rộng thêm ssh/scp/rsync/tmux/lldb/swift/sudo/
 sandbox-exec/sql-client (code-exec + exfil qua args).
 
-**`troly.spec` tự lọc `my-course/`.** Vì: `build.sh` stage rồi xoá
+**`troly.spec` tự lọc `workspace/`.** Vì: `build.sh` stage rồi xoá
 `clone-work/` cẩn thận, nhưng ai build bằng spec thì bundle nguyên DOM
 site thật của học viên (privacy + 4.4MB) vào binary phân phối — spec
 phải lọc giống build.sh.

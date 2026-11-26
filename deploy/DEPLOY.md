@@ -77,10 +77,10 @@ Script làm: copy → `C:\TroLyAI`, cài ttyd qua winget, hỏi tạo user
 sandbox, đặt license.json + fleet.json vào `.devin\`, shortcut Desktop.
 Script cũng `icacls` grant Modify cho `BUILTIN\Users` trên thư mục cài
 (ACL mặc định của `C:\` chỉ cho user thường quyền đọc — không grant thì
-app chạy non-elevated không ghi được `.devin\`, `.logs\`, `my-course\`);
+app chạy non-elevated không ghi được `.devin\`, `.logs\`, `workspace\`);
 `setup-agent-user.ps1` chạy ngay sau đó seal lại quyền của user sandbox
 `troly-agent`. Máy đa-user có thể truyền `-ForUser` để chỉ định đúng chủ
-nhân. Re-install giữ nguyên file state trong `my-course\` (config,
+nhân. Re-install giữ nguyên file state trong `workspace\` (config,
 manifest, bots, permissions, connections, bot.md) — seed lessons vẫn
 được cập nhật.
 
@@ -170,7 +170,7 @@ quản.
 2. **Revoke máy** trên dashboard (drawer máy → "Thu hồi máy này") —
    máy bị đá khỏi fleet ngay, beacon sau đó trả `revoked`, máy tự xoá
    `machine.key` và về pending. Ghế `active30` giảm sau 30 ngày.
-3. **Dữ liệu trên máy**: `my-course/` chứa toàn bộ bài làm của NV —
+3. **Dữ liệu trên máy**: `workspace/` chứa toàn bộ bài làm của NV —
    copy ra nếu cty cần giữ, rồi xoá folder `C:\TroLyAI` / `~/TroLyAI`
    (hoặc re-image máy theo quy trình IT).
 4. **Extension**: gỡ thủ công trong `chrome://extensions`, hoặc nếu
@@ -182,7 +182,7 @@ quản.
 
 ## 6. Viết workflow cho cty
 
-Mỗi quy trình = một file `my-course/workflows/<id>.json` + liệt kê id
+Mỗi quy trình = một file `workspace/workflows/<id>.json` + liệt kê id
 trong `index.json` (schema: title/desc/icon/dept i18n, `prompt` với
 `{{input}}`, `inputs`, `requires`, `checklist`, `verify`). Nhân viên
 thấy card trong portal → bấm Chạy → điền form → trợ lý làm → tick
@@ -193,7 +193,7 @@ mỗi release — viết xong chạy nó trước khi đẩy pack.
 ## 6.5. Gỡ / rollback
 
 Xoá shortcut + folder `C:\TroLyAI` (hoặc `~/TroLyAI`). **Dữ liệu của
-nhân viên nằm trong `my-course/`** — copy ra trước khi xoá nếu cần giữ.
+nhân viên nằm trong `workspace/`** — copy ra trước khi xoá nếu cần giữ.
 Extension: gỡ trong `chrome://extensions` hoặc xoá policy.
 
 ## 7. Lỗi hay gặp (chi tiết: docs/troubleshooting-runbook.md)

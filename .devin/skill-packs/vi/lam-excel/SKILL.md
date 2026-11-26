@@ -46,7 +46,7 @@ giây"*.
 2. Nói trước bằng lời thường: *"mình sẽ đọc file X, làm Y, ghi ra file
    mới Z — file gốc không đụng. Nhé?"*
 3. Thực hiện bằng script Python trong folder làm việc (không ghi script
-   lộn xộn — viết vào `my-course/` hoặc folder bài đang làm).
+   lộn xộn — viết vào `workspace/` hoặc folder bài đang làm).
 4. Kiểm tra lại file kết quả (đếm dòng, đọc vài dòng mẫu) trước khi báo.
 5. Báo NGẮN kiểu con người: *"xong — 3.000 dòng lọc còn 412 trong
    `khach-ha-noi-moi.xlsx`"*. Mở folder kết quả cho họ xem.

@@ -53,7 +53,7 @@ khách Loan xin đổi lịch..."*
 **Luyện trên file mô phỏng trước** (nếu Zalo chưa sẵn sàng), gõ:
 
 ```
-Đọc file my-course/lesson-01-doc-tin-chua-doc-zalo/sample-files/zalo-hop-thu-demo.txt rồi liệt kê giúp em những hội thoại nào có tin chưa đọc, kèm xem trước nội dung.
+Đọc file workspace/tool-01-doc-tin-chua-doc-zalo/sample-files/zalo-hop-thu-demo.txt rồi liệt kê giúp em những hội thoại nào có tin chưa đọc, kèm xem trước nội dung.
 ```
 
 ### Bước 2: Đào sâu vào một hội thoại

@@ -4,7 +4,7 @@
 Học `internal/backup` của GoClaw: kiểm đĩa trống TRƯỚC khi copy —
 thiếu chỗ thì abort rõ ràng chứ không nén nửa chừng rồi để lại đống rác.
 
-Sao chép: `my-course/` toàn bộ + các file state trong `.devin/` mà
+Sao chép: `workspace/` toàn bộ + các file state trong `.devin/` mà
 update/pack có thể chạm (skills/, rules.local.md, bots-related…).
 KHÔNG sao chép code (tools/web/extension) — code rollback đi đường
 `.devin/backup-code-*` của launcher, là mốc khác.
@@ -32,7 +32,7 @@ STATE = [
     "pack-version", "beacon.cursor", "secrets.local.json",
     "mcp_config.json", "mcp_config.local.json", "bridge.token",
 ]
-SEED = ["my-course"]              # dir ở ROOT
+SEED = ["workspace"]              # dir ở ROOT
 
 
 def dir_size(fp):

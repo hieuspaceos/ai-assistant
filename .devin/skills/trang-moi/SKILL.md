@@ -24,7 +24,7 @@ python qua exec cho chính xác.
 
 Hỏi (gom một lần, dùng ask_user_question nếu được):
 
-- **Site nào**: quét mọi `my-course/*.html`, đếm file có
+- **Site nào**: quét mọi `workspace/*.html`, đếm file có
   `data-cs-template`. Chỉ 1 file → dùng luôn, không cần hỏi. NHIỀU
   file (học viên clone nhiều site) → **bắt buộc hỏi** "thêm vào site
   nào?" kèm danh sách tên site — tuyệt đối không đoán, vì nhầm site
@@ -38,7 +38,7 @@ Hỏi (gom một lần, dùng ask_user_question nếu được):
 - **Tiêu đề** trang mới → suy slug: chữ thường không dấu, nối bằng
   `-` (bỏ dấu tiếng Việt, ký tự lạ → `-`). Cho họ xác nhận slug.
 - **Nội dung chính**: mô tả ngắn (excerpt), thân bài (vài đoạn), ảnh
-  (link hoặc file trong `my-course/` — họ gửi sau cũng được, để
+  (link hoặc file trong `workspace/` — họ gửi sau cũng được, để
   placeholder).
 
 ### 2. Nhân bản trang mẫu
@@ -88,7 +88,7 @@ Chèn xong, kiểm ngay bằng script — không tin mắt:
 ### 6. Giao
 
 - Mở viewer:
-  `http://localhost:8080/web/clone-view.html?src=/my-course/<file>.html`
+  `http://localhost:8080/web/clone-view.html?src=/workspace/<file>.html`
   → bấm route mới trong menu (hoặc gõ hash `#/route/slug`) → thấy
   trang mới render đúng khung.
 - Báo ngắn: *"xong — bài mới đã có trang riêng và card trên trang

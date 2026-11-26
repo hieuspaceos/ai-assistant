@@ -258,13 +258,13 @@ function Test-SensitivePath($p) {
 
 # read-write trong/trùm folder mã nguồn = ghi được tools\*.ps1 → code chạy
 # ngoài mọi hàng rào (parity rw_grant_ok trong chat-bridge.py). Path nằm
-# trong vùng writable sẵn (my-course…) thì cho qua — thừa nhưng vô hại.
+# trong vùng writable sẵn (workspace…) thì cho qua — thừa nhưng vô hại.
 function Test-RwGrantOk($p) {
     $rpl = [IO.Path]::GetFullPath([string]$p).TrimEnd('\', '/').ToLower()
     $cwdl = [IO.Path]::GetFullPath($WorkDir).TrimEnd('\', '/').ToLower()
     if ($rpl -ne $cwdl -and -not $rpl.StartsWith($cwdl + '\') -and
         -not $cwdl.StartsWith($rpl + '\')) { return $true }
-    foreach ($d in @("my-course", ".devin\skills", ".logs")) {
+    foreach ($d in @("workspace", ".devin\skills", ".logs")) {
         $w = [IO.Path]::GetFullPath((Join-Path $WorkDir $d)).TrimEnd('\', '/').ToLower()
         if ($rpl -eq $w -or $rpl.StartsWith($w + '\')) { return $true }
     }
@@ -862,7 +862,7 @@ function Drain-Queue {
 }
 
 # ---------- permissions.json + connections.json (Phase 0) ----------
-$McDir = Join-Path $WorkDir "my-course"
+$McDir = Join-Path $WorkDir "workspace"
 $PermFp = Join-Path $McDir "permissions.json"
 $ConnFp = Join-Path $McDir "connections.json"
 $ConfigFp = Join-Path $McDir "config.json"
@@ -1333,7 +1333,7 @@ try {
                 if ($folder -notmatch '^[a-zA-Z0-9_-]+$') {
                     Send-Json $ctx @{ err = "tên folder lạ" } 400
                 } else {
-                    $course = (Resolve-Path (Join-Path $WorkDir "my-course")).Path
+                    $course = (Resolve-Path (Join-Path $WorkDir "workspace")).Path
                     $target = Join-Path $course $folder
                     if ((Test-Path $target -PathType Container) -and
                         ((Resolve-Path $target).Path.StartsWith($course + [IO.Path]::DirectorySeparatorChar))) {
@@ -1362,18 +1362,18 @@ try {
                 $body = $reader.ReadToEnd() | ConvertFrom-Json
                 $rel = ([string]$body.file).Trim().TrimStart("/")
                 $html = [string]$body.html
-                $course = (Resolve-Path (Join-Path $WorkDir "my-course")).Path
+                $course = (Resolve-Path (Join-Path $WorkDir "workspace")).Path
                 $target = [IO.Path]::GetFullPath((Join-Path $WorkDir $rel))
-                if (-not $rel.StartsWith("my-course/") -or $rel.Contains("..") -or
+                if (-not $rel.StartsWith("workspace/") -or $rel.Contains("..") -or
                     $rel.Contains("\") -or
                     -not $target.StartsWith($course + [IO.Path]::DirectorySeparatorChar) -or
                     $target -notmatch '\.html?$') {
-                    Send-Json $ctx @{ err = "chỉ lưu file .html trong my-course/" } 400
+                    Send-Json $ctx @{ err = "chỉ lưu file .html trong workspace/" } 400
                 } elseif (-not $html) {
                     Send-Json $ctx @{ err = "trang trống" } 400
                 } else {
                     # GetFullPath chỉ lexical — junction/symlink dưới
-                    # my-course\ lách containment (audit-5 F3; bản .py
+                    # workspace\ lách containment (audit-5 F3; bản .py
                     # dùng realpath nên không lỗi). Check từng segment
                     # kể cả leaf: ReparsePoint → từ chối. Segment chưa
                     # tồn tại (subdir mới) → Get-Item trả $null → bỏ qua.

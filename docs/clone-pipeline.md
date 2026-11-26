@@ -7,7 +7,7 @@ kiến trúc và contract, không thay skill.
 ## Mục tiêu
 
 Học viên thấy một trang đẹp → muốn "một trang giống y chang nhưng là của
-mình". Kết quả: một file `.html` tự chạy trong `my-course/`, **giống hệt
+mình". Kết quả: một file `.html` tự chạy trong `workspace/`, **giống hệt
 về khung** (bố cục, màu, font, khoảng cách, hiệu ứng) còn **nội dung là
 của học viên** — sửa được tại chỗ trong viewer của portal.
 
@@ -84,20 +84,20 @@ scroll đầu trang hoặc tới `id` khi hash dạng `#/route#id`.
 
 ## clone-view.html — viewer sửa tại chỗ
 
-`http://localhost:8080/web/clone-view.html?src=/my-course/<file>.html`
+`http://localhost:8080/web/clone-view.html?src=/workspace/<file>.html`
 
 Trang hiện toàn màn hình trong portal + thanh công cụ:
 
 - **Sửa nội dung** → bấm vào phần tử có marker → chỉnh ngay (text
   inline, ảnh, link, nền, khối).
 - **Lưu lại trang** → `POST :7682/api/save-page` → bridge tạo `.bak`
-  rồi ghi file (sandbox: chỉ `.html` dưới `my-course/`).
+  rồi ghi file (sandbox: chỉ `.html` dưới `workspace/`).
 - **Tải về máy** → xuất file serialize hiện tại.
 
 File clone KHÔNG nhúng script sửa — viewer inject khi render, nên file
 đứng một mình vẫn sạch.
 
-**Ràng buộc CSP (từ lock-down 2026-11):** mọi `.html` dưới `my-course/`
+**Ràng buộc CSP (từ lock-down 2026-11):** mọi `.html` dưới `workspace/`
 được serve kèm `Content-Security-Policy` với `connect-src 'none'` —
 clone **không được phụ thuộc** `fetch`/`XHR`/`WebSocket`/`sendBeacon`
 kể cả gọi localhost (dead code, CSP chặn). Được phép: ảnh/font/style/
@@ -108,7 +108,7 @@ Maps sống), media `self`/`data:`. Form clone chỉ giả lập —
 
 ## /trang-moi — thêm trang chi tiết sau clone
 
-"Viết thêm bài blog/tour/sản phẩm" → skill quét `my-course/*.html` tìm
+"Viết thêm bài blog/tour/sản phẩm" → skill quét `workspace/*.html` tìm
 `data-cs-template`:
 
 1. Nhiều site có template → **hỏi site nào** (không đoán).

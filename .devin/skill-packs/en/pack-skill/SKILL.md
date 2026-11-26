@@ -21,14 +21,14 @@ bank keeper (mail/Zalo) → keeper merges into `.devin/skill-packs/<lang>/`.
    many). **Skip** the built-in skills (already in skill-packs) — only
    package NEW generated ones.
 2. Announce: *"I'll pack the 2 skills you picked into
-   `my-course/skill-exports/skills-<date>.zip` for you to send to the
+   `workspace/skill-exports/skills-<date>.zip` for you to send to the
    bank keeper. The originals in `.devin/skills/` stay untouched. OK?"*
 3. Pack:
    ```bash
-   mkdir -p my-course/skill-exports
-   cd .devin/skills && zip -r ../../my-course/skill-exports/skills-$(date +%Y%m%d).zip <skill1> <skill2>
+   mkdir -p workspace/skill-exports
+   cd .devin/skills && zip -r ../../workspace/skill-exports/skills-$(date +%Y%m%d).zip <skill1> <skill2>
    # Windows PowerShell:
-   # Compress-Archive .devin\skills\<skill1>,.devin\skills\<skill2> my-course\skill-exports\skills-<date>.zip
+   # Compress-Archive .devin\skills\<skill1>,.devin\skills\<skill2> workspace\skill-exports\skills-<date>.zip
    ```
 4. Report the zip path + how to send: *"send this file to the bank
    keeper (I won't send it myself)"*.
@@ -37,11 +37,11 @@ bank keeper (mail/Zalo) → keeper merges into `.devin/skill-packs/<lang>/`.
 
 ## Bot mode — "share the whole assistant"
 
-Besides single skills, you can pack a **bot** from `my-course/bots.json`
+Besides single skills, you can pack a **bot** from `workspace/bots.json`
 (a named assistant + the skills it uses). The file imports on another
 machine via "Import assistant" in the header chip menu.
 
-1. Read `my-course/bots.json` → list `bots[]` (name + role) → ask the
+1. Read `workspace/bots.json` → list `bots[]` (name + role) → ask the
    learner which one to share.
 2. Write `bot.json` from that object — schema fields only:
    `name, avatar, role, skills, needs, recipes, instructions`
@@ -51,7 +51,7 @@ machine via "Import assistant" in the header chip menu.
 4. Copy each skill in `bot["skills"]` from `.devin/skills/<name>/` into
    `skills/<name>/` in the bundle (pack system skills too — small files,
    the receiving side never overwrites existing skills).
-5. Zip into `my-course/skill-exports/bot-<slug>.zip` with this layout:
+5. Zip into `workspace/skill-exports/bot-<slug>.zip` with this layout:
 
    ```
    bot-mia.zip
@@ -63,7 +63,7 @@ machine via "Import assistant" in the header chip menu.
    Use python `zipfile` (Windows may lack `zip`):
    ```bash
    python3 -c "import zipfile,glob,os
-   z=zipfile.ZipFile('my-course/skill-exports/bot-<slug>.zip','w')
+   z=zipfile.ZipFile('workspace/skill-exports/bot-<slug>.zip','w')
    z.write('bot.json'); z.write('README.txt')
    [z.write(f,os.path.relpath(f,'.')) for f in glob.glob('skills/**/*',recursive=True) if os.path.isfile(f)]
    z.close()"

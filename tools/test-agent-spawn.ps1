@@ -8,7 +8,7 @@
 #   1. compile C# AgentSpawn nhung trong chat-bridge.ps1 (code that)
 #   2. spawn cross-user: whoami = troly-agent
 #   3. deny-read file bi chan, doc duoc file cho phep
-#   4. deny-ghi tools\, ghi duoc my-course\  (ACL do setup-agent-user cap)
+#   4. deny-ghi tools\, ghi duoc workspace\  (ACL do setup-agent-user cap)
 #   5. stdio 2 chieu qua anonymous pipe (stdin -> stdout)
 #   6. IsAlive + kill ca cay qua Job Object
 #   7. sai mat khau -> Error ro rang (khong throw)
@@ -118,10 +118,10 @@ Start-Sleep -Milliseconds 300
 Check "deny-write tools\" (-not (Test-Path $wf))
 Remove-Item $wf -Force -ErrorAction SilentlyContinue
 
-$okf = Join-Path $Root "my-course\poc-write.txt"
+$okf = Join-Path $Root "workspace\poc-write.txt"
 Spawn-ReadAll "cmd.exe /c echo wrote> `"$okf`"" | Out-Null
 Start-Sleep -Milliseconds 300
-Check "write my-course\" ((Test-Path $okf) -and
+Check "write workspace\" ((Test-Path $okf) -and
     ((Get-Content $okf -Raw -ErrorAction SilentlyContinue) -match "wrote"))
 Remove-Item $okf -Force -ErrorAction SilentlyContinue
 

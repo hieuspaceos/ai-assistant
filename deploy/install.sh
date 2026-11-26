@@ -31,15 +31,15 @@ mkdir -p "$DEST"
 # Bài học còn lại cứ đè — seed cập nhật theo gói mới là chủ đích.
 STATE="config.json manifest.json bots.json permissions.json connections.json bot.md"
 XTRA=""
-if [ -d "$DEST/my-course" ]; then
-    for f in $STATE; do XTRA="$XTRA --exclude=my-course/$f"; done
+if [ -d "$DEST/workspace" ]; then
+    for f in $STATE; do XTRA="$XTRA --exclude=workspace/$f"; done
 fi
 TMPF="$(mktemp /tmp/troly-install-XXXXXX)"
 tar cf "$TMPF" -C "$SRC" --exclude=__pycache__ \
-    --exclude='my-course/.shots' --exclude='my-course/clone-work' \
-    --exclude='my-course/.trash' $XTRA \
+    --exclude='workspace/.shots' --exclude='workspace/clone-work' \
+    --exclude='workspace/.trash' $XTRA \
     tools web extension templates docs collector-web \
-    .devin/skill-packs my-course \
+    .devin/skill-packs workspace \
     AGENTS.md CLAUDE.md SETUP.md README.md requirements.txt VERSION \
     CHANGELOG.md start.sh start.bat brain.json .gitignore \
     || { echo "  !! loi doc goi nguon — huy cai"; rm -f "$TMPF"; exit 1; }
@@ -51,8 +51,8 @@ echo "  ok — copy xong"
 # cạm bẫy: learner_name khác rỗng trong bộ cài = mọi máy NV bị coi là
 # "máy cũ" → mycourse_files của pack cty không bao giờ áp
 if grep -q '"learner_name"[[:space:]]*:[[:space:]]*"[^"]' \
-        "$DEST/my-course/config.json" 2>/dev/null; then
-    echo "  !! my-course/config.json có learner_name — mycourse_files"
+        "$DEST/workspace/config.json" 2>/dev/null; then
+    echo "  !! workspace/config.json có learner_name — mycourse_files"
     echo "     của pack sẽ KHÔNG áp trên máy NV. Để trống trước khi cài."
 fi
 

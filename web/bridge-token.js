@@ -3,8 +3,8 @@
    cùng origin (kể cả iframe chat/clone-view) dùng chung, rồi xoá mã khỏi
    thanh địa chỉ cho gọn.
    bfetch() = fetch + tự gắn X-Bridge-Token — CHỈ với 2 port bridge thật.
-   Trước gắn cho MỌI URL loopback → request nạp nội dung /my-course/ trên
-   :8080 cũng đèo token: một service worker scope /my-course/ (não ghi .js
+   Trước gắn cho MỌI URL loopback → request nạp nội dung /workspace/ trên
+   :8080 cũng đèo token: một service worker scope /workspace/ (não ghi .js
    vào được vì đây là vùng write-allowlist) đọc trộm được header. :8080
    không cần token — request tới nó phải đi trần. */
 (function () {

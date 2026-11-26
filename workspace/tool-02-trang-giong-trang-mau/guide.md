@@ -44,7 +44,7 @@ Thời gian: khoảng 15 phút.
 Gõ vào khung chat (sửa phần nội dung thành của bạn):
 
 ```
-Đọc trang my-course/lesson-02-trang-giong-trang-mau/sample-files/trang-mau.html rồi dựng cho em một trang web giống về bố cục và phong cách — nhưng nội dung của em: sản phẩm "Trà thảo mộc Thanh Lọc", khẩu hiệu "Ngủ ngon mỗi đêm", ưu điểm là nguyên liệu tự nhiên, không caffeine, đóng gói túi lọc tiện dụng, giá ưu đãi 149.000đ (gạch giá cũ 220.000đ), nút "ĐẶT NGAY". Lưu ra file my-course/trang-cua-em.html rồi mở cho em xem.
+Đọc trang workspace/tool-02-trang-giong-trang-mau/sample-files/trang-mau.html rồi dựng cho em một trang web giống về bố cục và phong cách — nhưng nội dung của em: sản phẩm "Trà thảo mộc Thanh Lọc", khẩu hiệu "Ngủ ngon mỗi đêm", ưu điểm là nguyên liệu tự nhiên, không caffeine, đóng gói túi lọc tiện dụng, giá ưu đãi 149.000đ (gạch giá cũ 220.000đ), nút "ĐẶT NGAY". Lưu ra file workspace/trang-cua-em.html rồi mở cho em xem.
 ```
 
 Điều sẽ xảy ra: trợ lý đọc trang mẫu, phân tích nhịp trình bày (ảnh lớn +

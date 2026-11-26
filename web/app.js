@@ -1,5 +1,5 @@
-/* Portal "Trợ lý AI" — đọc my-course/manifest.json, hiển thị bài học.
-   Serve từ root ai-assistant/ nên tài nguyên đều ở /my-course/... và /intro/... */
+/* Portal "Trợ lý AI" — đọc workspace/manifest.json, hiển thị bài học.
+   Serve từ root ai-assistant/ nên tài nguyên đều ở /workspace/... và /intro/... */
 
 const TTYD_URL = 'http://localhost:7681';
 const BRIDGE_URL = 'http://localhost:7682';
@@ -9,24 +9,24 @@ let chatChecked = false;
 let chatMode = 'chat';
 let LANG = 'vi';
 
-/* Chuỗi UI theo ngôn ngữ trong my-course/config.json (onboarding chọn vi/en).
+/* Chuỗi UI theo ngôn ngữ trong workspace/config.json (onboarding chọn vi/en).
    Phần tử tĩnh trong index.html gắn data-i18n / data-i18n-ph /
    data-i18n-title / data-i18n-html; chuỗi động trong file này dùng t(). */
 const I18N = {
   vi: {
     loading: 'Đang tải…',
-    lessons: 'Bài học',
+    lessons: 'Công cụ',
     recipesTitle: 'Công thức nhanh',
     recipeHint: 'Gõ các lệnh này trong tab “Hỏi trợ lý”',
     introLesson: 'Làm quen & cài đặt',
-    emptyLessons: 'Chưa có bài nào. Mở tab "Hỏi trợ lý" và gõ /phong-van nhé.',
+    emptyLessons: 'Chưa có công cụ nào. Mở tab "Hỏi trợ lý" và gõ /phong-van nhé.',
     emptyApps: 'Chưa có app nào — trợ lý tự thêm khi bạn cần.',
     tabSlide: 'Slide', tabGuide: 'Hướng dẫn', tabExercise: 'Bài tập', tabAsk: 'Hỏi trợ lý',
     welcomeTitle: 'Chào bạn!',
-    welcomeSub: 'Trợ lý AI làm việc thật trên máy bạn — và nó tự dạy bạn dùng nó qua một khoá học riêng.',
+    welcomeSub: 'Trợ lý AI làm việc thật trên máy bạn — và nó tự làm ra những công cụ riêng cho bạn, kèm hướng dẫn từng-bước dùng ngay.',
     chatFrameTitle: 'Chat với trợ lý (kiểu tin nhắn)',
     how1: '<b>Nhờ trợ lý</b> bất cứ việc gì — bấm nút <b>Hỏi trợ lý</b> phía trên.',
-    how2: '<b>Chọn một bài</b> bên trái để xem slide và hướng dẫn.',
+    how2: '<b>Chọn một công cụ</b> bên trái để xem hướng dẫn — hoặc bấm <b>▶ Dùng ngay</b>.',
     how3: '<b>Kẹt cứ hỏi</b>: không có câu hỏi nào là “ngốc” cả.',
     extTitle: 'Trạng thái cánh tay trình duyệt (extension Trợ Lý AI)',
     extOn: 'Đã nối trình duyệt', extOff: 'Chưa nối trình duyệt',
@@ -56,11 +56,11 @@ const I18N = {
     saveCheck: 'Lưu & kiểm tra',
     setupLocal: 'Chỉ lưu trên máy bạn, vào file ẩn — không gửi đi đâu.',
     dlgCancel: 'Huỷ', dlgOk: 'Đồng ý', dlgOkShort: 'Đã hiểu',
-    delLessonTitle: 'Xoá bài này (giữ lại công thức)',
+    delLessonTitle: 'Xoá hướng dẫn này (giữ lại lệnh /…)',
     helloPrefix: 'Chào ',
     creating: 'File đang được tạo — quay lại sau nhé.',
     slideCreating: 'Slide đang được tạo — quay lại sau vài phút nhé.',
-    noExercise: 'Bài này không có bài tập — chỉ cần mở được trợ lý là đạt.',
+    noExercise: 'Mục này không có phần thêm — mở hướng dẫn là đủ.',
     wzStep: 'Bước', wzBack: 'Quay lại', wzNext: 'Tiếp', wzDone: 'Xong — xem toàn bộ',
     wzAll: 'Xem hết', wzSteps: 'Xem từng bước', wzIntro: 'Giới thiệu',
     wtLaunch: '▶ Dùng ngay', wtClose: 'Đóng hướng dẫn',
@@ -69,9 +69,9 @@ const I18N = {
     wtAuto: 'Để trợ lý lo luôn', wtReveal: 'Mở trong Finder',
     wtDownload: 'Tải file', wtOk: 'Đúng rồi', wtNotYet: 'Chưa thấy — nhờ trợ lý',
     wtCopy: 'Copy', wtCopied: 'Đã copy ✓', wtDone: 'Xong', wtAsked: 'Đã nhờ trợ lý ✓',
-    delConfirmTitle: 'Xoá bài "{t}"?',
-    delConfirmMsg: 'Toàn bộ nội dung của bài này (hướng dẫn và file kèm theo) sẽ mất hết. Công thức nhanh (như /anh-web) vẫn được giữ lại vì bạn đã học xong.',
-    delOk: 'Xoá bài',
+    delConfirmTitle: 'Xoá mục "{t}"?',
+    delConfirmMsg: 'Toàn bộ nội dung của mục này (hướng dẫn và file kèm theo) sẽ mất hết. Lệnh /… vẫn được giữ lại vì nó nằm trong bộ công thức của bạn.',
+    delOk: 'Xoá',
     delFailTitle: 'Chưa xoá được',
     delFailMsg: 'Kiểm tra lại xem chat-bridge có đang chạy không nhé — thử chạy lại file start.',
     gateTitle: 'Cần bạn xác nhận',
@@ -79,8 +79,8 @@ const I18N = {
     warnChat: '<b>Chế độ Chat chưa mở:</b> chạy lại <code>start.bat</code>, hoặc bấm sang tab <b>Terminal</b> bên cạnh để dùng tạm.',
     warnCli: '<b>Terminal chưa mở:</b> chạy lại <code>start.bat</code>, hoặc mở PowerShell gõ <code>devin</code> để học bình thường.',
     hintNotReady: 'Trợ lý chưa sẵn sàng — mở lại file <code>start</code> rồi tải lại trang này. Nếu mới dùng lần đầu, bấm <a href="onboarding.html"><b>vào đây để cài đặt</b></a>.',
-    hintNoLessons: 'Chưa có bài nào? Bấm <b>Hỏi trợ lý</b> và gõ <code>/phong-van</code>, nó sẽ hỏi vài câu rồi thiết kế khoá học riêng cho bạn.',
-    hintReady: 'Chọn một bài bên trái để học — hoặc bấm <b>Hỏi trợ lý</b> để nhờ bất cứ việc gì, không cần mở bài học.',
+    hintNoLessons: 'Chưa có công cụ nào? Bấm <b>Hỏi trợ lý</b> và gõ <code>/phong-van</code>, nó sẽ hỏi vài câu rồi làm bộ công cụ riêng cho bạn.',
+    hintReady: 'Chọn một công cụ bên trái để dùng — hoặc bấm <b>Hỏi trợ lý</b> để nhờ bất cứ việc gì, không cần mở hướng dẫn.',
     botChipTitle: 'Đổi trợ lý',
     botGeneral: 'Trợ lý chung',
     botNew: 'Tạo trợ lý mới',
@@ -117,18 +117,18 @@ const I18N = {
   },
   en: {
     loading: 'Loading…',
-    lessons: 'Lessons',
+    lessons: 'Tools',
     recipesTitle: 'Quick recipes',
     recipeHint: 'Type these in the "Ask the assistant" tab',
     introLesson: 'Getting started & setup',
-    emptyLessons: 'No lessons yet. Open "Ask the assistant" and type /interview.',
+    emptyLessons: 'No tools yet. Open "Ask the assistant" and type /interview.',
     emptyApps: 'No apps yet — the assistant adds them as needed.',
     tabSlide: 'Slide', tabGuide: 'Guide', tabExercise: 'Exercise', tabAsk: 'Ask the assistant',
     welcomeTitle: 'Hello!',
-    welcomeSub: 'Your AI assistant does real work on this machine — and it teaches you to use it through a course built just for you.',
+    welcomeSub: 'Your AI assistant does real work on this machine — and it builds tools just for you, each with a step-by-step walkthrough.',
     chatFrameTitle: 'Chat with the assistant',
     how1: '<b>Ask the assistant</b> for anything — click <b>Ask the assistant</b> above.',
-    how2: '<b>Pick a lesson</b> on the left to see slides and the guide.',
+    how2: '<b>Pick a tool</b> on the left to see the guide — or hit <b>▶ Use it now</b>.',
     how3: '<b>Stuck? Just ask</b> — no question is a silly one.',
     extTitle: 'Browser arm status (Trợ Lý AI extension)',
     extOn: 'Browser connected', extOff: 'Browser not connected',
@@ -158,11 +158,11 @@ const I18N = {
     saveCheck: 'Save & check',
     setupLocal: 'Saved only on this machine, in a hidden file — never sent anywhere.',
     dlgCancel: 'Cancel', dlgOk: 'OK', dlgOkShort: 'Got it',
-    delLessonTitle: 'Delete this lesson (keeps the recipes)',
+    delLessonTitle: 'Remove this guide (keeps the /command)',
     helloPrefix: 'Hi ',
     creating: 'This file is being created — check back soon.',
     slideCreating: 'Slides are being created — check back in a few minutes.',
-    noExercise: 'This lesson has no exercise — opening the assistant is enough.',
+    noExercise: 'This entry has no extra section — the guide is enough.',
     wzStep: 'Step', wzBack: 'Back', wzNext: 'Next', wzDone: 'Done — view all',
     wzAll: 'View all', wzSteps: 'Step by step', wzIntro: 'Overview',
     wtLaunch: '▶ Use it now', wtClose: 'Close walkthrough',
@@ -171,8 +171,8 @@ const I18N = {
     wtAuto: 'Let the assistant do it', wtReveal: 'Open in Finder',
     wtDownload: 'Download', wtOk: 'Looks right', wtNotYet: 'Not there — ask the assistant',
     wtCopy: 'Copy', wtCopied: 'Copied ✓', wtDone: 'Done', wtAsked: 'Assistant asked ✓',
-    delConfirmTitle: 'Delete lesson "{t}"?',
-    delConfirmMsg: 'All of this lesson\u2019s content (guide and any bundled files) will be gone for good. Quick recipes (like /web-images) stay because you already learned them.',
+    delConfirmTitle: 'Remove "{t}"?',
+    delConfirmMsg: 'All of this entry\u2019s content (guide and bundled files) will be gone for good. The /command stays — it lives with your other quick recipes.',
     delOk: 'Delete',
     delFailTitle: 'Couldn\'t delete',
     delFailMsg: 'Check whether the chat bridge is running — try running the start file again.',
@@ -181,8 +181,8 @@ const I18N = {
     warnChat: '<b>Chat mode isn\'t up:</b> run the <code>start</code> file again, or switch to the <b>Terminal</b> tab meanwhile.',
     warnCli: '<b>Terminal isn\'t up:</b> run the <code>start</code> file again, or open a shell and type <code>devin</code>.',
     hintNotReady: 'The assistant isn\'t ready — run the <code>start</code> file again and reload. First time here? <a href="onboarding.html"><b>Click to set up</b></a>.',
-    hintNoLessons: 'No lessons yet? Click <b>Ask the assistant</b> and type <code>/interview</code> — it will ask a few questions then design a course just for you.',
-    hintReady: 'Pick a lesson on the left — or click <b>Ask the assistant</b> for anything, no lesson needed.',
+    hintNoLessons: 'No tools yet? Click <b>Ask the assistant</b> and type <code>/interview</code> — it will ask a few questions then build tools just for you.',
+    hintReady: 'Pick a tool on the left — or click <b>Ask the assistant</b> for anything, no guide needed.',
     botChipTitle: 'Switch assistant',
     botGeneral: 'General assistant',
     botNew: 'Create an assistant',
@@ -267,7 +267,7 @@ const uiAlert = (title, msg) => uiDlg({title, msg, okText: t('dlgOkShort'), canC
 
 async function loadManifest() {
   try {
-    const res = await bfetch('/my-course/manifest.json?_=' + Date.now());
+    const res = await bfetch('/workspace/manifest.json?_=' + Date.now());
     if (!res.ok) throw new Error('no manifest');
     manifest = await res.json();
   } catch {
@@ -357,7 +357,7 @@ async function deleteLesson(b) {
   }
   if (currentLesson === b) {
     currentLesson = null;
-    document.querySelectorAll('.lesson-tab').forEach(t => t.hidden = true);
+    document.querySelectorAll('.tool-tab').forEach(t => t.hidden = true);
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     $('#content').hidden = true;
     $('#welcome').hidden = false;
@@ -380,13 +380,13 @@ function selectLesson(lesson, btn) {
     guide:    true,
     exercise: !isIntro && lesson.has_exercise !== false,
   };
-  document.querySelectorAll('.lesson-tab').forEach(t => { t.hidden = !tabs[t.dataset.tab]; });
+  document.querySelectorAll('.tool-tab').forEach(t => { t.hidden = !tabs[t.dataset.tab]; });
   if (isIntro) loadIntro();
   else loadLesson(lesson);
   switchTab(tabs.slide ? 'slide' : 'guide');
 }
 
-function baseUrl(lesson) { return '/my-course/' + lesson.folder + '/'; }
+function baseUrl(lesson) { return '/workspace/' + lesson.folder + '/'; }
 
 function loadIntro() {
   setPaneHtml('slide', iframe('/intro/slides.html'));
@@ -1378,7 +1378,7 @@ $('#bot-file').onchange = async (e) => {
 };
 
 /* ---- workflows: quy trình "bấm là chạy" ----
-   File tĩnh my-course/workflows/*.json — card → panel inputs+preflight
+   File tĩnh workspace/workflows/*.json — card → panel inputs+preflight
    → POST /api/prompt (kênh gõ tay y hệt) → poll đợi done → checklist
    người tick + verify tự động (count-glob). Không endpoint mới phía
    write — gate y nguyên. */
@@ -1391,12 +1391,12 @@ const subst = (s, ins) => String(s || '').replace(/\{\{(\w+)\}\}/g,
 async function loadWorkflows() {
   try {
     // :8080 file tĩnh — fetch trần, không gắn token (bridge-token.js)
-    const r = await fetch('/my-course/workflows/index.json?_=' + Date.now());
+    const r = await fetch('/workspace/workflows/index.json?_=' + Date.now());
     if (!r.ok) return;
     const idx = await r.json();
     const wfs = (await Promise.all((idx.workflows || []).map(async (id) => {
       try {
-        const rr = await fetch('/my-course/workflows/' +
+        const rr = await fetch('/workspace/workflows/' +
           encodeURIComponent(id) + '.json?_=' + Date.now());
         if (!rr.ok) return null;
         const w = await rr.json();

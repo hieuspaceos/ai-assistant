@@ -34,7 +34,7 @@
     },
     {
       "kind": "type",
-      "text": "Đọc trang my-course/lesson-02-trang-giong-trang-mau/sample-files/trang-mau.html rồi dựng cho em một trang web giống về bố cục và phong cách — nội dung của em: sản phẩm \"Trà thảo mộc Thanh Lọc\", khẩu hiệu \"Ngủ ngon mỗi đêm\", ưu điểm: nguyên liệu tự nhiên, không caffeine, túi lọc tiện dụng, giá 149.000đ gạch giá cũ 220.000đ, nút \"ĐẶT NGAY\". Lưu ra my-course/trang-cua-em.html rồi mở cho em xem.",
+      "text": "Đọc trang workspace/tool-02-trang-giong-trang-mau/sample-files/trang-mau.html rồi dựng cho em một trang web giống về bố cục và phong cách — nội dung của em: sản phẩm \"Trà thảo mộc Thanh Lọc\", khẩu hiệu \"Ngủ ngon mỗi đêm\", ưu điểm: nguyên liệu tự nhiên, không caffeine, túi lọc tiện dụng, giá 149.000đ gạch giá cũ 220.000đ, nút \"ĐẶT NGAY\". Lưu ra workspace/trang-cua-em.html rồi mở cho em xem.",
       "cps": 18,
       "say": "Nhìn dài vậy thôi chứ toàn lời thường: chỉ cho trợ lý file trang mẫu, kể tên sản phẩm, khẩu hiệu, ưu điểm, giá, chữ trên nút — rồi bảo lưu ra file mới và mở cho mình xem. Gõ xong bấm gửi."
     },
@@ -64,7 +64,7 @@
     },
     {
       "kind": "files",
-      "title": "my-course/ — file mới tạo",
+      "title": "workspace/ — file mới tạo",
       "items": [
         [
           "trang-cua-em.html",
@@ -75,7 +75,7 @@
     {
       "kind": "bubble",
       "who": "agent",
-      "text": "Xong — file `my-course/trang-cua-em.html` đã mở trên trình duyệt. Cùng một khuôn với trang mẫu: đầu ấn tượng, ba ưu điểm, giá 149.000đ gạch giá cũ, nút ĐẶT NGAY — nhưng tên là Trà Thanh Lọc, của bạn hết.",
+      "text": "Xong — file `workspace/trang-cua-em.html` đã mở trên trình duyệt. Cùng một khuôn với trang mẫu: đầu ấn tượng, ba ưu điểm, giá 149.000đ gạch giá cũ, nút ĐẶT NGAY — nhưng tên là Trà Thanh Lọc, của bạn hết.",
       "reveal": 0.04,
       "say": "Đây — trang của mình, cùng một khuôn. Nhưng nhìn kỹ: tên là trà Thanh Lọc, màu khác, chữ khác — của mình hết."
     },

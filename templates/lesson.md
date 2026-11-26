@@ -1,7 +1,7 @@
 <!--
 TEMPLATE HƯỚNG DẪN DÙNG CÔNG CỤ — agent điền vào chỗ {{...}} khi sinh bài mới.
 Quy tắc bắt buộc khi điền:
-- Ngôn ngữ theo `my-course/config.json` (vi → tiếng Việt, en → English),
+- Ngôn ngữ theo `workspace/config.json` (vi → tiếng Việt, en → English),
   giọng ELI10 theo AGENTS.md của folder này. Tên bước dịch theo ngôn ngữ
   đó nhưng giữ đúng loại trong từ vựng bước bên dưới.
 - Bài này là một TUTORIAL TỪNG-BƯỚC để dùng một công cụ — như màn

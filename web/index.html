@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Trợ lý AI: làm việc thật trên máy bạn</title>
-<meta name="description" content="Trợ lý AI tiếng Việt làm việc thật trên máy bạn — đọc Zalo, xử lý file, cập nhật Sheet — và tự dạy bạn dùng nó qua một khoá học riêng.">
+<meta name="description" content="Trợ lý AI tiếng Việt làm việc thật trên máy bạn — đọc Zalo, xử lý file, cập nhật Sheet — và tự dạy bạn dùng nó qua bộ công cụ riêng.">
 <link rel="stylesheet" href="vendor/fonts.css">
 <link rel="icon" type="image/svg+xml" href="logo.svg">
 <link rel="stylesheet" href="styles.css?v=17">
@@ -26,9 +26,9 @@
     </div>
   </div>
   <div id="tabs">
-    <button data-tab="slide" class="tab lesson-tab" hidden data-i18n="tabSlide">Slide</button>
-    <button data-tab="guide" class="tab lesson-tab" hidden data-i18n="tabGuide">Hướng dẫn</button>
-    <button data-tab="exercise" class="tab lesson-tab" hidden data-i18n="tabExercise">Bài tập</button>
+    <button data-tab="slide" class="tab tool-tab" hidden data-i18n="tabSlide">Slide</button>
+    <button data-tab="guide" class="tab tool-tab" hidden data-i18n="tabGuide">Hướng dẫn</button>
+    <button data-tab="exercise" class="tab tool-tab" hidden data-i18n="tabExercise">Bài tập</button>
     <button data-tab="chat" class="tab chat-tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5c-1.6 0-3.1-.4-4.4-1.2L3 20l1.2-5.1A8.5 8.5 0 1 1 21 11.5z"/></svg><span data-i18n="tabAsk">Hỏi trợ lý</span></button>
   </div>
   <div id="learner-name"></div>
@@ -41,7 +41,7 @@
 <a id="update-banner" hidden target="_blank" rel="noopener"></a>
 
 <div class="layout">
-  <nav id="lesson-list">
+  <nav id="tool-list">
     <div class="nav-title" data-i18n="lessons">Bài học</div>
     <div id="lessons"><p class="loading" data-i18n="loading">Đang tải…</p></div>
     <div id="recipes" hidden>
@@ -82,7 +82,7 @@
     <div id="welcome">
       <div class="hero">
         <h2 id="welcome-title" data-i18n="welcomeTitle">Chào bạn!</h2>
-        <p class="hero-sub" id="welcome-sub" data-i18n="welcomeSub">Trợ lý AI làm việc thật trên máy bạn — và nó tự dạy bạn dùng nó qua một khoá học riêng.</p>
+        <p class="hero-sub" id="welcome-sub" data-i18n="welcomeSub">Trợ lý AI làm việc thật trên máy bạn — và nó tự dạy bạn dùng nó qua bộ công cụ riêng.</p>
       </div>
       <div class="how">
         <div class="how-item"><span class="how-num">1</span><div data-i18n-html="how1"><b>Nhờ trợ lý</b> bất cứ việc gì — bấm nút <b>Hỏi trợ lý</b> phía trên.</div></div>

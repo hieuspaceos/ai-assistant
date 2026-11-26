@@ -55,7 +55,7 @@ công cụ đo tốt nhất: trang đã render xong JS, đã đăng nhập sẵn
   bằng trình duyệt). Nếu việc đó làm được bằng extension thì agent tự
   làm; chỉ nhờ họ khi thật sự cần tay người, kèm chỉ dẫn từng nhấp
   chuột mô tả đúng thứ trên màn hình của họ.
-- Tạo folder làm việc `clone-work/<slug-site>/` trong `my-course/` —
+- Tạo folder làm việc `clone-work/<slug-site>/` trong `workspace/` —
   MỖI SITE MỘT FOLDER RIÊNG (VD `clone-work/mekongtouch/`). Nếu chỉ
   dùng `clone-work/` chung thì clone site thứ hai ghi đè số liệu đo
   của site thứ nhất. Folder chứa: `ref-dom.html`, `ref-styles.json`,
@@ -372,7 +372,7 @@ từng khối.
 
 - Mở trang kết quả trong **viewer của app** (không mở file trần):
   `open` hoặc dẫn họ tới
-  `http://localhost:8080/web/clone-view.html?src=/my-course/<tên-file>.html`
+  `http://localhost:8080/web/clone-view.html?src=/workspace/<tên-file>.html`
   — trang hiện TOÀN MÀN HÌNH trong app kèm thanh công cụ: nút **Sửa
   nội dung** → bấm thẳng vào chữ/ảnh/nút/khối để chỉnh tại chỗ →
   **Lưu lại trang** (ghi về file gốc) hoặc **Tải về máy**, nút **✕** đóng.

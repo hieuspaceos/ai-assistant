@@ -1,6 +1,6 @@
 ---
 name: tao-cong-cu
-description: Gói một việc lặp lại thành công cụ riêng — sinh skill /command mới kèm walkthrough.json (hướng dẫn tương tác từng-bước trong portal) + guide.md bản đọc trong my-course/, cập nhật manifest. Dùng khi học viên mô tả một việc muốn trợ lý làm sẵn công thức, hoặc muốn "biến việc vừa làm thành công cụ cho lần sau".
+description: Gói một việc lặp lại thành công cụ riêng — sinh skill /command mới kèm walkthrough.json (hướng dẫn tương tác từng-bước trong portal) + guide.md bản đọc trong workspace/, cập nhật manifest. Dùng khi học viên mô tả một việc muốn trợ lý làm sẵn công thức, hoặc muốn "biến việc vừa làm thành công cụ cho lần sau".
 triggers:
   - user
   - model
@@ -57,7 +57,7 @@ này làm trên file/app nào? đầu ra mong muốn là gì?
    lý" rồi một `wait-run`** — trợ lý hay hỏi lẻ giữa run (xác nhận, hỏi
    nghĩa dữ liệu) và không đoán được bao nhiêu lượt; vòng này gánh hết.
    Mở đầu bằng `say` giới thiệu, kết thúc bằng `done` chốt "lần sau gõ
-   lệnh gì". Đặt trong `my-course/lesson-XX-<slug>/` (XX = số tiếp theo
+   lệnh gì". Đặt trong `workspace/tool-XX-<slug>/` (XX = số tiếp theo
    trong manifest).
 4. **Viết guide.md** theo `templates/lesson.md` — bản đọc của chính
    walkthrough đó (cùng các bước, dạng trang để đọc lại nhanh / in ra).
@@ -68,7 +68,7 @@ này làm trên file/app nào? đầu ra mong muốn là gì?
      đứng trước
    - guide.md: mỗi `### Bước` có 1 thao tác + 1 dòng ✅, không từ cấm
    Sai chỗ nào sửa chỗ đó rồi mới qua bước 6.
-6. **Cập nhật `my-course/manifest.json`**: thêm entry lesson với
+6. **Cập nhật `workspace/manifest.json`**: thêm entry lesson với
    `"has_slides": false, "has_video": false, "has_exercise": false,
    "has_walkthrough": true`; nếu là skill mới thì thêm vào `recipes`:
    `{"command": "/<ten>", "meaning": "<ý nghĩa một dòng>"}`.

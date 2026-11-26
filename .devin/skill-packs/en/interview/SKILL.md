@@ -1,6 +1,6 @@
 ---
 name: interview
-description: Interview the learner about their daily work, then generate custom tools (skills) plus step-by-step usage guides in my-course/. Use when a new learner wants to start learning.
+description: Interview the learner about their daily work, then generate custom tools (skills) plus step-by-step usage guides in workspace/. Use when a new learner wants to start learning.
 triggers:
   - user
 allowed-tools:
@@ -40,7 +40,7 @@ computer").
 ## Phase 1.5 — Map work to apps/websites
 
 For each pain surfacing in Phase 2, ask one more: *"which app or website
-do you do this on?"* → map to connectors in `my-course/connections.json`:
+do you do this on?"* → map to connectors in `workspace/connections.json`:
 
 | They say | Connector |
 |---|---|
@@ -53,7 +53,7 @@ do you do this on?"* → map to connectors in `my-course/connections.json`:
 | Files on the machine | `permissions.json` folder |
 
 Any needed connector still `status: not-connected` → note it for
-**lesson-00 "Connections"** (Phase 4).
+**tool-00 "Connections"** (Phase 4).
 
 ## Phase 2 — Two branches: knows vs doesn't know
 
@@ -131,7 +131,7 @@ Drop some). Adjust if they want, then lock it.
 ## Phase 4 — Generate the course (and custom tools if any)
 
 **Lesson-00 "Connections"**: if Phase 1.5 noted connectors the lessons
-need that aren't connected yet → generate `my-course/lesson-00-ket-noi/`
+need that aren't connected yet → generate `workspace/tool-00-ket-noi/`
 teaching the one-time setup:
 - browser → install the AI Assistant extension (SETUP step 5)
 - wordpress → create an App Password → write `.devin/secrets.local.json`
@@ -139,13 +139,13 @@ teaching the one-time setup:
 - google-sheets → install the MCP + OAuth
 - outlook/zalo → stay logged in on the browser
 Build it per `templates/lesson.md`, put it first in the manifest
-(`lesson-00`), and every skill generated for later lessons must check
+(`tool-00`), and every skill generated for later lessons must check
 `connections.json` first — not connected → send the learner through
-lesson-00 first.
+tool-00 first.
 
-For EACH locked item (numbered lesson-01, lesson-02...), generate exactly
+For EACH locked item (numbered tool-01, tool-02...), generate exactly
 TWO things: one tool (new skill / existing skill / free-form ask) + one
-`guide.md` step-by-step tutorial in `my-course/lesson-XX-<slug>/`.
+`guide.md` step-by-step tutorial in `workspace/tool-XX-<slug>/`.
 
 **The detailed procedure lives in `/make-tool`** — read
 `.devin/skills/make-tool/SKILL.md` and follow it for each item (pick the
@@ -157,7 +157,7 @@ Do NOT create `exercise.md`, `video-script.md`, `sample-files/`,
 
 ## Phase 5 — Update the portal + welcome
 
-After all lessons, WRITE `my-course/manifest.json` per schema:
+After all lessons, WRITE `workspace/manifest.json` per schema:
 
 ```json
 {
@@ -170,10 +170,10 @@ After all lessons, WRITE `my-course/manifest.json` per schema:
   ],
   "lessons": [
     {
-      "id": "lesson-01",
+      "id": "tool-01",
       "title": "<outcome name>",
       "description": "<one line: the pain it solves>",
-      "folder": "lesson-01-<slug>",
+      "folder": "tool-01-<slug>",
       "has_slides": false,
       "has_video": false,
       "has_exercise": false
@@ -202,7 +202,7 @@ one set of tasks.
    - `{action:"create", name, role:<template id>, avatar, skills, needs,
      recipes, instructions:<instructions in learner language>}`
    - `{action:"activate", id:<new id>}` — the bridge installs missing
-     skills and writes `my-course/bot.md`.
+     skills and writes `workspace/bot.md`.
 5. Tell the learner: *"This course teaches you to use <name>, the
    assistant we just created — message <name> from now on."*
 

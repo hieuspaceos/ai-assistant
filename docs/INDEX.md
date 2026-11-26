@@ -44,6 +44,6 @@ Entry gốc: [`README.md`](../README.md) · Quy tắc session: [`AGENTS.md`](../
 
 ## Quy ước đọc
 
-- Doc viết tiếng Việt — khớp ngôn ngữ của chính dự án (`my-course/config.json` → `language`).
+- Doc viết tiếng Việt — khớp ngôn ngữ của chính dự án (`workspace/config.json` → `language`).
 - Tên file, key JSON, tên skill: tiếng Anh.
 - Doc nào ghi "(stateful)" là doc có trạng thái thời gian — cập nhật khi làm việc, không coi là spec bất biến.

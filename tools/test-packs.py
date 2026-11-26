@@ -17,7 +17,7 @@ SKILLS = os.path.join(ROOT, ".devin", "skills")
 PACKS = os.path.join(ROOT, ".devin", "skill-packs")
 PACK_VI = os.path.join(PACKS, "vi")
 PACK_EN = os.path.join(PACKS, "en")
-MANIFEST = os.path.join(ROOT, "my-course", "manifest.json")
+MANIFEST = os.path.join(ROOT, "workspace", "manifest.json")
 
 # skill vi -> skill en: ánh xạ TƯỜNG MINH (tên lệnh theo ngôn ngữ).
 # Nguồn chung: skill-packs/skill-map.json — chat-bridge cũng đọc file này
@@ -110,7 +110,7 @@ for lang, pack in (("vi", vi), ("en", en)):
 #    map được sang en); mọi need phải khớp id app trong connections.json
 ROLES = os.path.join(PACKS, "roles")
 try:
-    conn = json.load(open(os.path.join(ROOT, "my-course", "connections.json"),
+    conn = json.load(open(os.path.join(ROOT, "workspace", "connections.json"),
                           encoding="utf-8"))
     conn_ids = {a.get("id") for a in conn.get("apps", [])}
 except Exception as e:
@@ -132,10 +132,10 @@ if os.path.isdir(ROLES):
             check(n in conn_ids,
                   f"roles/{f}: need '{n}' không khớp id nào trong connections.json")
 
-# 7. my-course/workflows/ — schema workflow: id khớp tên file, prompt
+# 7. workspace/workflows/ — schema workflow: id khớp tên file, prompt
 #    không rỗng, checklist ≥1 mục, requires.connections trỏ id app thật,
 #    inputs key dùng trong prompt ({{key}} phải khai báo input)
-WF_DIR = os.path.join(ROOT, "my-course", "workflows")
+WF_DIR = os.path.join(ROOT, "workspace", "workflows")
 if os.path.isdir(WF_DIR):
     try:
         idx = json.load(open(os.path.join(WF_DIR, "index.json"),

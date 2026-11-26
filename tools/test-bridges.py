@@ -75,13 +75,13 @@ def wait_health(url, tries=60):
 def make_workdir():
     d = tempfile.mkdtemp(prefix="troly-test-")
     os.makedirs(os.path.join(d, ".devin"))
-    os.makedirs(os.path.join(d, "my-course"))
+    os.makedirs(os.path.join(d, "workspace"))
     # não giả — bridge sống nhưng Acp.dead ngay (không cần não thật để test)
     json.dump({"id": "none", "cmd": "__no_such_brain__", "args": []},
               open(os.path.join(d, "brain.json"), "w"))
     open(os.path.join(d, ".devin", "bridge.token"), "w").write(TOKEN)
     json.dump({"learner_name": "", "recipes": [], "lessons": []},
-              open(os.path.join(d, "my-course", "manifest.json"), "w"))
+              open(os.path.join(d, "workspace", "manifest.json"), "w"))
     # skill-packs thật để /api/setup copy được
     packs = os.path.join(d, ".devin", "skill-packs")
     shutil.copytree(os.path.join(ROOT, ".devin", "skill-packs"), packs)
@@ -133,15 +133,15 @@ def main():
         check("7. save-page .. → 400", s == 400, str(s))
 
         s, b, _ = http("POST", base + f"/api/save-page?token={TOKEN}",
-                       {"file": "my-course/x.txt", "html": "x"})
+                       {"file": "workspace/x.txt", "html": "x"})
         check("8. save-page non-.html → 400", s == 400, str(s))
 
         s, b, _ = http("POST", base + f"/api/save-page?token={TOKEN}",
-                       {"file": "my-course/a.html", "html": "<p>xin chào</p>"})
-        fp = os.path.join(wd, "my-course", "a.html")
+                       {"file": "workspace/a.html", "html": "<p>xin chào</p>"})
+        fp = os.path.join(wd, "workspace", "a.html")
         ok = s == 200 and open(fp, encoding="utf-8").read() == "<p>xin chào</p>"
         s2, _, _ = http("POST", base + f"/api/save-page?token={TOKEN}",
-                        {"file": "my-course/a.html", "html": "<p>đổi</p>"})
+                        {"file": "workspace/a.html", "html": "<p>đổi</p>"})
         ok = ok and s2 == 200 and os.path.exists(fp + ".bak")
         check("9. save-page ghi file + .bak", ok, f"{s}/{s2}")
 
@@ -193,15 +193,15 @@ def main():
         s, _, _ = http("GET", f"http://127.0.0.1:{sv}/.devin/bridge.token")
         check("14. serve chặn dotfile", s in (403, 404), str(s))
 
-        # audit S12: JSON điều khiển trong my-course không GET trần được
-        open(os.path.join(wd, "my-course", "permissions.json"),
+        # audit S12: JSON điều khiển trong workspace không GET trần được
+        open(os.path.join(wd, "workspace", "permissions.json"),
              "w").write("{}")
         s, _, _ = http("GET",
-                       f"http://127.0.0.1:{sv}/my-course/permissions.json")
+                       f"http://127.0.0.1:{sv}/workspace/permissions.json")
         s2, _, _ = http("GET",
                         f"http://127.0.0.1:{sv}/MY-COURSE/PERMISSIONS.JSON")
         s3, _, _ = http("GET",
-                        f"http://127.0.0.1:{sv}/my-course/manifest.json")
+                        f"http://127.0.0.1:{sv}/workspace/manifest.json")
         check("14b. serve chặn JSON điều khiển (kể cả alias hoa)",
               s == 404 and s2 == 404 and s3 == 200,
               f"{s}/{s2}/{s3}")
@@ -309,7 +309,7 @@ def main():
         check("16. setup vi → cài pack vi",
               s == 200 and os.path.isdir(os.path.join(sk, "clone-trang"))
               and os.path.isdir(os.path.join(sk, "phong-van")), str(s))
-        mf = json.load(open(os.path.join(wd, "my-course", "manifest.json")))
+        mf = json.load(open(os.path.join(wd, "workspace", "manifest.json")))
         check("16b. setup ghi recipes vi vào manifest",
               any(r.get("command") == "/clone-trang"
                   for r in mf.get("recipes", [])), str(mf.get("recipes"))[:80])
@@ -370,7 +370,7 @@ def main():
 
         s, b, _ = http("POST", b3 + f"/api/bot?token={TOKEN}",
                        {"action": "activate", "id": bid})
-        bot_md = os.path.join(wd, "my-course", "bot.md")
+        bot_md = os.path.join(wd, "workspace", "bot.md")
         # audit đợt 4: activate/delete/import-confirm qua consent gate —
         # agent tự đổi persona + bots.json (file sandbox deny-write) im
         # lặng được trước đây
@@ -379,7 +379,7 @@ def main():
         ok = (s == 202 and sa_b == 200
               and os.path.isfile(bot_md)
               and "Hằng" in open(bot_md, encoding="utf-8").read())
-        mf = json.load(open(os.path.join(wd, "my-course", "manifest.json")))
+        mf = json.load(open(os.path.join(wd, "workspace", "manifest.json")))
         ok = ok and any(r.get("command") == "/doc-zalo"
                         for r in mf.get("recipes", []))
         check("19b. activate (qua gate) → bot.md + recipes gộp", ok, str(b)[:80])
@@ -489,11 +489,11 @@ def main():
         _approve(b3, b.get("pending"))              # deactivate cũng qua gate
 
         # ---- lock-down ph-1: Host check + term-gate + ws cap ----
-        s, _ = http_raw(f"http://127.0.0.1:{sv}/my-course/manifest.json",
+        s, _ = http_raw(f"http://127.0.0.1:{sv}/workspace/manifest.json",
                         headers={"Host": "evil.example"})
         check("21. serve Host lạ → 403 (rebinding)", s == 403, str(s))
 
-        s, _ = http_raw(f"http://127.0.0.1:{sv}/my-course/manifest.json",
+        s, _ = http_raw(f"http://127.0.0.1:{sv}/workspace/manifest.json",
                         headers={"Host": f"localhost:{sv}"})
         check("22. serve Host localhost → 200", s == 200, str(s))
 
@@ -521,17 +521,17 @@ def main():
               "MAX_WS_MSG" in src_eb and "next_id[0] += 1" in seg)
 
         # ---- lock-down ph-2: CSP trên vùng nội dung ----
-        with open(os.path.join(wd, "my-course", "csp-check.html"), "w") as f:
+        with open(os.path.join(wd, "workspace", "csp-check.html"), "w") as f:
             f.write("<p>x</p>")
         os.makedirs(os.path.join(wd, "site"), exist_ok=True)
         with open(os.path.join(wd, "site", "t.html"), "w") as f:
             f.write("<p>x</p>")
-        s, h = http_raw(f"http://127.0.0.1:{sv}/my-course/csp-check.html")
+        s, h = http_raw(f"http://127.0.0.1:{sv}/workspace/csp-check.html")
         csp = h.get("Content-Security-Policy", "")
-        check("25. .html my-course có CSP connect-src 'none'",
+        check("25. .html workspace có CSP connect-src 'none'",
               s == 200 and "connect-src 'none'" in csp, f"{s} {csp[:60]}")
-        s, h = http_raw(f"http://127.0.0.1:{sv}/my-course/manifest.json")
-        check("25a. .json my-course KHÔNG có CSP",
+        s, h = http_raw(f"http://127.0.0.1:{sv}/workspace/manifest.json")
+        check("25a. .json workspace KHÔNG có CSP",
               s == 200 and "Content-Security-Policy" not in h)
         s, h = http_raw(f"http://127.0.0.1:{sv}/site/t.html")
         check("26. .html ngoài vùng nội dung KHÔNG có CSP",
@@ -660,7 +660,7 @@ def main():
         # trong TMPDIR (vùng writable theo profile) nên write-probe ở đó
         # pass giả. Tạo workdir riêng trong ROOT (vùng deny-theo-default)
         sbwd = tempfile.mkdtemp(prefix="sbtest-", dir=ROOT)
-        for sd in ("tools", "my-course", ".devin", ".devin/skills",
+        for sd in ("tools", "workspace", ".devin", ".devin/skills",
                    ".logs"):
             os.makedirs(os.path.join(sbwd, sd), exist_ok=True)
         open(os.path.join(sbwd, "brain.json"), "w").write("{}")
@@ -669,10 +669,10 @@ def main():
              "w").write(TOKEN)
         open(os.path.join(sbwd, ".devin", "secrets.local.json"),
              "w").write("{}")
-        open(os.path.join(sbwd, "my-course", "permissions.json"),
+        open(os.path.join(sbwd, "workspace", "permissions.json"),
              "w").write("{}")
         json.dump({"learner_name": "", "recipes": [], "lessons": []},
-                  open(os.path.join(sbwd, "my-course",
+                  open(os.path.join(sbwd, "workspace",
                                     "manifest.json"), "w"))
 
         # 33: profile sinh được + đúng cấu trúc (deny default, bind deny,
@@ -695,7 +695,7 @@ def main():
               and '(deny file-write* (literal "' +
                   os.path.join(sbwd, ".devin", "bridge.token") + '")' in prof
               and '(deny file-write* (literal "' +
-                  os.path.join(sbwd, "my-course",
+                  os.path.join(sbwd, "workspace",
                                "permissions.json") + '")' in prof,
               prof[:120])
 
@@ -704,7 +704,7 @@ def main():
         if has_sbx and prof:
             # 34: não trong sandbox đọc được file project
             r = subprocess.run(["sandbox-exec", "-f", sb_fp, "/bin/cat",
-                                os.path.join(sbwd, "my-course",
+                                os.path.join(sbwd, "workspace",
                                              "manifest.json")],
                                capture_output=True, text=True)
             check("34. sandbox: đọc project → được",
@@ -732,22 +732,22 @@ def main():
                   r.returncode != 0
                   and "not permitted" in (r.stderr or "").lower(),
                   r.stderr[:60])
-            # 36b-h: write-allowlist — não chỉ ghi được my-course/,
+            # 36b-h: write-allowlist — não chỉ ghi được workspace/,
             # .devin/skills/, .logs/ (audit S1/S2: trước rw=cả cwd → não
             # tự sửa được permissions.json/brain.json/tools = tự cởi còng)
             probes = [
                 ("36b. ghi tools/ → deny",
                  os.path.join(sbwd, "tools", "probe-w.txt"), False),
-                ("36c. ghi my-course/permissions.json → deny",
-                 os.path.join(sbwd, "my-course", "permissions.json"),
+                ("36c. ghi workspace/permissions.json → deny",
+                 os.path.join(sbwd, "workspace", "permissions.json"),
                  False),
                 ("36d. ghi brain.json → deny",
                  os.path.join(sbwd, "brain.json"), False),
                 ("36e. ghi .devin/skills/ → ok",
                  os.path.join(sbwd, ".devin", "skills", "probe-x", "f"),
                  True),
-                ("36g. ghi my-course/ → ok (positive control)",
-                 os.path.join(sbwd, "my-course", "probe-ok.txt"), True),
+                ("36g. ghi workspace/ → ok (positive control)",
+                 os.path.join(sbwd, "workspace", "probe-ok.txt"), True),
                 ("36h. ghi .logs/ → ok",
                  os.path.join(sbwd, ".logs", "h.jsonl"), True),
             ]
@@ -904,7 +904,7 @@ def main():
               f"{s}/{s2}/{s3}")
         shutil.rmtree(wd4, ignore_errors=True)
 
-        # 44: serve.py trả CSP sandbox cho /my-course/ + /intro/ — trang
+        # 44: serve.py trả CSP sandbox cho /workspace/ + /intro/ — trang
         # không tin chạy ở opaque origin, không đọc được localStorage/DOM
         # portal (audit N1). Không có allow-same-origin (đặt vào là hỏng).
         csp44 = ""
@@ -912,12 +912,12 @@ def main():
                          encoding="utf-8").read().splitlines():
             if "sandbox" in line:
                 csp44 += line
-        check("44. CSP sandbox my-course/intro (không same-origin)",
+        check("44. CSP sandbox workspace/intro (không same-origin)",
               "sandbox allow-scripts" in csp44
               and "allow-same-origin" not in csp44, csp44[:80])
 
         # 45: bridge-token chỉ gắn vào port bridge — không gắn cho :8080
-        # (request tới /my-course/ kèm token → service worker ăn — audit N2)
+        # (request tới /workspace/ kèm token → service worker ăn — audit N2)
         bt = open(os.path.join(ROOT, "web", "bridge-token.js"),
                   encoding="utf-8").read()
         check("45. bfetch chỉ gắn token cho 7682/7684",
@@ -947,18 +947,18 @@ def main():
 
         # 47: read-write trên folder chứa/trong mã nguồn → 400 (ghi được
         # tools/*.py = code chạy NGOÀI sandbox ở spawn kế); bên trong
-        # my-course (writable sẵn) → 202 qua card như thường
+        # workspace (writable sẵn) → 202 qua card như thường
         os.makedirs(os.path.join(wd, "tools"), exist_ok=True)
         r47 = True
         for p47, want in ((os.path.dirname(wd), 400), (wd, 400),
                           (os.path.join(wd, "tools"), 400),
-                          (os.path.join(wd, "my-course"), 202)):
+                          (os.path.join(wd, "workspace"), 202)):
             s, b, _ = http("POST", b3 + f"/api/permissions?token={TOKEN}",
                            {"path": p47, "access": "read-write"})
             if s != want:
                 r47 = False
                 print(f"    ✗ RW {p47} → {s} (muốn {want}) {str(b)[:60]}")
-        check("47. RW grant trên/trong mã nguồn → 400, my-course → 202", r47)
+        check("47. RW grant trên/trong mã nguồn → 400, workspace → 202", r47)
 
         # 48: deny-list mở rộng (exec-qua-args) + terminal cũng qua deny
         r48 = True
@@ -992,7 +992,7 @@ def main():
         spec.loader.exec_module(gs)
         json.dump({"folders": [{"path": os.path.dirname(wd),
                                 "access": "read-write"}]},
-                  open(os.path.join(wd, "my-course",
+                  open(os.path.join(wd, "workspace",
                                     "permissions.json"), "w"))
         prof50 = gs.build_profile(wd)
         check("50. profile deny-write tools/ + brain.json dù RW grant cha",
@@ -1048,7 +1048,7 @@ def main():
         # 52: /api/connections — upsert status thường → 200 thẳng; đặt/đổi
         # open_url → 202 card (audit v6: nút "Mở trang" quen-thuộc trỏ
         # site lạ = phishing — học viên phải thấy đích trước khi tin)
-        connfp = os.path.join(wd, "my-course", "connections.json")
+        connfp = os.path.join(wd, "workspace", "connections.json")
         s52a, _, _ = http("POST", b3 + f"/api/connections?token={TOKEN}",
                           {"app": {"id": "t52", "name": "T52",
                                    "status": "ok"}})
@@ -1149,27 +1149,27 @@ def main():
             check("54e. err báo 'kẹt' cho học viên",
                   any("kẹt" in m for m in msgs), str(msgs))
 
-        # 55: delete-lesson → bài vào my-course/.trash/ chứ không mất hẳn
+        # 55: delete-lesson → bài vào workspace/.trash/ chứ không mất hẳn
         # (bấm nhầm Đồng ý vẫn khôi phục được), manifest bỏ entry.
         # Dùng b3: base/b2 bị test restart giết sớm; b3 sống tới cuối, cùng wd.
-        les = os.path.join(wd, "my-course", "lesson-99-rac")
+        les = os.path.join(wd, "workspace", "tool-99-rac")
         os.makedirs(les, exist_ok=True)
         open(os.path.join(les, "lesson.md"), "w").write("# bài test")
-        mfp = os.path.join(wd, "my-course", "manifest.json")
+        mfp = os.path.join(wd, "workspace", "manifest.json")
         m55 = json.load(open(mfp))
-        m55.setdefault("lessons", []).append({"folder": "lesson-99-rac",
+        m55.setdefault("lessons", []).append({"folder": "tool-99-rac",
                                               "title": "t"})
         json.dump(m55, open(mfp, "w"))
         s, b, _ = http("POST", b3 + f"/api/delete-lesson?token={TOKEN}",
-                       {"folder": "lesson-99-rac"},
+                       {"folder": "tool-99-rac"},
                        headers={"Origin": "http://localhost:8080"})
         rid55 = b.get("pending")
         s55, b55, _ = http("POST", b3 + f"/api/respond?token={TOKEN}",
                            {"id": rid55, "optionId": "ok"},
                            headers={"Origin": "http://localhost:8080"})
-        trash_dir = os.path.join(wd, "my-course", ".trash")
+        trash_dir = os.path.join(wd, "workspace", ".trash")
         trashed = [d for d in os.listdir(trash_dir)
-                   if d.startswith("lesson-99-rac-")] \
+                   if d.startswith("tool-99-rac-")] \
             if os.path.isdir(trash_dir) else []
         m55b = json.load(open(mfp))
         check("55. delete-lesson → .trash, khôi phục được",
@@ -1178,7 +1178,7 @@ def main():
               and len(trashed) == 1
               and os.path.exists(os.path.join(trash_dir, trashed[0],
                                               "lesson.md"))
-              and all(b.get("folder") != "lesson-99-rac"
+              and all(b.get("folder") != "tool-99-rac"
                       for b in m55b.get("lessons", [])),
               f"{s}/{s55}/{trashed}/{str(b)[:60]}/{str(b55)[:60]}")
 
@@ -1237,15 +1237,15 @@ def main():
             "gen_sandbox_mod", os.path.join(TOOLS, "gen-sandbox.py"))
         gsm = importlib.util.module_from_spec(spec2)
         spec2.loader.exec_module(gsm)
-        la = os.path.join(wd, "my-course", "la")
+        la = os.path.join(wd, "workspace", "la")
         os.symlink(os.path.expanduser("~/Library/LaunchAgents"), la)
         check("58. _grant_ok symlink→LaunchAgents → False",
               not gsm._grant_ok(la, "read-write", wd))
-        doc = os.path.join(wd, "my-course", "doc-link")
+        doc = os.path.join(wd, "workspace", "doc-link")
         os.symlink(os.path.expanduser("~/Documents"), doc)
         check("58b. _grant_ok symlink→non-sensitive → False (divergence)",
               not gsm._grant_ok(doc, "read", wd))
-        rdir = os.path.join(wd, "my-course", "real-dir")
+        rdir = os.path.join(wd, "workspace", "real-dir")
         os.makedirs(rdir, exist_ok=True)
         check("58c. _grant_ok dir thật trong vùng writable → True",
               gsm._grant_ok(rdir, "read-write", wd))
@@ -1255,7 +1255,7 @@ def main():
         # CAO-2 end-to-end ở profile: permissions.json chứa grant đã swap
         # symlink → build_profile KHÔNG emit allow cho đích (deny line
         # của enumeration vẫn có là bình thường — chỉ check dòng allow)
-        perm_fp = os.path.join(wd, "my-course", "permissions.json")
+        perm_fp = os.path.join(wd, "workspace", "permissions.json")
         json.dump({"folders": [{"path": la, "access": "read-write"}]},
                   open(perm_fp, "w"))
         prof = gsm.build_profile(wd)
@@ -1296,7 +1296,7 @@ def main():
 
         # CAO-2 lớp apply: request grant hợp lệ → xoá dir TRƯỚC khi bấm
         # → _apply từ chối, không ghi grant vào permissions.json
-        dgone = os.path.join(wd, "my-course", "gone-soon")
+        dgone = os.path.join(wd, "workspace", "gone-soon")
         os.makedirs(dgone, exist_ok=True)
         s, b, _ = http("POST", b3 + f"/api/permissions?token={TOKEN}",
                        {"paths": [dgone], "access": "read"})
@@ -1312,7 +1312,7 @@ def main():
 
         # CAO-2 lớp apply (symlink): swap sang folder nhạy cảm trước khi
         # bấm → _apply từ chối y vậy
-        dsw = os.path.join(wd, "my-course", "swap-me")
+        dsw = os.path.join(wd, "workspace", "swap-me")
         os.makedirs(dsw, exist_ok=True)
         s, b, _ = http("POST", b3 + f"/api/permissions?token={TOKEN}",
                        {"paths": [dsw], "access": "read"})
@@ -1372,7 +1372,7 @@ def main():
                        {"action": "create", "name": "Bot Test 65",
                         "recipes": [{"command": "/c1",
                                      "meaning": "nghĩa một"}]})
-        bots65 = json.load(open(os.path.join(wd, "my-course",
+        bots65 = json.load(open(os.path.join(wd, "workspace",
                                              "bots.json")))
         r65 = next((x.get("recipes") or [{}])[0]
                    for x in bots65.get("bots", [])

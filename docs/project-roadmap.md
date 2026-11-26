@@ -29,7 +29,7 @@ việc hoặc đổi ưu tiên.
 | Tạo bot theo nghề | Plan `261120-2100-create-bot`: bot = persona + skill theo nghề + connection — template gallery, phỏng vấn sinh bot, nhập bot chia sẻ (sau keep-moat) |
 | Mobile viewport cho clone | Extension chưa đổi được kích thước cửa sổ — hiện kiểm tĩnh media query. CDP `Emulation.setDeviceMetricsOverride` là đường đi nếu cần ảnh mobile thật |
 | `clone-compare` trên Windows | `shot` cần `sips` (macOS). PowerShell `System.Drawing` đổi BMP tương đương — port khi có học viên Windows cần so ảnh |
-| Backup nhiều mốc | `.bak` giữ 1 bản. Nếu học viên hay sửa hỏng: versioned `.bak-<timestamp>` hoặc git init trong my-course |
+| Backup nhiều mốc | `.bak` giữ 1 bản. Nếu học viên hay sửa hỏng: versioned `.bak-<timestamp>` hoặc git init trong workspace |
 | Skill pack đồng bộ hai chiều | ~~`clone-trang`/`trang-moi` chưa có trong `skill-packs/`~~ — **đã xong** (261120-1635-fix-audit): cả hai pack có đủ + bản en `clone-page`/`new-page`; `test-packs.py` bắt quên đồng bộ sau này |
 | Kiểm tĩnh file clone tự động | Đếm data-cs/section, parse thẻ — có thể thêm mode `check` vào clone-compare.py |
 
@@ -40,7 +40,7 @@ việc hoặc đổi ưu tiên.
 | Devin Desktop/editor ACP thay stack nhúng | Portal giờ là vỏ — nâng cấp khi muốn trải nghiệm "app" hơn; đánh đổi: mất quyền kiểm soát UI |
 | Devin Cloud (app.devin.ai) | Sandbox an toàn cho người mới nhưng phải upload file + trả cloud credits |
 | `video.mp4` thật | `video-builder` chỉ chắc chắn ra kịch bản — quay kiểu Khan cần Edge headless + ffmpeg + VieNeu-TTS (local, Apache-2.0 — `tools/render-video.py` + `TTS_PY`/`TTS_VOICE`) |
-| Đa học viên trên một máy | Hiện một `my-course/` duy nhất — nếu cần profile thì manifest/config theo user |
+| Đa học viên trên một máy | Hiện một `workspace/` duy nhất — nếu cần profile thì manifest/config theo user |
 | Publish clone ra ngoài | File tĩnh up Netlify/GitHub Pages được, nhưng là việc kỹ thuật với học viên — chỉ làm khi có nhu cầu thật |
 
 ## Nguyên tắc ưu tiên

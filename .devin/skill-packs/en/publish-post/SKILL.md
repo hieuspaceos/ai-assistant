@@ -16,7 +16,7 @@ featured media.
 
 ## Check connection (mandatory)
 
-1. Read `my-course/connections.json` → app `wordpress`.
+1. Read `workspace/connections.json` → app `wordpress`.
 2. `POST /api/check-connection` `{"id":"wordpress"}` → `ok: true` first.
 3. `ok: false` / missing credentials → guide setup:
    - Have the learner open ⚙ **Settings** → the **Set up** button next

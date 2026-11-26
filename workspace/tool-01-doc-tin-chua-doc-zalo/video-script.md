@@ -37,7 +37,7 @@ dừng ở mấy dòng "chưa đọc". Không hiện tin nhắn thật nào.
 
 **MÀN HÌNH:** Gõ chậm prompt vào khung chat:
 ```
-Đọc file my-course/lesson-01-doc-tin-chua-doc-zalo/sample-files/zalo-hop-thu-demo.txt rồi liệt kê giúp em những hội thoại nào có tin chưa đọc, kèm xem trước nội dung.
+Đọc file workspace/tool-01-doc-tin-chua-doc-zalo/sample-files/zalo-hop-thu-demo.txt rồi liệt kê giúp em những hội thoại nào có tin chưa đọc, kèm xem trước nội dung.
 ```
 Để Devin chạy thật trên màn hình — KHÔNG cắt. Khi trả lời xong, gõ tiếp
 câu đào sâu:

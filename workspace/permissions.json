@@ -1,5 +1,5 @@
 {
-  "description": "Folders the assistant may read/write. my-course/ and ai-assistant/ are always allowed. Manage via portal or ask the assistant.",
+  "description": "Folders the assistant may read/write. workspace/ and ai-assistant/ are always allowed. Manage via portal or ask the assistant.",
   "folders": [
     {
       "path": "~/Downloads",

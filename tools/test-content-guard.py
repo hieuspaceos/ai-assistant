@@ -132,10 +132,10 @@ check("UNTRUSTED" in o["text"], "chuỗi dài bị bọc")
 check(o["short"] == "ok", "chuỗi ngắn (<40 ký tự) không bọc")
 
 print("== unit: exec allowlist ==")
-pats = ["ls *", "df -h", "cat my-course/**", "rm *|sh", "  "]
+pats = ["ls *", "df -h", "cat workspace/**", "rm *|sh", "  "]
 check(cg.exec_allowed("ls -la /tmp", pats) == "ls *", "glob 'ls *' khớp")
 check(cg.exec_allowed("df -h", pats) == "df -h", "lệnh đúng khớp")
-check(cg.exec_allowed("cat my-course/a/b.txt", pats),
+check(cg.exec_allowed("cat workspace/a/b.txt", pats),
       "** khớp sâu")
 check(cg.exec_allowed("rm -rf /", pats) is None,
       "pattern độc bị lọc + lệnh lạ không khớp")
@@ -224,7 +224,7 @@ def free_port():
 PORT = free_port()
 tmp = tempfile.mkdtemp(prefix="cg-test-")
 os.makedirs(os.path.join(tmp, ".devin"), exist_ok=True)
-os.makedirs(os.path.join(tmp, "my-course"), exist_ok=True)
+os.makedirs(os.path.join(tmp, "workspace"), exist_ok=True)
 # não giả — bridge sống, Acp dead ngay (chỉ test HTTP layer)
 json.dump({"id": "none", "cmd": "__no_such_brain__", "args": []},
           open(os.path.join(tmp, "brain.json"), "w"))

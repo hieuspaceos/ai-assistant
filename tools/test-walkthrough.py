@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""test-walkthrough.py — kiểm mọi walkthrough.json trong my-course/.
+"""test-walkthrough.py — kiểm mọi walkthrough.json trong workspace/.
 
 Runner portal là renderer câm nên file hỏng = màn hướng dẫn hỏng ngay
 giữa chừng học viên. Generator (/tao-cong-cu) chạy file này SAU KHI
 viết walkthrough.json và trước khi báo xong; CI cũng chạy qua suite.
 
-Cách chạy:  python3 tools/test-walkthrough.py [đường-dẫn-my-course]
-Mặc định:   ./my-course
+Cách chạy:  python3 tools/test-walkthrough.py [đường-dẫn-workspace]
+Mặc định:   ./workspace
 
 Kiểm:
 - JSON parse được, có title + steps là mảng không rỗng
@@ -140,7 +140,7 @@ def check_file(path, errs):
 
 
 def main():
-    root = (sys.argv[1] if len(sys.argv) > 1 else "./my-course")
+    root = (sys.argv[1] if len(sys.argv) > 1 else "./workspace")
     errs, files = [], []
     if os.path.isdir(root):
         for dp, _, fns in os.walk(root):

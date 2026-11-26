@@ -42,9 +42,9 @@ body{display:flex;flex-direction:column}
 <script src="bridge-token.js"></script>
 <script>
 const qs = new URLSearchParams(location.search);
-// chỉ cho phép xem file cùng origin trong my-course/ (chặn mở URL lạ)
+// chỉ cho phép xem file cùng origin trong workspace/ (chặn mở URL lạ)
 let SRC = qs.get('src') || '';
-if (!/^\/(my-course|intro)\/[\w.\-\/]+\.html?$/i.test(SRC)
+if (!/^\/(workspace|intro)\/[\w.\-\/]+\.html?$/i.test(SRC)
     || SRC.split('/').includes('..')) SRC = '';
 const BRIDGE = 'http://localhost:7682';
 const frame = document.getElementById('frame');
@@ -53,7 +53,7 @@ const hint = document.getElementById('hint');
 let editing = false, dirty = false;
 let undoStack = [];        // [{idx, html}] — snapshot section trước mỗi lần sửa
 let origBody = null;       // body.innerHTML lúc vào chế độ sửa → nút "Về bản gốc"
-// Trang my-course giờ chịu CSP "sandbox" → opaque origin → KHÔNG đọc được
+// Trang workspace giờ chịu CSP "sandbox" → opaque origin → KHÔNG đọc được
 // DOM iframe nữa (đúng ý: script độc trong trang cũng không đọc được gì
 // của portal). Chế độ SỬA nạp trang qua srcdoc — srcdoc cùng origin với
 // clone-view nên sửa được, nhưng phải LỌC <script> ra trước, nếu không
@@ -182,7 +182,7 @@ if (SRC) {
   fetch(SRC).then(r => { if (!r.ok) throw 0; return r.text(); })
     .then(h => { origHtml = h; origSrcdoc = prepareEditable(h); })
     .catch(() => {});
-} else hint.textContent = 'Mở kèm ?src=/my-course/ten-file.html';
+} else hint.textContent = 'Mở kèm ?src=/workspace/ten-file.html';
 
 function toast(t) {
   const el = document.getElementById('toast');
