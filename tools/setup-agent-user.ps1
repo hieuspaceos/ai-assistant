@@ -1,4 +1,4 @@
-# setup-agent-user.ps1 — Windows: tao user han che "troly-agent" + cap
+﻿# setup-agent-user.ps1 — Windows: tao user han che "troly-agent" + cap
 # NTFS ACL + luu credential DPAPI cho chat-bridge.ps1 spawn nao duoi
 # user do (CreateProcessWithLogonW). Chay MOT LAN, can admin.
 #
@@ -95,10 +95,25 @@ function Deny-Full($path) {
 }
 
 Write-Host "Cap ACL project:"
+# .devin\skills phai ton tai TRUOC khi re-seal — deny-W ke thua tren
+# .devin khien agent khong tu tao duoc dir nay neu chua co.
+New-Item -ItemType Directory -Force (Join-Path $Root ".devin\skills") | Out-Null
 Grant-Item $Root "RX"                                   # doc toan cay
 Grant-Item (Join-Path $Root "my-course") "M"            # ghi bai hoc, files
 Grant-Item (Join-Path $Root ".devin\skills") "M"        # agent tu viet skill
 Grant-Item (Join-Path $Root ".logs") "M"                # log
+
+# RE-SEAL (audit-5 F6b): install.ps1 grant "BUILTIN\Users:M" tren $Dest
+# cho user thuong chay app — troly-agent cung thuoc Users nen duoc M
+# toan cay neu khong khoa lai (.devin\exec-allowlist.json = tu duyet
+# exec; update-stage+update-pending = RCE quyen chu; start.bat…).
+# Deny W ke thua toan cay (file state tao SAU NAY cung bi chan), roi
+# go deny trong dung 3 dir agent duoc ghi. /remove:d PHAI chay truoc
+# Deny-Write le ben duoi vi no go ca deny san co trong my-course.
+icacls $Root /deny "${AgentUser}:(OI)(CI)W" /Q | Out-Null
+foreach ($d in @("my-course", ".devin\skills", ".logs")) {
+    icacls (Join-Path $Root $d) /remove:d "${AgentUser}" /T /Q | Out-Null
+}
 
 # File dieu khien + ma nguon bridge: doc duoc, KHONG ghi.
 foreach ($p in @(
@@ -109,6 +124,7 @@ foreach ($p in @(
     (Join-Path $Root "my-course\connections.json"),
     (Join-Path $Root "my-course\config.json"),
     (Join-Path $Root "my-course\bots.json"),
+    (Join-Path $Root "my-course\manifest.json"),
     (Join-Path $Root "my-course\bot.md"))) { Deny-Write $p }
 
 # bridge.token: nao DOC duoc (can de goi bridge) nhung khong GHI —
@@ -116,9 +132,15 @@ foreach ($p in @(
 Deny-Write (Join-Path $Root ".devin\bridge.token")
 
 # Secrets: khoa han — agent doc duoc la lo het credential ra ngoai.
+# machine.key/fleet.json (beacon_secret ca org)/license.json cung vay
+# (audit-5 F6) — agent chi can bridge.token de goi bridge.
 foreach ($fp in @($CredFp,
                  (Join-Path $Root ".devin\secrets.local.json"),
-                 (Join-Path $Root ".devin\mcp_config.local.json"))) {
+                 (Join-Path $Root ".devin\mcp_config.local.json"),
+                 (Join-Path $Root ".devin\machine.key"),
+                 (Join-Path $Root ".devin\fleet.json"),
+                 (Join-Path $Root ".devin\license.json"),
+                 (Join-Path $Root ".devin\env-allowlist.json"))) {
     Deny-Full $fp
 }
 
@@ -165,12 +187,61 @@ if (Test-Path $BrainFp) {
 }
 
 # --- permissions.json: grant theo access ---
+# Enforcement-point recheck (audit-5 F11, parity path_sensitive/_grant_ok
+# tren macOS): drive-root / home / Windows / Program* = "mo toan may";
+# .ssh, browser profile, DPAPI… = credential store. So HAI chieu nhu
+# path_sensitive: path trong sensitive HOAC path chua sensitive (grant
+# C:\Users doc het profile moi user). Pack permissions_template hay
+# file sua tay khong duoc bien thanh ACL cho agent.
 Write-Host "Cap ACL permissions.json:"
 if (Test-Path $PermFp) {
     $perm = Get-Content $PermFp -Raw -Encoding UTF8 | ConvertFrom-Json
+    # Hai nhom theo dung path_guard: ROOTS = chan exact-match (~,
+    # WINDIR…) — con cua chung van grant duoc nhu macOS; DIRS = so
+    # hai chieu (trong sensitive / chua sensitive) nhu _SENSITIVE_DIRS.
+    $skipExact = @($env:USERPROFILE, $env:WINDIR, $env:ProgramFiles,
+                   ${env:ProgramFiles(x86)}, $env:ProgramData) |
+                 Where-Object { $_ } |
+                 ForEach-Object { $_.TrimEnd('\') }
+    $la = $env:LOCALAPPDATA; $ra = $env:APPDATA
+    $skipDirs = @((Join-Path $env:USERPROFILE ".ssh"),
+                  (Join-Path $env:USERPROFILE ".aws"),
+                  (Join-Path $env:USERPROFILE ".kube"),
+                  (Join-Path $env:USERPROFILE ".docker"),
+                  (Join-Path $env:USERPROFILE ".azure"),
+                  $(if ($la) { Join-Path $la "Google\Chrome" }),
+                  $(if ($la) { Join-Path $la "Microsoft\Edge" }),
+                  $(if ($la) { Join-Path $la "BraveSoftware" }),
+                  $(if ($ra) { Join-Path $ra "Mozilla" }),
+                  $(if ($ra) { Join-Path $ra "1Password" }),
+                  $(if ($ra) { Join-Path $ra "Microsoft\Credentials" }),
+                  $(if ($ra) { Join-Path $ra "Microsoft\Protect" }),
+                  $(if ($ra) { Join-Path $ra "Microsoft\Crypto" })) |
+                 Where-Object { $_ } |
+                 ForEach-Object { $_.TrimEnd('\') }
     foreach ($f in $perm.folders) {
         $p = [Environment]::ExpandEnvironmentVariables(
                  ($f.path -replace "^~", $env:USERPROFILE))
+        if (-not [IO.Path]::IsPathRooted($p)) {
+            Write-Host "  bo qua (khong tuyet doi): $p"; continue
+        }
+        # ProviderPath: .Path cua UNC mang prefix FileSystem:: lam so
+        # khop StartsWith sai; ProviderPath tra path FS tho.
+        $rp = try { (Resolve-Path $p -ErrorAction Stop).ProviderPath.
+                    TrimEnd('\') } catch { $null }
+        if (-not $rp) { Write-Host "  bo qua (khong ton tai): $p"; continue }
+        $bad = ($rp -match "^[A-Za-z]:$") -or ($skipExact -contains $rp)
+        foreach ($s in $skipDirs) {
+            if ($rp -ieq $s `
+                -or $rp.StartsWith($s + '\', 'OrdinalIgnoreCase') `
+                -or $s.StartsWith($rp + '\', 'OrdinalIgnoreCase')) {
+                $bad = $true; break
+            }
+        }
+        if ($bad) {
+            Write-Host "  bo qua (nhay cam): $p" -ForegroundColor Yellow
+            continue
+        }
         Grant-Item $p ($(if ($f.access -eq "read-write") { "M" } else { "RX" }))
     }
 } else {

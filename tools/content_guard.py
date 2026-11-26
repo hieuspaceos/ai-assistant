@@ -210,15 +210,16 @@ def load_allowlist(devin_dir):
         return []
 
 def exec_allowed(cmd, patterns):
-    """Glob match — pattern như 'ls *', 'git status', 'cat my-course/**'.
+    """Glob match — pattern như 'ls *', 'ls -la', 'cat my-course/**'.
     Trả pattern khớp đầu tiên hoặc None. Lọc qua cùng lint denylist của
     apply-pack (phòng file allowlist bị sửa tay chứa pattern độc)."""
     import fnmatch
+    from cmd_deny import pattern_cmd_denied, first_token
     DENY = ("|", ">", "<", ";", "&&", "`", "$(")
     c = " ".join(str(cmd).split())
     # lệnh chứa metachar shell (chain/redirect/subst) KHÔNG được
-    # auto-duyệt dù khớp glob — `git status *` cũng khớp
-    # `git status && rm -rf ~` vì * nuốt đuôi. Lệnh phức hợp → cứ gate.
+    # auto-duyệt dù khớp glob — `ls *` cũng khớp
+    # `ls ~ && rm -rf ~` vì * nuốt đuôi. Lệnh phức hợp → cứ gate.
     if any(d in c for d in DENY):
         return None
     for p in patterns:
@@ -229,6 +230,12 @@ def exec_allowed(cmd, patterns):
         # gate chứ không allowlist nữa. Chỉ nhận pattern bắt đầu bằng
         # tên lệnh cụ thể (ký tự đầu phải là chữ/số/./_/-).
         if not pl[0].isalnum() and pl[0] not in "._-":
+            continue
+        # first-token là interpreter/exec-helper ("pwsh *", "git *",
+        # kể cả glob-evasion "git*"/"g[i]t *") — lint pack đã chặn
+        # nhưng file sửa tay/qua kênh khác cũng phải chặn ở enforcement
+        # (F9 — pattern này tắt gate, không phải allowlist).
+        if pattern_cmd_denied(first_token(pl)):
             continue
         if fnmatch.fnmatchcase(c, pl) or fnmatch.fnmatchcase(c, pl + " *"):
             return pl

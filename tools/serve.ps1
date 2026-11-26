@@ -1,4 +1,4 @@
-# serve.ps1 — server web nhỏ cho portal, chạy bằng PowerShell thuần (không cần cài gì)
+﻿# serve.ps1 — server web nhỏ cho portal, chạy bằng PowerShell thuần (không cần cài gì)
 # Phục vụ folder ai-assistant/ tại http://localhost:8080
 # Chặn dotfiles/folder ẩn (.devin, .git...) — secrets nằm đó, không được lộ ra web.
 #
@@ -27,7 +27,9 @@ $mime = @{
 # sandbox -> OPAQUE ORIGIN (khong doc duoc localStorage/iframe portal/
 # service worker; KHONG them allow-same-origin) + connect-src 'none' chan
 # moi fetch/XHR/WS. KHONG ap cho /web/ - portal phai goi bridge duoc.
-$csp = "sandbox allow-scripts allow-top-navigation allow-popups allow-modals; " +
+# Top-nav chi khi CO user activation (audit-5 F14).
+$csp = "sandbox allow-scripts allow-top-navigation-by-user-activation " +
+       "allow-popups allow-modals; " +
        "default-src 'self'; script-src 'self' 'unsafe-inline' https:; " +
        "style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https:; " +
        "font-src 'self' data: https:; media-src 'self' data:; " +

@@ -75,6 +75,14 @@ powershell -ExecutionPolicy Bypass -File deploy\install.ps1
 
 Script làm: copy → `C:\TroLyAI`, cài ttyd qua winget, hỏi tạo user
 sandbox, đặt license.json + fleet.json vào `.devin\`, shortcut Desktop.
+Script cũng `icacls` grant Modify cho `BUILTIN\Users` trên thư mục cài
+(ACL mặc định của `C:\` chỉ cho user thường quyền đọc — không grant thì
+app chạy non-elevated không ghi được `.devin\`, `.logs\`, `my-course\`);
+`setup-agent-user.ps1` chạy ngay sau đó seal lại quyền của user sandbox
+`troly-agent`. Máy đa-user có thể truyền `-ForUser` để chỉ định đúng chủ
+nhân. Re-install giữ nguyên file state trong `my-course\` (config,
+manifest, bots, permissions, connections, bot.md) — seed lessons vẫn
+được cập nhật.
 
 ### macOS
 

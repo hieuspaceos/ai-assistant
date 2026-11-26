@@ -107,7 +107,8 @@ $BrainPresets = @(
 )
 
 # Interpreter/exec helper không được làm "não" tự nhập — args của chúng
-# là code-exec trần (parity BRAIN_CMD_DENY trong chat-bridge.py).
+# là code-exec trần (parity BRAIN_CMD_DENY trong cmd_deny.py — file này
+# là bản mirror tay, cập nhật khi cmd_deny đổi).
 $BrainCmdDeny = @("python3","python","py","sh","bash","zsh","fish","dash",
     "osascript","node","deno","bun","ruby","perl","php","pwsh",
     "powershell","cmd","env","nice","xargs","find","make","rake",
@@ -124,7 +125,29 @@ $BrainCmdDeny = @("python3","python","py","sh","bash","zsh","fish","dash",
     "git","awk","gawk","nawk","mawk","tar","vim","vi","nvim",
     "nano","emacs","less","more","most","man","nohup","setsid",
     "timeout","flock","watch","parallel","shortcuts","xcrun",
-    "docker","podman","su","doas")
+    "docker","podman","su","doas",
+    # batch audit-3/audit-5 (trước sót — mirror cmd_deny.py):
+    "brew","gh","java","jshell","dotnet","mono","lua","luajit",
+    "r","rscript","tclsh","groovy","scala","kotlin","xcodebuild",
+    "plutil","go","cargo","julia","ipython","pypy","micropython",
+    "gjs","qjs","nodemon","tsx","ts-node","bunx","uv","uvx","pipx",
+    "conda","poetry","pdm","jupyter","vitest","jest","mocha","clj",
+    "clojure","lein","stack","cabal","mise","asdf")
+# Họ interpreter hậu tố VERSION (python3.12, perl5.40…) — exact-match
+# không bắt được; mirror _BRAIN_CMD_DENY_RE (cmd_deny.py).
+$BrainCmdDenyRe = [regex]'(?x)^(?:
+    (i?python|pypy|jython|micropython|pyspark)[\d.]*w? | py |
+    perl[\d.]* | ruby[\d.]* | php[\d.]* | pip[\d.]* | node(js)?[\d.]* |
+    (ba|z|fi|da|k|c|tc)?sh\d* |
+    lua(jit)?[\d.]* | tclsh[\d.]* | r(script)?[\d.]* |
+    java\w* | jshell | groovy\w* | scala | kotlin\w* | dotnet | mono |
+    brew | gh | go | cargo | xcodebuild | plutil | shortcuts |
+    bundle | irb | pry | julia | gjs | qjs | runghc | ghci
+)$'
+function Test-BrainDenied([string]$name) {
+    $n = $name.ToLower()
+    return ($BrainCmdDeny -contains $n) -or ($n -match $BrainCmdDenyRe)
+}
 
 function Get-Brain {
     # brain.json → não đang dùng; id khớp preset thì lấy preset làm nền;
@@ -140,13 +163,13 @@ function Get-Brain {
     # deny-list cũng rơi về devin — trước đây chỉ check ở POST /api/brain,
     # còn brain.json sửa tay ("/bin/evil", "powershell") vẫn spawn thẳng.
     if ($b -and $b.cmd -and ([string]$b.cmd -match '^[A-Za-z0-9_.-]+$') -and
-        ($fromPreset -or -not ($BrainCmdDeny -contains ([string]$b.cmd).ToLower()))) {
+        ($fromPreset -or -not (Test-BrainDenied ([string]$b.cmd)))) {
         if (-not $b.PSObject.Properties["args"]) { $b | Add-Member -NotePropertyName args -NotePropertyValue @() }
         # terminal cũng qua deny-list: file sửa tay terminal:"powershell"
         # → term-gate.cmd exec shell trần trong ttyd (parity load_brain py).
         if (-not $b.PSObject.Properties["terminal"] -or -not $b.terminal -or
             ([string]$b.terminal -notmatch '^[A-Za-z0-9_.-]+$') -or
-            ($BrainCmdDeny -contains ([string]$b.terminal).ToLower())) {
+            (Test-BrainDenied ([string]$b.terminal))) {
             $b | Add-Member -NotePropertyName terminal -NotePropertyValue $b.cmd -Force
         }
         return $b
@@ -1154,7 +1177,7 @@ try {
                     }
                     # Interpreter/exec helper không được làm "não" tự nhập —
                     # args của chúng là code-exec trần (python -c, find -exec)
-                    if ($BrainCmdDeny -contains $cmd.ToLower()) {
+                    if (Test-BrainDenied $cmd) {
                         Send-Json $ctx @{ err = "lệnh này chạy code tuỳ ý — không dùng làm não được" } 400
                         continue
                     }
@@ -1171,7 +1194,7 @@ try {
                     $term = if ($body.terminal) { [string]$body.terminal } else { $cmd }
                     if ($term.Length -gt 60) { $term = $term.Substring(0, 60) }
                     if ($term -notmatch '^[A-Za-z0-9_.-]+$') { $term = $cmd }
-                    if ($BrainCmdDeny -contains $term.ToLower()) {
+                    if (Test-BrainDenied $term) {
                         Send-Json $ctx @{ err = "lệnh terminal này chạy code tuỳ ý — không dùng được" } 400
                         continue
                     }
@@ -1303,12 +1326,31 @@ try {
                 $course = (Resolve-Path (Join-Path $WorkDir "my-course")).Path
                 $target = [IO.Path]::GetFullPath((Join-Path $WorkDir $rel))
                 if (-not $rel.StartsWith("my-course/") -or $rel.Contains("..") -or
+                    $rel.Contains("\") -or
                     -not $target.StartsWith($course + [IO.Path]::DirectorySeparatorChar) -or
                     $target -notmatch '\.html?$') {
                     Send-Json $ctx @{ err = "chỉ lưu file .html trong my-course/" } 400
                 } elseif (-not $html) {
                     Send-Json $ctx @{ err = "trang trống" } 400
                 } else {
+                    # GetFullPath chỉ lexical — junction/symlink dưới
+                    # my-course\ lách containment (audit-5 F3; bản .py
+                    # dùng realpath nên không lỗi). Check từng segment
+                    # kể cả leaf: ReparsePoint → từ chối. Segment chưa
+                    # tồn tại (subdir mới) → Get-Item trả $null → bỏ qua.
+                    $rp = $course; $reparse = $false
+                    $segs = $rel -split '/'
+                    foreach ($seg in $segs[1..($segs.Count-1)]) {
+                        $rp = Join-Path $rp $seg
+                        $it = Get-Item $rp -Force -ErrorAction SilentlyContinue
+                        if ($it -and ($it.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+                            $reparse = $true; break
+                        }
+                    }
+                    if ($reparse) {
+                        Send-Json $ctx @{ err = "không lưu qua link/junction" } 400
+                        continue
+                    }
                     [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($target)) | Out-Null
                     # backup trước khi ghi đè — học viên sửa hỏng còn về được
                     if (Test-Path $target) { Copy-Item $target "$target.bak" -Force }

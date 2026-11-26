@@ -367,14 +367,16 @@ Accepted-risk (ghi nhận, không vá đợt này):
   `redirect_request` khi host đổi.
 - **`my-course/bot.md` deny-write**: deferred — skill phỏng vấn ghi
   trực tiếp nên cần endpoint ghi-bot qua bridge trước khi deny được.
-- **`/api/save-page` + CSP `allow-top-navigation`**: trang clone trồng
-  được top-navigate ra site ngoài — cân nhắc
-  `allow-top-navigation-by-user-activation` nếu browser còn hỗ trợ.
+- ~~`/api/save-page` + CSP `allow-top-navigation`~~ — **đã vá đợt 5
+  (F14)**: đổi sang `allow-top-navigation-by-user-activation` (Chrome
+  58+/Safari 11.1+) — link vẫn top-nav khi học viên bấm, script tự
+  điều hướng bị chặn.
 - **ps1 divergence**: các fix đợt này là `.py`-only — Windows accepted
   mở hơn (không Seatbelt, không native dialog nên CAO-1/CAO-2 vốn
-  không áp); riêng `$BrainCmdDeny` ps1 vẫn exact-match cũ →
-  `python3.12` lọt được trên Windows (impact thấp — cũng qua consent
-  gate, và Windows không có sandbox kernel-level để thoát).
+  không áp). ~~`$BrainCmdDeny` ps1 vẫn exact-match cũ → `python3.12`
+  lọt~~ — đã vá đợt 5: bổ sung full list + `-match` regex version ở
+  cả 4 chỗ nhân bản (chat-bridge.ps1, read-brain.ps1, term-gate.ps1,
+  term-gate.sh — case globs).
 
 ### Audit lại 2 vòng — regression do chính đợt vá gây ra
 
@@ -553,3 +555,76 @@ Accepted-risk còn lại:
   `scrollableEls()` trực tiếp → sau re-render index trỏ nhầm vùng.
   Sửa: thử `byRef('sN')` trước (giữ element identity + `isConnected`),
   index chỉ là phương án cuối.
+
+## Audit đợt 5 — web/clone/save-page + update/pack + ACL + installers
+
+16 phát hiện F1–F16, đã vá toàn bộ; chi tiết trong
+`plans/261126-1411-audit-5-fix/`. Điểm đáng nhớ:
+
+- **F1/F7/F13 — `install.ps1` cài `C:\TroLyAI` không writable cho user
+  thường** (admin-only ACL mặc định → bridge chết vì không ghi được
+  `bridge.token`): vá `icacls $Dest /grant "BUILTIN\Users:(OI)(CI)M"`,
+  kèm **re-seal trong `setup-agent-user.ps1`** (deny-W `(OI)(CI)` trên
+  root cho `troly-agent` + `/remove:d` trong 3 dir writable) vì
+  `troly-agent ∈ BUILTIN\Users` — nếu không seal lại, agent được Modify
+  toàn cây → sửa `exec-allowlist.json`/`update-stage`/`start.bat` =
+  escape. Đây là regression suýt xảy ra do chính vá đề xuất — bài học
+  "grant mới phải soi lại deny cũ".
+- **F3 — save-page trên `.ps1` chỉ lexical `GetFullPath`** → junction
+  dưới `my-course/` qua mặt containment, bridge ghi `.html` bất cứ đâu
+  với quyền owner. Vá: từ chối mọi segment là reparse point trên đường
+  vào file (fail-closed hơn `.py`, vì NTFS junction tạo không cần
+  privilege).
+- **F4/F12 — clone-view**: srcdoc sót `<object data="javascript:…">`/
+  `embed`/applet → trung hoà thêm attribute `data` + ép sandbox cho
+  object/embed/applet như iframe; regex `?src=` siết lại chặn `..`.
+- **F2/F5/F8/F9/F10/F16 — `apply-pack.py`**: lint `open_url` bắt buộc
+  `http(s)`; chặn drive-absolute (`C:/x`, `C:x`) + `%ENV%` trong mọi
+  path pack + `permissions_template` (`path_sensitive`/`rw_grant_ok`
+  qua `path_guard`); `fetch_pack` không follow redirect; `update.py`
+  chỉ gắn `machine.key` cho request cùng origin manifest. **F9 quan
+  trọng nhất**: trích `BRAIN_CMD_DENY` + regex ra `tools/cmd_deny.py`
+  dùng chung — lint pack so **first-token** thay substring (tên ngắn
+  `r`/`at`/`go`/`env` khớp mọi pattern), và `exec_allowed` ở
+  `content_guard` cũng loại pattern interpreter → file sửa tay cũng
+  không auto-duyệt `pwsh *`. **Audit lại lần 3 bắt thêm**: so thẳng
+  first-token bị lách bằng glob — `git*`/`g[i]t *`/`g[!x]t *`/`"git" *`
+  vẫn khớp `git -c …` lúc exec mà deny-check không thấy →
+  `pattern_cmd_denied` 3 lớp (strip glob-meta, strip digit cho họ
+  version, reverse-fnmatch tên deny). Cùng đợt: 4 bản nhân bản deny
+  list trong `chat-bridge.ps1`/`read-brain.ps1`/`term-gate.ps1`/
+  `term-gate.sh` sót batch audit-3 + họ version (`python3.12`, `uv`,
+  `tsx`…) → bổ sung parity (mirror + regex/glob version) — trước đó
+  `BRAIN_TERM="python3.12"` mở được shell trần trong ttyd.
+- **F6/F6b/F11 — `setup-agent-user.ps1`**: Deny-Full thêm
+  `machine.key`/`fleet.json`/`license.json`/`env-allowlist.json`
+  (agent trước đọc được `beacon_secret` của cả org); `manifest.json`
+  vào Deny-Write; grant-loop theo `permissions.json` recheck parity
+  `path_sensitive` — hai nhóm: exact-match roots (`~`, `WINDIR`,
+  `ProgramData`…) + **two-way** dirs (`.ssh`, browser profile,
+  `Microsoft\Credentials`/`Protect`/`Crypto`): path trong sensitive
+  HOẶC chứa sensitive (grant `C:\Users` trước vẫn qua → đọc hết
+  profile mọi user — audit-lại phát hiện vá một chiều thiếu chiều
+  ngược).
+- **F14 — CSP**: `allow-top-navigation` →
+  `allow-top-navigation-by-user-activation` (cả `.py` lẫn `.ps1`;
+  Chrome 58+/Safari 11.1+ hỗ trợ).
+
+### Residual / quyết định chủ đích
+
+- **F15 — `devin_files` cho phép pack ghi `mcp_config.json`**: kênh
+  exec-từ-xa theo thiết kế (config-pack chính là cách cty provision
+  tool MCP cho não). Blast radius khoanh trong org với admin_key —
+  cùng biên tin cậy với "pack không ký" đã chấp nhận ở trên, không mở
+  rộng thêm.
+- **F10 note**: `permissions_template` bị lint cấm path sensitive,
+  nhưng enforcement cuối vẫn là ACL layer — macOS có `_grant_ok` khi
+  regen Seatbelt, Windows có skip-list trong `setup-agent-user.ps1`.
+  Lint phía pack là defense-in-depth, không phải rào chính.
+- **Vá `.ps1` chỉ verify được trên CI Windows** (`test-windows` +
+  `test-agent-spawn.ps1`); máy dev macOS không chạy được — chấp nhận
+  review + CI là chuẩn xác, cân nhắc thêm một step CI chạy
+  non-elevated để bắt lỗi lớp ACL.
+- Vá F1 chỉ ý nghĩa trên máy **đa-user** (admin cài, nhiều người dùng
+  chung máy); kịch bản một-máy-một-người vốn đã an toàn — `-ForUser`
+  của installer cho phép chỉ định chủ nhân thay vì grant `BUILTIN\Users`.

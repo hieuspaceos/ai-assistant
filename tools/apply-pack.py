@@ -28,7 +28,7 @@ Luật ghi:
 
   python3 tools/apply-pack.py [DATA_DIR] [--file pack.json]
 """
-import hashlib, json, os, shutil, subprocess, sys, time
+import hashlib, json, os, re, shutil, subprocess, sys, time
 import urllib.parse, urllib.request, zipfile   # noqa: F401 — zip unused
 import urllib.error                             # noqa: F401
 
@@ -38,6 +38,9 @@ ROOT = os.path.abspath(sys.argv[1] if len(sys.argv) > 1
 DEVIN = os.path.join(ROOT, ".devin")
 MYC = os.path.join(ROOT, "my-course")
 TOOLS = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, TOOLS)
+from path_guard import path_sensitive, rw_grant_ok   # noqa: E402
+from cmd_deny import pattern_cmd_denied, first_token   # noqa: E402
 FLEET_FP = os.path.join(DEVIN, "fleet.json")
 MKEY_FP = os.path.join(DEVIN, "machine.key")
 INBOX_FP = os.path.join(DEVIN, "fleet-inbox.json")
@@ -48,10 +51,31 @@ CONN_FP = os.path.join(MYC, "connections.json")
 BOTS_FP = os.path.join(MYC, "bots.json")
 
 # exec_allowlist lint — pack mang allowlist exec là quyền lớn; pattern
-# có mấy dấu này biến allowlist thành kênh chạy code tuỳ ý
+# có mấy dấu này biến allowlist thành kênh chạy code tuỳ ý. Substring
+# chỉ cho metachar/tool exfil — tên interpreter so qua cmd_deny.first_token
+# (tên ngắn r/at/go/env trong deny-set làm substring khớp mọi pattern).
 ALLOWLIST_DENY = ("|", ">", "<", ";", "&&", "`", "$(", "sudo", "rm ",
                   "curl", "wget", "certutil", "powershell", "bash",
                   "python", "node ", "sh ", "eval")
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Redirect → trả None → urlopen raise HTTPError. Pack chỉ nhận từ
+    đúng collector trong fleet.json; bị redirect là dấu hiệu DNS/proxy
+    bị chơi — parity chủ đích NoRedirect của update.py (F8)."""
+    def redirect_request(self, *a, **k):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
+
+
+def _bad_relpath(fn):
+    """Tên file tương đối trong pack — chặn absolute POSIX, `..`,
+    backslash, VÀ drive-absolute/drive-relative Windows (`C:/x`,
+    `C:x`) vì os.path.join trên Windows resolve chúng ra khỏi dir đích."""
+    return (fn.startswith("/") or ".." in fn.split("/")
+            or "\\" in fn or re.match(r"^[A-Za-z]:", fn))
 
 
 def _read(fp, default=""):
@@ -84,7 +108,7 @@ def fetch_pack(hint, base, key):
     # Cloudflare chặn UA "Python-urllib" (1010) — cần UA riêng
     req.add_header("User-Agent", "TroLyAI-Pack/1")
     req.add_header("X-Beacon-Key", key)
-    with urllib.request.urlopen(req, timeout=15) as r:
+    with _OPENER.open(req, timeout=15) as r:
         data = r.read()
     if hint.get("sha256") and \
             hashlib.sha256(data).hexdigest() != hint["sha256"]:
@@ -96,12 +120,21 @@ def lint(pack):
     if not isinstance(pack.get("pack_version"), int):
         raise ValueError("pack_version phải là số nguyên")
     for pat in pack.get("exec_allowlist") or []:
+        pl = str(pat).strip()
+        # first-token thuộc deny-set (pwsh/cmd/zsh/find/git/tar/docker…) —
+        # enforcement chỉ lọc metachar nên "pwsh *" qua là tắt gate (F9).
+        # pattern_cmd_denied so cả glob-evasion: "git*"/"g[i]t *" cũng
+        # khớp được "git -c …" khi exec nên phải coi là git (audit-lại-3).
+        # Check trước ALLOWLIST_DENY để lỗi nói đúng tên — "pwsh *" cũng
+        # khớp substring "sh " ở dưới nhưng nguyên nhân thật là pwsh.
+        if pl and pattern_cmd_denied(first_token(pl)):
+            raise ValueError(
+                f"exec_allowlist pattern là interpreter/exec: {pat}")
         low = str(pat).lower()
         if any(d in low for d in ALLOWLIST_DENY):
             raise ValueError(f"exec_allowlist pattern nguy hiểm: {pat}")
         # pattern phải bắt đầu bằng tên lệnh — `*`/`?` trần khớp mọi
         # lệnh = tắt consent gate chứ không allowlist
-        pl = str(pat).strip()
         if pl and not pl[0].isalnum() and pl[0] not in "._-":
             raise ValueError(
                 f"exec_allowlist pattern không bắt đầu tên lệnh: {pat}")
@@ -109,12 +142,36 @@ def lint(pack):
         if "/" in sid or "\\" in sid or sid in (".", ".."):
             raise ValueError(f"skill id lạ: {sid}")
         for fn in files:
-            if fn.startswith("/") or ".." in fn.split("/") \
-                    or "\\" in fn:
+            if _bad_relpath(fn):
                 raise ValueError(f"skill {sid}: path lạ {fn}")
     for wf in (pack.get("workflows") or {}):
-        if wf.startswith("/") or ".." in wf or "\\" in wf:
+        if _bad_relpath(wf):
             raise ValueError(f"workflow path lạ: {wf}")
+    # connections merge ghi thẳng vào file, KHÔNG qua _h_connections —
+    # lưới open_url phải lặp lại ở đây: javascript:/data: trong nút
+    # "Mở trang" của portal chạy script ngay trong origin portal (F2)
+    for c in (pack.get("connections") or []):
+        if not isinstance(c, dict):
+            raise ValueError("connections entry không phải object")
+        ou = str(c.get("open_url") or "")
+        if ou and not re.match(r"^https?://", ou, re.I):
+            raise ValueError(
+                f"connections[{c.get('id')}]: open_url chỉ nhận http(s)")
+    # permissions_template → permissions.json trần ở máy mới. Lint
+    # sensitive ở đây vì Windows grant ACL không re-check như
+    # gen-sandbox._grant_ok (F10). `%` env-var (%USERPROFILE%) expand
+    # khác nền → chặn luôn (pack legit dùng ~ hoặc absolute).
+    for f in (pack.get("permissions_template") or []):
+        if not isinstance(f, dict):
+            raise ValueError("permissions_template entry không phải object")
+        p = str(f.get("path") or "")
+        if not p or "%" in p:
+            raise ValueError(f"permissions_template path lạ: {p!r}")
+        if path_sensitive(p):
+            raise ValueError(f"permissions_template nhạy cảm: {p}")
+        if str(f.get("access")) == "read-write" \
+                and not rw_grant_ok(p, ROOT):
+            raise ValueError(f"permissions_template rw vào code: {p}")
     # devin_files — whitelist cứng: pack được đặt config vào .devin/ cho
     # não + probe (mcp), KHÔNG được đụng state máy (token, key, license,
     # allowlist exec — cái đó đi kênh exec_allowlist/new-machine riêng)
@@ -126,7 +183,8 @@ def lint(pack):
         if fn not in DEVIN_FILES_OK:
             raise ValueError(f"devin_files tên không được phép: {fn}")
     for fn in (pack.get("mycourse_files") or {}):
-        if "/" in fn or "\\" in fn or ".." in fn or fn.startswith("."):
+        if "/" in fn or "\\" in fn or ".." in fn or fn.startswith(".") \
+                or re.match(r"^[A-Za-z]:", fn):
             raise ValueError(f"mycourse_files path lạ: {fn}")
         if not fn.endswith((".md", ".json", ".jsonl", ".txt")):
             raise ValueError(f"mycourse_files loại không cho: {fn}")

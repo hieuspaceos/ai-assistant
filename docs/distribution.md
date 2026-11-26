@@ -62,7 +62,7 @@ cũ), admin đẩy qua `POST /api/packs`:
  "workflows": {"<file>.json": {...}},
  "rules_local_md": "…",
  "permissions_template": [{"path": "…", "access": "read-write"}],
- "exec_allowlist": ["git *"]}
+ "exec_allowlist": ["ls *"]}
 ```
 
 Máy áp qua `apply-pack.py` (beacon gọi khi inbox có `pack`):
@@ -76,8 +76,18 @@ Máy áp qua `apply-pack.py` (beacon gọi khi inbox có `pack`):
 - `permissions_template` + `exec_allowlist` → **chỉ máy chưa onboard**
   (chưa có learner_name) — pack không được đè consent máy đang chạy.
 - Lint `exec_allowlist`: pattern chứa `|`, `;`, `>`, `sudo`, `rm `,
-  `curl`… → reject cả pack (allowlist độc = kênh chạy code tuỳ ý).
+  `curl`… hoặc first-token là interpreter/exec-helper (`pwsh *`,
+  `git *`, kể cả dạng glob `git*`/`g[i]t *`) → reject cả pack
+  (allowlist độc = kênh chạy code tuỳ ý). `exec_allowed` ở
+  `content_guard` cũng loại các pattern này lúc chạy — file sửa tay
+  không auto-duyệt được.
+- Lint thêm (audit-5): `connections[].open_url` bắt buộc `http(s)`;
+  tên file trong skills/workflows/mycourse_files chặn drive-absolute
+  Windows (`C:/x`, `C:x`); `permissions_template` chặn `%ENV%`,
+  path nhạy cảm (`path_sensitive`) và `read-write` vào vùng code
+  (`rw_grant_ok`). `devin_files` whitelist cứng `mcp_config(.local).json`.
 - org trong pack ≠ org máy → abort. Tải pack org khác → collector 403.
+  Pack fetch không follow redirect.
 
 ## Thao tác vendor
 

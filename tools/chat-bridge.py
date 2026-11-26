@@ -31,6 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from content_guard import (scrub_env, load_env_extra, load_allowlist,
                            exec_allowed)   # noqa: E402
 from path_guard import path_sensitive, rw_grant_ok   # noqa: E402
+from cmd_deny import brain_cmd_denied as _brain_cmd_denied   # noqa: E402
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 7682
 CWD = sys.argv[2] if len(sys.argv) > 2 else "."
@@ -155,69 +156,9 @@ BRAIN_PRESETS = [
                           "en": "open the Goose site and follow its install guide"}}},
 ]
 
-# Interpreter/exec helper không được làm "não" tự nhập — args của chúng
-# là code-exec trần (python3 -c, find -exec, npm run). Preset npx đã cover
-# adapter hợp lệ nên deny npx/npm ở custom cũng không mất gì.
-BRAIN_CMD_DENY = {
-    "python3", "python", "py", "sh", "bash", "zsh", "fish", "dash",
-    "osascript", "node", "deno", "bun", "ruby", "perl", "php", "pwsh",
-    "powershell", "cmd", "env", "nice", "xargs", "find", "make", "rake",
-    "npm", "npx", "yarn", "pnpm", "gem", "pip", "pip3", "curl", "wget",
-    "nc", "ncat", "socat", "busybox", "open", "rundll32", "regsvr32",
-    "mshta", "wscript", "cscript", "wmic", "certutil", "bitsadmin",
-    "eval", "exec", "launchctl",
-    # đọc credential/clipboard/màn hình
-    "security", "pbcopy", "pbpaste", "screencapture",
-    # exfil kênh mạng + shell bọc (pty → chạy lệnh tự do)
-    "ssh", "scp", "sftp", "rsync", "ftp", "telnet", "rlogin", "rsh",
-    "tmux", "screen", "script", "expect",
-    # debug/inject + runtime + cơ chế chạy ngoài/lách sandbox
-    "lldb", "gdb", "dtrace", "automator", "swift", "sudo",
-    "crontab", "at", "atq", "atrm", "sandbox-exec",
-    # DB client — lệnh "não" không bao giờ là shell database
-    "sqlite3", "mysql", "psql", "redis-cli", "mongosh", "mongo",
-    "qlmanage", "spctl", "codesign",
-    # code-exec qua args/config: git -c core.pager=sh, awk 'BEGIN{system()}',
-    # tar --checkpoint-action, editor/pager shell-escape (vim :!, less !cmd),
-    # wrapper bọc lệnh tuỳ ý, container mount host
-    "git", "awk", "gawk", "nawk", "mawk", "tar", "vim", "vi", "nvim",
-    "nano", "emacs", "less", "more", "most", "man", "nohup", "setsid",
-    "timeout", "flock", "watch", "parallel", "shortcuts", "xcrun",
-    "docker", "podman", "su", "doas",
-    # exec-qua-args hoặc build+run còn sót (audit-3 M3): brew ruby -e,
-    # gh extension exec, jshell/java, dotnet/mono script, R -e, go run…
-    "brew", "gh", "java", "jshell", "dotnet", "mono", "lua", "luajit",
-    "r", "rscript", "tclsh", "groovy", "scala", "kotlin", "xcodebuild",
-    "plutil", "go", "cargo", "julia", "ipython", "pypy", "micropython",
-    "gjs", "qjs",
-    # runner đời mới còn sót (audit-lại): nodemon/tsx/ts-node chạy JS,
-    # uv/uvx/pipx/conda/poetry bọc python, jupyter/vitest/jest/mocha exec
-    # file test/notebook, clj/lein/stack/cabal chạy Clojure/Haskell —
-    # tất cả đều là exec-via-args y hệt python3.12 bị chặn.
-    "nodemon", "tsx", "ts-node", "bunx", "uv", "uvx", "pipx", "conda",
-    "poetry", "pdm", "jupyter", "vitest", "jest", "mocha", "clj",
-    "clojure", "lein", "stack", "cabal", "mise", "asdf",
-}
-
-# Interpreter/compiler có hậu tố VERSION (python3.12, perl5.40, php8.2,
-# pip3.11, ruby3.3) hay clone (ipython, pypy, jython, micropython, luajit)
-# lọt exact-match — deny thêm bằng regex. Denylist không bao giờ đầy đủ:
-# custom brain vẫn = chạy lệnh tuỳ ý sau consent, list chỉ chặn tên
-# hiển nhiên — text card phải nói đúng bản chất đó.
-_BRAIN_CMD_DENY_RE = re.compile(r"""^(?:
-    (i?python|pypy|jython|micropython|pyspark)[\d.]*w? | py |
-    perl[\d.]* | ruby[\d.]* | php[\d.]* | pip[\d.]* | node(js)?[\d.]* |
-    (ba|z|fi|da|k|c|tc)?sh\d* |
-    lua(jit)?[\d.]* | tclsh[\d.]* | r(script)?[\d.]* |
-    java\w* | jshell | groovy\w* | scala | kotlin\w* | dotnet | mono |
-    brew | gh | go | cargo | xcodebuild | plutil | shortcuts |
-    bundle | irb | pry | julia | gjs | qjs | runghc | ghci
-)$""", re.X | re.I)
-
-def _brain_cmd_denied(name):
-    """Deny exact-set HOẶC regex (interpreter hậu tố version lọt
-    exact-match — audit-3 M3)."""
-    return name in BRAIN_CMD_DENY or bool(_BRAIN_CMD_DENY_RE.match(name))
+# Interpreter/exec-helper deny-list — trích sang cmd_deny.py dùng chung
+# với apply-pack lint + content_guard.exec_allowed (audit-5 F9: nhân
+# bản list = drift, drift ở đây là kênh code-exec).
 
 def load_brain():
     """brain.json → dict não đang dùng. id khớp preset thì lấy preset làm

@@ -44,7 +44,8 @@ body{display:flex;flex-direction:column}
 const qs = new URLSearchParams(location.search);
 // chỉ cho phép xem file cùng origin trong my-course/ (chặn mở URL lạ)
 let SRC = qs.get('src') || '';
-if (!/^\/(my-course|intro)\/[\w.\-\/]+\.html?$/i.test(SRC)) SRC = '';
+if (!/^\/(my-course|intro)\/[\w.\-\/]+\.html?$/i.test(SRC)
+    || SRC.split('/').includes('..')) SRC = '';
 const BRIDGE = 'http://localhost:7682';
 const frame = document.getElementById('frame');
 const fname = document.getElementById('fname');
@@ -110,6 +111,18 @@ function prepareEditable(html) {
     else
       f.setAttribute('data-cs-added-sandbox', '');
     f.setAttribute('sandbox', '');
+  });
+  // <object>/<embed>/<applet> cũng là nested context nhưng KHÔNG ép được
+  // sandbox — data/src tải javascript: hay HTML cùng origin đều chạy
+  // script trong origin portal. Trung hoà hẳn attr nạp (data-cs-sv-* để
+  // serialize() gắn lại nguyên) — render fallback khi sửa vẫn an toàn.
+  d.querySelectorAll('object,embed,applet').forEach(el => {
+    for (const a of ['data', 'src', 'code', 'codebase']) {
+      if (el.hasAttribute(a)) {
+        el.setAttribute('data-cs-sv-' + a, el.getAttribute(a));
+        el.removeAttribute(a);
+      }
+    }
   });
   return '<!DOCTYPE html>\n' + d.documentElement.outerHTML;
 }

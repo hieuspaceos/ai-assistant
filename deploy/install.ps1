@@ -1,4 +1,4 @@
-# install.ps1 — cài Trợ Lý AI lên máy Windows (chạy PowerShell ADMIN).
+﻿# install.ps1 — cài Trợ Lý AI lên máy Windows (chạy PowerShell ADMIN).
 #
 # Chạy:  powershell -ExecutionPolicy Bypass -File install.ps1 [-Dest C:\TroLyAI]
 #
@@ -9,7 +9,7 @@
 #   4. Copy license.json + fleet.json từ folder "company" cạnh script (nếu có)
 #   5. Shortcut Desktop "TroLy AI" → start.bat
 #   6. Hướng dẫn bước còn lại (extension + lần chạy đầu)
-param([string]$Dest = "C:\TroLyAI")
+param([string]$Dest = "C:\TroLyAI", [string]$ForUser = "")
 $ErrorActionPreference = "Stop"
 $src = Split-Path -Parent $PSScriptRoot   # folder repo chứa deploy/
 
@@ -22,18 +22,60 @@ Write-Host "Dich  : $Dest"
 # dev (secrets.local.json, machine.id, collector-data, .logs, .shots…)
 # vào bộ cài NV — include thì artefact mới tự nhiên không đi theo.
 if (Test-Path $Dest) { Write-Host "$Dest da ton tai — cap nhat de len" }
-$dirs = @("tools","web","extension","templates","docs","collector-web","my-course")
-foreach ($d in $dirs) {
-    robocopy (Join-Path $src $d) (Join-Path $Dest $d) /E /NFL /NDL /NJH /NJS `
-        /XD __pycache__ .shots clone-work | Out-Null
+function Rc($srcDir, $dstDir, [string[]]$extra) {
+    robocopy $srcDir $dstDir @extra /NFL /NDL /NJH /NJS | Out-Null
+    # robocopy exit >=8 = loi copy thuc — <8 la thanh cong (copy/skip)
+    if ($LASTEXITCODE -ge 8) {
+        Write-Host "  !! copy $dstDir loi (robocopy exit $LASTEXITCODE)" -ForegroundColor Red
+        exit 1
+    }
 }
-robocopy (Join-Path $src ".devin\skill-packs") (Join-Path $Dest ".devin\skill-packs") `
-    /E /NFL /NDL /NJH /NJS | Out-Null
+$dirs = @("tools","web","extension","templates","docs","collector-web")
+foreach ($d in $dirs) {
+    Rc (Join-Path $src $d) (Join-Path $Dest $d) `
+        @("/E","/XD","__pycache__",".shots","clone-work")
+}
+Rc (Join-Path $src ".devin\skill-packs") (Join-Path $Dest ".devin\skill-packs") @("/E")
+# my-course: 6 file state la du lieu hoc vien — reinstall KHONG de
+# (mat learner_name → may thanh "moi" → pack re-ap exec_allowlist +
+# permissions_template; mat bots/consent da duyet). Seed con lai di
+# qua /XO: ghi de chi khi goi cai moi hon — chinh sua cua hoc vien
+# trong bai hoc khong bi ban cu de len. (audit-5 F7)
+$stateFiles = @("config.json","manifest.json","bots.json","permissions.json",
+    "connections.json","bot.md")
+$mcDest = Join-Path $Dest "my-course"
+if (Test-Path $mcDest) {
+    Rc (Join-Path $src "my-course") $mcDest `
+        @("/E","/XO","/XD","__pycache__",".shots","clone-work",".trash") `
+        + @("/XF") + $stateFiles
+    foreach ($sf in $stateFiles) {
+        $sfSrc = Join-Path (Join-Path $src "my-course") $sf
+        $sfDst = Join-Path $mcDest $sf
+        if ((Test-Path $sfSrc) -and -not (Test-Path $sfDst)) {
+            Copy-Item $sfSrc $sfDst
+        }
+    }
+} else {
+    Rc (Join-Path $src "my-course") $mcDest `
+        @("/E","/XD","__pycache__",".shots","clone-work",".trash")
+}
 $files = @("AGENTS.md","CLAUDE.md","SETUP.md","README.md","requirements.txt",
     "VERSION","CHANGELOG.md","start.sh","start.bat","brain.json",".gitignore")
 foreach ($f in $files) {
     robocopy $src $Dest $f /NFL /NDL /NJH /NJS | Out-Null
+    if ($LASTEXITCODE -ge 8) {
+        Write-Host "  !! copy $f loi (robocopy exit $LASTEXITCODE)" -ForegroundColor Red
+        exit 1
+    }
 }
+# user thuong chay app can GHI .devin\ (token/key/state), my-course\,
+# .logs\ — C:\<dir> mac dinh chi cho BUILTIN\Users RX nen app chet khi
+# non-elevated (audit-5 F1). Grant M cho user local (-ForUser khi can
+# chi dinh dung chu nhan thay vi moi Users); troly-agent cung thuoc
+# Users nen setup-agent-user.ps1 RE-SEAL lai (deny-W tren root + mo
+# dung 3 dir writable) — thieu buoc do la sandbox escape.
+$grantTo = if ($ForUser) { $ForUser } else { "BUILTIN\Users" }
+icacls $Dest /grant "${grantTo}:(OI)(CI)M" /T /Q | Out-Null
 Write-Host "  ok — copy xong"
 
 # cạm bẫy: learner_name khác rỗng trong bộ cài = mọi máy NV bị coi là

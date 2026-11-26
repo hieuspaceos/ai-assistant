@@ -23,7 +23,7 @@ done
 # của ttyd; Linux chạy thẳng. BRAIN_TERM exec TRỰC TIẾP, KHÔNG qua `sh -c`
 # để không có eval path — và phải kiểm lại ở đây: start.sh đọc brain.json
 # thô, nên file sửa tay (terminal:"sh") mở shell trần cho ai có mã kết
-# nối. Giữ đồng bộ với BRAIN_CMD_DENY trong chat-bridge.py.
+# nối. Giữ đồng bộ với BRAIN_CMD_DENY trong cmd_deny.py.
 # Hạ chữ thường trước khi so: FS macOS/Windows không phân biệt hoa-thường
 # → "Python3" exec vẫn ra python3 dù pattern "python3" không khớp.
 _bt="$(printf '%s' "$BRAIN_TERM" | tr '[:upper:]' '[:lower:]')"
@@ -38,7 +38,15 @@ case "$_bt" in
   launchctl|security|pbcopy|pbpaste|screencapture|\
   ssh|scp|sftp|rsync|ftp|telnet|rlogin|rsh|tmux|screen|script|expect|\
   lldb|gdb|dtrace|automator|swift|sudo|crontab|at|atq|atrm|sandbox-exec|\
-  sqlite3|mysql|psql|redis-cli|mongosh|mongo|qlmanage|spctl|codesign)
+  sqlite3|mysql|psql|redis-cli|mongosh|mongo|qlmanage|spctl|codesign|\
+  brew|gh|java|jshell|dotnet|mono|lua|luajit|r|rscript|tclsh|groovy|\
+  scala|kotlin|xcodebuild|plutil|go|cargo|julia|ipython|pypy|\
+  micropython|gjs|qjs|nodemon|tsx|ts-node|bunx|uv|uvx|pipx|conda|\
+  poetry|pdm|jupyter|vitest|jest|mocha|clj|clojure|lein|stack|cabal|\
+  mise|asdf|\
+  python*|perl*|php*|pip*|ruby*|node*|lua*|tclsh*|rscript*|java*|\
+  julia*|groovy*|kotlin*|ipython*|pypy*|jython*|micropython*|pyspark*|\
+  ?sh|??sh|*sh[0-9]*|bundle|irb|pry|runghc|ghci)
     echo "Lenh terminal khong hop le - chay devin."; BRAIN_TERM=devin ;;
 esac
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

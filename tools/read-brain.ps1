@@ -22,11 +22,30 @@ $Deny = @(
     'git','awk','gawk','nawk','mawk','tar','vim','vi','nvim',
     'nano','emacs','less','more','most','man','nohup','setsid',
     'timeout','flock','watch','parallel','shortcuts','xcrun',
-    'docker','podman','su','doas'
+    'docker','podman','su','doas',
+    # batch audit-3/audit-5 (trước sót — mirror cmd_deny.py):
+    'brew','gh','java','jshell','dotnet','mono','lua','luajit',
+    'r','rscript','tclsh','groovy','scala','kotlin','xcodebuild',
+    'plutil','go','cargo','julia','ipython','pypy','micropython',
+    'gjs','qjs','nodemon','tsx','ts-node','bunx','uv','uvx','pipx',
+    'conda','poetry','pdm','jupyter','vitest','jest','mocha','clj',
+    'clojure','lein','stack','cabal','mise','asdf'
 )
+# họ interpreter hậu tố version (python3.12…) — mirror _BRAIN_CMD_DENY_RE
+$DenyRe = [regex]'(?x)^(?:
+    (i?python|pypy|jython|micropython|pyspark)[\d.]*w? | py |
+    perl[\d.]* | ruby[\d.]* | php[\d.]* | pip[\d.]* | node(js)?[\d.]* |
+    (ba|z|fi|da|k|c|tc)?sh\d* |
+    lua(jit)?[\d.]* | tclsh[\d.]* | r(script)?[\d.]* |
+    java\w* | jshell | groovy\w* | scala | kotlin\w* | dotnet | mono |
+    brew | gh | go | cargo | xcodebuild | plutil | shortcuts |
+    bundle | irb | pry | julia | gjs | qjs | runghc | ghci
+)$'
 function Clean-Brain($v) {
     $t = [string]$v
-    if ($t -match '^[A-Za-z0-9_.-]+$' -and $Deny -notcontains $t.ToLower()) {
+    $tl = $t.ToLower()
+    if ($t -match '^[A-Za-z0-9_.-]+$' -and $Deny -notcontains $tl -and
+        $tl -notmatch $DenyRe) {
         return $t
     }
     return 'devin'

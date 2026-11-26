@@ -109,9 +109,11 @@ def ver_tuple(s):
 
 
 def pick_manifest():
-    """Trả (manifest, source_url) mới nhất hợp lệ — manifest phải có đủ
-    version/url/sha256/sig."""
-    best, best_url = None, None
+    """Trả (manifest, source_url, source_key) mới nhất hợp lệ —
+    manifest phải có đủ version/url/sha256/sig. key đi theo nguồn
+    (collector → machine.key, ORIGIN vendor → None) — zip fetch đính
+    đúng key nguồn đó, không đính machine.key cho host lạ (F16)."""
+    best, best_url, best_key = None, None, None
     for url, key in manifest_sources():
         try:
             man = json.loads(fetch(url, key))
@@ -119,10 +121,10 @@ def pick_manifest():
                                         "sig")):
                 if best is None or ver_tuple(man["version"]) \
                         > ver_tuple(best["version"]):
-                    best, best_url = man, url
+                    best, best_url, best_key = man, url, key
         except Exception:
             continue
-    return best, best_url
+    return best, best_url, best_key
 
 
 def check_zip_safety(zf):
@@ -142,7 +144,7 @@ def check_zip_safety(zf):
 
 
 def main():
-    man, man_url = pick_manifest()
+    man, man_url, man_key = pick_manifest()
     if not man:
         return                                  # không nguồn nào tới
     cur = _read(os.path.join(ROOT, "VERSION"), "0")
@@ -164,7 +166,7 @@ def main():
         print("update: zip ở host khác manifest — abort", flush=True)
         return
     try:
-        data = fetch(zip_url, _read(MKEY_FP), timeout=max(TIMEOUT, 30))
+        data = fetch(zip_url, man_key, timeout=max(TIMEOUT, 30))
     except Exception as e:
         print(f"update: tải zip lỗi — {e}", flush=True)
         return

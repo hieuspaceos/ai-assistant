@@ -26,14 +26,17 @@ EXTRA_MIME = {".woff": "font/woff", ".woff2": "font/woff2", ".ttf": "font/ttf"}
 # nhất có thể bị prompt-injection). Hai lớp:
 #  - sandbox → trang rơi vào OPAQUE ORIGIN: không đọc được localStorage
 #    (bridge_token), không DOM-đọc được iframe/window.open tới portal,
-#    không register được service worker. allow-top-navigation/popups giữ
-#    link + target=_blank của trang clone sống; KHÔNG có allow-same-origin
-#    — có nó thì mọi thứ mất nghĩa.
+#    không register được service worker. Top-nav chỉ khi CÓ user
+#    activation (audit-5 F14 — trang độc không tự điều hướng cả tab;
+#    Chrome 58+/Safari 11.1+ đều hỗ trợ). allow-popups giữ target=_blank
+#    của trang clone sống; KHÔNG có allow-same-origin — có nó thì mọi
+#    thứ mất nghĩa.
 #  - connect-src 'none' → script không fetch/XHR/WS được đâu cả.
 # KHÔNG áp cho /web/ (portal phải gọi bridge được). clone-view sửa trang
 # qua srcdoc thay vì đọc DOM iframe vì trang giờ opaque.
 CSP_PATHS = ("/my-course/", "/intro/")
-CSP = ("sandbox allow-scripts allow-top-navigation allow-popups allow-modals; "
+CSP = ("sandbox allow-scripts allow-top-navigation-by-user-activation "
+       "allow-popups allow-modals; "
        "default-src 'self'; "
        "script-src 'self' 'unsafe-inline' https:; "
        "style-src 'self' 'unsafe-inline' https:; "

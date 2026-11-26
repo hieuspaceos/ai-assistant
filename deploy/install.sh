@@ -15,13 +15,26 @@ mkdir -p "$DEST"
 # SEED + .devin/skill-packs). Exclude-list từng lọt secrets/state máy
 # dev (secrets.local.json, machine.id, collector-data, .logs, .shots…)
 # vào bộ cài NV — include thì artefact mới tự nhiên không đi theo.
-tar cf - -C "$SRC" --exclude=__pycache__ --exclude='my-course/.shots' \
-    --exclude='my-course/clone-work' \
+# Reinstall: 6 file state của học viên không được đè (mất learner_name
+# → máy thành "mới" → pack re-áp exec_allowlist/permissions_template).
+# Bài học còn lại cứ đè — seed cập nhật theo gói mới là chủ đích.
+STATE="config.json manifest.json bots.json permissions.json connections.json bot.md"
+XTRA=""
+if [ -d "$DEST/my-course" ]; then
+    for f in $STATE; do XTRA="$XTRA --exclude=my-course/$f"; done
+fi
+TMPF="$(mktemp /tmp/troly-install-XXXXXX)"
+tar cf "$TMPF" -C "$SRC" --exclude=__pycache__ \
+    --exclude='my-course/.shots' --exclude='my-course/clone-work' \
+    --exclude='my-course/.trash' $XTRA \
     tools web extension templates docs collector-web \
     .devin/skill-packs my-course \
     AGENTS.md CLAUDE.md SETUP.md README.md requirements.txt VERSION \
-    CHANGELOG.md start.sh start.bat brain.json .gitignore 2>/dev/null \
-    | tar xf - -C "$DEST"
+    CHANGELOG.md start.sh start.bat brain.json .gitignore \
+    || { echo "  !! loi doc goi nguon — huy cai"; rm -f "$TMPF"; exit 1; }
+tar xf "$TMPF" -C "$DEST" \
+    || { echo "  !! loi ghi vao $DEST — cai dat do dang"; rm -f "$TMPF"; exit 1; }
+rm -f "$TMPF"
 echo "  ok — copy xong"
 
 # cạm bẫy: learner_name khác rỗng trong bộ cài = mọi máy NV bị coi là

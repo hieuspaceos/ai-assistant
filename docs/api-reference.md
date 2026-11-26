@@ -143,7 +143,8 @@ Không có API — chỉ GET file tĩnh. Đặc điểm:
 - **CSP** trên mọi `.html` dưới `/my-course/` và `/intro/` (so path
   đã-unquote + lower-case — `%6dy-course`/`/MY-COURSE` không bypass;
   gắn kể cả response 206): **`sandbox allow-scripts
-  allow-top-navigation allow-popups allow-modals`** — trang rơi vào
+  allow-top-navigation-by-user-activation allow-popups
+  allow-modals`** — trang rơi vào
   opaque origin (không `allow-same-origin`): không đọc được
   `localStorage.bridge_token`, không DOM-đọc portal qua
   iframe/`window.open`, không register service worker — kèm

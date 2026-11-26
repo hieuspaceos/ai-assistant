@@ -272,7 +272,7 @@ try:
         "rules_local_md": "# Luat cty test\n",
         "permissions_template": [{"path": "my-course",
                                   "access": "read-write"}],
-        "exec_allowlist": ["git *", "ls"],
+        "exec_allowlist": ["ls *", "df -h"],
     }
     code, r = http("POST", base + "/api/packs",
                    {"X-Admin-Key": SEC_A}, pack)
@@ -358,6 +358,40 @@ try:
         capture_output=True, text=True, timeout=30)
     check("nguy hiểm" in r4.stdout or "không hợp lệ" in r4.stdout,
           "exec_allowlist độc → pack bị reject")
+
+    # ---- audit-5: các mặt lint mới (F2/F5/F9/F10) ----
+    def reject_pack(p, want, msg):
+        fp = os.path.join(tmp, "pack-t.json")
+        json.dump(dict(pack, pack_version=9, **p), open(fp, "w"))
+        r = subprocess.run(
+            [sys.executable, os.path.join(TOOLS, "apply-pack.py"), mdata,
+             "--file", fp], env=env_machine,
+            capture_output=True, text=True, timeout=30)
+        check(want in r.stdout, msg)
+
+    reject_pack({"connections": [{"id": "x",
+                 "open_url": "javascript:alert(1)"}]},
+                "open_url", "F2: open_url javascript: → reject")
+    reject_pack({"skills": {"s": {"C:/evil.md": "x"}}},
+                "path lạ", "F5: skill filename drive-abs → reject")
+    reject_pack({"workflows": {"C:/w.json": {}}},
+                "path lạ", "F5: workflow drive-abs → reject")
+    reject_pack({"mycourse_files": {"C:x.md": "x"}},
+                "path lạ", "F5: mycourse_files drive-rel → reject")
+    reject_pack({"exec_allowlist": ["pwsh *"]},
+                "interpreter", "F9: pwsh * → reject")
+    reject_pack({"exec_allowlist": ["git *"]},
+                "interpreter", "F9: git * → reject (exec-via-args)")
+    reject_pack({"exec_allowlist": ["git*"]},
+                "interpreter", "F9: git* (không space) → reject")
+    reject_pack({"exec_allowlist": ["g[i]t *"]},
+                "interpreter", "F9: g[i]t * (class) → reject")
+    reject_pack({"permissions_template": [{"path": "/",
+                 "access": "read-write"}]},
+                "nhạy cảm", "F10: perm / rw → reject")
+    reject_pack({"permissions_template": [{"path": "%USERPROFILE%",
+                 "access": "read"}]},
+                "path lạ", "F10: perm %env → reject")
 
     # máy tải pack org khác qua HTTP → 403
     code, _ = http("GET", base + "/packs/KHAC/9.json",

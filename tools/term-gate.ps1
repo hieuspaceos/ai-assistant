@@ -32,7 +32,7 @@ while (-not [string]::Equals($t, $env:BRIDGE_TOKEN, [StringComparison]::Ordinal)
 
 # BRAIN_TERM exec trực tiếp — brain.json sửa tay (terminal:"powershell")
 # mở shell trần trong ttyd cho ai có mã kết nối. Charset + deny-list giữ
-# đồng bộ BRAIN_CMD_DENY (chat-bridge.py) / term-gate.sh / read-brain.ps1.
+# đồng bộ BRAIN_CMD_DENY (cmd_deny.py) / term-gate.sh / read-brain.ps1.
 # Ký tự &, |, " phải chặn bằng charset — `& $brain` của PowerShell cũng
 # chạy được lệnh nếu giá trị lạ lọt qua.
 $brain = [string]$env:BRAIN_TERM
@@ -51,9 +51,28 @@ $deny = @(
     'git','awk','gawk','nawk','mawk','tar','vim','vi','nvim',
     'nano','emacs','less','more','most','man','nohup','setsid',
     'timeout','flock','watch','parallel','shortcuts','xcrun',
-    'docker','podman','su','doas'
+    'docker','podman','su','doas',
+    # batch audit-3/audit-5 (trước sót — mirror cmd_deny.py):
+    'brew','gh','java','jshell','dotnet','mono','lua','luajit',
+    'r','rscript','tclsh','groovy','scala','kotlin','xcodebuild',
+    'plutil','go','cargo','julia','ipython','pypy','micropython',
+    'gjs','qjs','nodemon','tsx','ts-node','bunx','uv','uvx','pipx',
+    'conda','poetry','pdm','jupyter','vitest','jest','mocha','clj',
+    'clojure','lein','stack','cabal','mise','asdf'
 )
-if ($brain -notmatch '^[A-Za-z0-9_.-]+$' -or $deny -contains $brain.ToLower()) {
+# họ interpreter hậu tố version (python3.12…) — mirror _BRAIN_CMD_DENY_RE
+$denyRe = [regex]'(?x)^(?:
+    (i?python|pypy|jython|micropython|pyspark)[\d.]*w? | py |
+    perl[\d.]* | ruby[\d.]* | php[\d.]* | pip[\d.]* | node(js)?[\d.]* |
+    (ba|z|fi|da|k|c|tc)?sh\d* |
+    lua(jit)?[\d.]* | tclsh[\d.]* | r(script)?[\d.]* |
+    java\w* | jshell | groovy\w* | scala | kotlin\w* | dotnet | mono |
+    brew | gh | go | cargo | xcodebuild | plutil | shortcuts |
+    bundle | irb | pry | julia | gjs | qjs | runghc | ghci
+)$'
+if ($brain -notmatch '^[A-Za-z0-9_.-]+$' -or
+    $deny -contains $brain.ToLower() -or
+    $brain.ToLower() -match $denyRe) {
     Write-Host "Lenh terminal khong hop le - chay devin."
     $brain = "devin"
 }

