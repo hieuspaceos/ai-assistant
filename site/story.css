@@ -204,6 +204,11 @@
 .saved { font-size: var(--text-sm); color: var(--color-muted); text-align: center; }
 .saved strong { font-size: var(--text-xl); font-weight: 600; color: var(--color-accent-2); font-variant-numeric: tabular-nums; }
 
+/* ————— bridge — the question the next scene answers ————— */
+.bridge__q { font-family: var(--font-display); font-weight: var(--display-weight); font-size: var(--text-title); letter-spacing: var(--tracking-display); color: var(--color-ink-2); text-align: center; max-width: 22ch; }
+.bridge__q::before { content: "“"; color: var(--color-accent); }
+.bridge__q::after { content: "”"; color: var(--color-accent); }
+
 /* ————— end card ————— */
 .end { text-align: center; }
 .end__line { font-family: var(--font-display); font-weight: var(--display-weight); font-size: var(--text-section); letter-spacing: var(--tracking-display); color: var(--color-ink); max-width: 18ch; }

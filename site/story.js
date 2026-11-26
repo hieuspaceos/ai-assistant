@@ -132,8 +132,13 @@ const APP_NAME = {
   img: "Canva", files: "Files", web: "Web",
 };
 
-// beat budget per scene — total ~24s
-const HOLD = { pile: 5000, tasks: 7800, memory: 5600, auto: 5600 };
+// beat budget per scene — ~32s total; bridges are question beats between scenes
+const HOLD = { pile: 5200, bridge: 2200, tasks: 8000, memory: 5800, auto: 6200 };
+const BRIDGES = {
+  tasks: "Nhờ trợ lý được không?",
+  memory: "Lần sau phải nhờ lại từ đầu à?",
+  auto: "Còn hôm quên luôn cả nhờ thì sao?",
+};
 
 const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
 
@@ -224,6 +229,12 @@ function sceneAuto(c) {
   </div>`;
 }
 
+function sceneBridge(q) {
+  return `<div class="scene scene--bridge" role="group" aria-label="Câu hỏi">
+    <p class="bridge__q beat" style="--i:0">${esc(q)}</p>
+  </div>`;
+}
+
 function sceneEnd() {
   return `<div class="scene scene--end" role="group" aria-label="Kết">
     <div class="end">
@@ -247,7 +258,9 @@ if (storyEl) {
 
   function renderRole(role) {
     const c = STORY[role];
-    stage.innerHTML = scenePile(c) + sceneTasks(c) + sceneMemory(c) + sceneAuto(c) + sceneEnd();
+    stage.innerHTML = scenePile(c) + sceneBridge(BRIDGES.tasks) + sceneTasks(c)
+      + sceneBridge(BRIDGES.memory) + sceneMemory(c)
+      + sceneBridge(BRIDGES.auto) + sceneAuto(c) + sceneEnd();
     rolesEl.querySelectorAll(".story__role").forEach(b =>
       b.setAttribute("aria-selected", String(b.dataset.role === role)));
   }
@@ -262,7 +275,18 @@ if (storyEl) {
     });
   }
 
-  const order = ["scene--pile", "scene--tasks", "scene--memory", "scene--auto", "scene--end"];
+  // timeline: scene class → {hold, stepper index}; bridges keep the
+  // previous step lit (they are the question the next scene answers)
+  const SEQ = [
+    ["scene--pile", "pile", 0],
+    ["scene--bridge", "bridge", 0],
+    ["scene--tasks", "tasks", 1],
+    ["scene--bridge", "bridge", 1],
+    ["scene--memory", "memory", 2],
+    ["scene--bridge", "bridge", 2],
+    ["scene--auto", "auto", 3],
+    ["scene--end", "end", 3],
+  ];
 
   function play() {
     stopTimers(); stopBell();
@@ -270,14 +294,14 @@ if (storyEl) {
     const scenes = [...stage.querySelectorAll(".scene")];
     scenes.forEach(s => s.classList.remove("is-on"));
     let t = 400;
-    order.forEach((cls, idx) => {
+    SEQ.forEach(([, hold, step], i) => {
       timers.push(setTimeout(() => {
-        scenes.forEach(s => s.classList.toggle("is-on", s.classList.contains(cls)));
-        setStep(Math.min(idx, 3));
-        if (cls === "scene--pile") startBell();
+        scenes.forEach((s, j) => s.classList.toggle("is-on", j === i));
+        setStep(step);
+        if (i === 0) startBell();
         else stopBell();
       }, t));
-      t += HOLD[cls.replace("scene--", "")] || 2500;
+      t += HOLD[hold] || 2500;
     });
     const replay = stage.querySelector("#story-replay");
     if (replay) replay.addEventListener("click", play);
