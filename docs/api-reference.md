@@ -94,7 +94,8 @@ vài giây chụp lại, đừng bỏ ảnh (ảnh là chuẩn so của clone-pi
 ## 2. chat-bridge :7682 — portal chat + quản trị (`tools/chat-bridge.py`)
 
 Body limit: 1 MB mặc định, **8 MB riêng `/api/save-page`** (trang clone
-có ảnh base64).
+có ảnh base64), **15 MB riêng `/api/upload-paste`** (ảnh base64 trên
+dây — cap 10MB sau giải mã).
 
 ### GET
 
@@ -102,13 +103,14 @@ có ảnh base64).
 |---|---|
 | `/api/health` | `{"ok":true, "brain":"<id não>", "version":"<VERSION>", "extVersion":"<version extension kỳ vọng>"}` — **miễn token** |
 | `/api/brain` | não hiện tại + danh sách preset (kèm cờ `installed`) |
-| `/api/poll` | output mới từ session não ACP. `?since=<n>` con trỏ; `since<0` = reset (replay toàn bộ + `reset:true`). `?wait=<ms>` = long-poll: chờ tới khi có event mới hoặc hết `wait` (cap 30s) — chỉ `.py`, `.ps1` bỏ qua `wait` (HttpListener tuần tự, giữ request sẽ kẹt mọi call khác) |
+| `/api/poll` | output mới từ session não ACP. `?since=<n>` con trỏ; `since<0` = reset (replay toàn bộ + `reset:true`). `?wait=<ms>` = long-poll: chờ tới khi có event mới hoặc hết `wait` (cap 30s) — chỉ `.py`, `.ps1` bỏ qua `wait` (HttpListener tuần tự, giữ request sẽ kẹt mọi call khác). Khi `reset:true` response kèm `perm_pending` = id các card perm (`perm-*` + `local-*`) còn sống ở bridge — UI dùng nó để mờ/khoá card replay lên nhưng đã hết hạn |
 | `/api/permissions` | nội dung `permissions.json` |
 | `/api/connections` | nội dung `connections.json` |
 | `/api/config` | nội dung `config.json` |
 | `/api/check-path` | `?path=<đường dẫn>` → `{ok, isdir}` — onboarding kiểm folder tồn tại trước khi xin quyền; chỉ trả isdir, không metadata |
 | `/api/count-glob` | `?path=<dir>&pattern=<glob>` → `{ok, count, capped}` — verify engine của workflow hỏi "folder có đủ N file khớp pattern không"; trả SỐ, không trả tên file (danh sách file = lộ nội dung máy); pattern chứa `..`/`/`/`\` → về `*`; folder không tồn tại/nhạy cảm → count 0; cap 2000 |
 | `/api/bots` | `{active, bots, templates}` — bot đã tạo + template nghề từ `skill-packs/roles/` |
+| `/api/skills` | `{skills:[{name, desc}]}` — slash-menu trong chat: tên folder `.devin/skills/*/` + mô tả cắt từ frontmatter `description:` của SKILL.md (≤120 ký tự). Chỉ metadata, không trả nội dung file |
 | `/api/install-brain` | `{ok, running, state, id, step, log}` — tiến trình cài não (onboarding poll); state `running`/`done`/`error`; proc chết giữa chừng mà state file kẹt `running` → trả `error` (chỉ `.py`) |
 
 ### POST
@@ -117,6 +119,8 @@ có ảnh base64).
 |---|---|---|
 | `/api/prompt` | `{text}` | gửi prompt vào não ACP. Não đang bận một lượt khác → `409 {"err":"đang bận"}`. Não chết → bridge tự bật lại, trả 503 "gửi lại sau" |
 | `/api/cancel` | — | nút "■ Dừng" trong chat: não đang chạy lượt (`prompt_lock` locked) → notification ACP `session/cancel` (không id). Không có lượt → vẫn `{ok:true}` — idempotent, bấm dư không hại. Não phớt lờ cancel thì lượt cứ chạy tới done — endpoint KHÔNG kill process |
+| `/api/new-task` | — | nút "＋ Việc mới": hội thoại sạch context. Giữ `prompt_lock` suốt `session/new` (não sống — ACP đa session) hoặc `spawn_brain` (não chết/từ chối → respawn); bận → `409`. Broadcast `cleared` (ranh giới: `replay_history` chỉ đọc SAU marker gần nhất — history file KHÔNG xoá) rồi `ready` tự mở lock; `cleared` cũng clear `local_pending` (card gate chờ chết theo hội thoại). Lỗi spawn → `503` |
+| `/api/config` | `{terminal?:bool, language?:vi\|en}` | whitelist merge vào `config.json` — chỉ 2 key này. `terminal:true` → spawn ttyd ngay qua term-gate (khỏi restart); `false` → giết theo pidfile/port. `language` đổi ngôn ngữ portal/chat (UI tự reload sau khi ghi). Key lạ → `400` |
 | `/api/brain` | `{id}` hoặc `{cmd, args?, terminal?, label?}` | đổi não: ghi `brain.json` + restart agent; preset không đủ `requires` → 404 kèm `missing`; `cmd` chỉ nhận tên lệnh trần `[A-Za-z0-9_.-]+` và ngoài denylist interpreter/exec (exact-match + `_BRAIN_CMD_DENY_RE` cho hậu tố version như `python3.12`; so **case-insensitive**); `terminal` cũng phải tên trần và qua cùng denylist, sai → về `cmd`/preset. **Mọi đổi não → consent gate `202 {pending, msg}`** — kể cả preset (agent tự gọi được endpoint qua token nên preset đổi thẳng = tự kill session); card custom ghi "chạy lệnh tuỳ ý" vì denylist không đầy đủ |
 | `/api/respond` | `{id, optionId}` | hai loại card, CẢ HAI đều **bắt buộc `Origin` loopback** (card ACP: id do não tự khai + não có sẵn token → thiếu Origin là não tự duyệt) — thiếu/khác → `403` và card KHÔNG bị consume: (a) card ACP — `id` phải đang pending (ghi khi bridge dispatch `session/request_permission`, TTL 600s; `id` non-scalar hoặc trùng card đang mở — kể cả `local-*` — bị từ chối ngay lúc đăng ký + báo `-32602` cho agent): không khớp/hết hạn/đã trả → `404`; `optionId` lạ → `400` (không huỷ card). (b) card nội bộ `local-*` (consent gate): nhận `ok`/`__cancel__`; hợp lệ → apply một lần. `optionId:"__cancel__"` = huỷ. **macOS (NATIVE_GATE):** cả hai loại card duyệt qua hộp thoại native (`osascript`) do bridge spawn — option duyệt qua HTTP → `403` dù đủ token+Origin (proof-of-human; card ACP approve pick theo `_pick_allow` — ưu tiên `allow_once` trước `allow_always`, không phải `allow*` đầu tiên); `__cancel__` vẫn nhận qua HTTP và giết dialog đang mở; quyết định phát `perm_done` để UI đóng card. Dialog native KHÔNG có nút cancel — bấm "Không"/hết hạn = declined → đóng card hẳn, không phát lại card đường HTTP. `NATIVE_MAX=2`: đạt trần dialog đang mở thì gate từ chối (`409` cho endpoint, `-32602` cho não ACP) — không queue, không downgrade card |
 | `/api/delete-lesson` | `{folder}` | consent gate → `202 {pending, msg}`; bấm Đồng ý mới xoá — thực ra **move** vào `workspace/.trash/<folder>-<ts>-<hex>` + gỡ manifest (khôi phục được), không xoá hẳn |
@@ -132,8 +136,10 @@ có ảnh base64).
 | `/api/bot-import` | `{file: "<base64 zip>"}` | bung bundle bot vào temp → trả `{preview:{stage,name,avatar,instructions,skills,needs,bundled}}`; chống zip-slip; body cap 8MB |
 | `/api/bot-import-confirm` | `{stage}` | ghi thật: cài skill (không đè) + thêm bot vào `bots.json`; KHÔNG tự activate; stage dùng một lần |
 | `/api/install-brain` | `{id}` hoặc `{id, login:true}` | cài não một nút (`tools/install-brain.py` — preset có `auto:true`, node portable trong `DATA/node`, không cần admin) hoặc mở terminal đăng nhập não (OAuth cần terminal thật, chích PATH `DATA/node` cho não cài lén). **Chỉ `.py`** (ps1 đã đóng băng). Máy đã onboard/fleet → **consent gate** `202 {pending, msg}`; máy chưa onboard → chạy luôn (nút bấm là consent, y hệt `/api/setup` lần đầu); POST lặp lúc đang cài = no-op |
-| `/api/pick-folder` | — | mở hộp chọn folder native macOS (`osascript choose folder`) → `{ok, path}` dạng `~/...`; serial một hộp, timeout/huỷ → `{cancelled:true}` (walkthrough `pick-file`, settings "+ thêm folder") |
-| `/api/reveal` | `{path}` | `open -R <path>` (chỉ highlight trong Finder, không thực thi file) — nút "Mở trong Finder" của walkthrough step `open`; cùng chống-oracle của check-path: chỉ dưới `~`, không `.devin`, không vùng nhạy; không tồn tại → lỗi |
+| `/api/pick-folder` | — | mở hộp chọn folder native (macOS `osascript` / Windows WinForms `FolderBrowserDialog` qua `powershell -STA` / Linux `zenity`) → `{ok, path}` dạng `~/...`; serial một hộp (`_pick_folder_lock`), timeout/huỷ → `{cancelled:true}` (walkthrough `pick-file`, settings "+ thêm folder") |
+| `/api/reveal` | `{path}` | `open -R` / `explorer /select,` / `xdg-open` folder-chứa (highlight không thực thi file) — nút "Mở trong Finder" của walkthrough + chip 📂 trên path trong chat; cùng chống-oracle của check-path: chỉ dưới `~`, không `.devin`, không vùng nhạy; không tồn tại → lỗi |
+| `/api/upload-paste` | `{data, mime?}` | dán ảnh vào ô chat → ghi `workspace/inbox/paste-<ts>.<ext>`; `data` nhận data-URL hoặc base64 trần; whitelist mime (png/jpg/gif/webp/bmp); cap 10MB sau giải mã; tên file server tự đặt; trả `{ok, path}` tương đối để chèn vào prompt |
+| `/api/support-bundle` | — | nút "Gói nhật ký lỗi" trong Cài đặt → **consent gate** `202` (nhật ký rời máy); duyệt → zip `.logs/` (bỏ `chat-history*`, file >5MB) + `config.json` rút gọn (`language`/`learner_name`/`terminal` — không secret) ra Desktop → OneDrive/Desktop → Downloads (đích cố định, không nhận từ client), rồi reveal file |
 | `/api/emit-event` | `{t, ...}` | kênh event nội bộ cho đồng nghiệp bridge (ext-bridge → `inj_suspect`, launcher → `env_scrub`) — append vào event store để beacon đếm thống kê. `t` phải trong whitelist `inj_suspect`/`perm:auto`/`env_scrub`, type lạ → `400`; tín hiệu rollout (`pack_applied`/`update_applied`) CỐ Ý không cho phát — agent tự emit được giả báo "đã update" (audit-6 F8) |
 
 ---

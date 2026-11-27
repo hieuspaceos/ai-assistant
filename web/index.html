@@ -123,9 +123,15 @@
         <button id="folder-save" data-i18n="addBtn">Thêm</button>
       </div>
       <button id="folder-add-btn" class="mini-btn" data-i18n="addFolderBtn">+ thêm folder</button>
+      <div class="nav-title" data-i18n="langTitle">Ngôn ngữ</div>
+      <select id="lang-sel" class="brain-sel">
+        <option value="vi">Tiếng Việt</option>
+        <option value="en">English</option>
+      </select>
       <div class="nav-title" data-i18n="advancedTitle">Nâng cao</div>
       <label class="check"><input type="checkbox" id="term-toggle"><span data-i18n="termToggle">Hiện chế độ Terminal (màn hình lệnh — chỉ khi bạn biết mình đang làm gì)</span></label>
       <p class="settings-hint" style="margin-top:var(--space-md)"><a href="admin.html" target="_blank" rel="noopener" data-i18n="adminLink">Dành cho quản trị viên (IT) →</a></p>
+      <p class="settings-hint"><button id="support-bundle" class="mini-btn" type="button" data-i18n="supportBtn">Gói nhật ký lỗi (gửi khi cần hỗ trợ)</button></p>
     </div>
   </div>
 </div>
@@ -199,6 +205,6 @@ bfetch('http://localhost:7682/api/config', { signal: cfgSignal })
   .then(c => { if (!c.language) location.replace('onboarding.html'); })
   .catch(() => { /* bridge chưa chạy → cứ hiện portal */ });
 </script>
-<script src="app.js?v=16"></script>
+<script src="app.js?v=17"></script>
 </body>
 </html>

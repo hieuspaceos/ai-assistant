@@ -33,6 +33,7 @@ GATED = {
     "/api/bot":                "activate/delete — ghi bots.json (deny-write) + bot.md; create/rename mở (không kích hoạt gì; instructions preview ở card activate — audit-3 M2)",
     "/api/bot-import-confirm": "mọi lần — cài skill + instruction từ ngoài",
     "/api/install-brain":     "chỉ khi máy đã onboard/fleet — cài phần mềm lên máy; máy chưa onboard chưa có agent nào giả nút bấm nên chạy luôn (y hệt setup lần đầu)",
+    "/api/support-bundle":    "mọi lần — nhật ký rời máy (zip ra Desktop); nhật ký có thể chứa tên file học viên đã xử lý",
 }
 
 # OPEN_OK: đã xét kỹ — không cần gate. Khai endpoint POST mới vào đây
@@ -45,9 +46,11 @@ OPEN_OK = {
     "/api/check-connection": "chỉ ghi status probe vào connections.json",
     "/api/bot-import":       "stage zip vào temp + trả preview; ghi thật ở -confirm",
     "/api/emit-event":       "append-only, whitelist event type — chỉ inflate được đếm dashboard",
-    "/api/pick-folder":      "mở hộp chọn folder native (dialog macOS) — chỉ trả path user tự chọn; serialized + 1 dialog/lần, không ghi gì",
-    "/api/reveal":           "`open -R` = chỉ highlight trong Finder, không thực thi file; path giới hạn dưới ~ + deny-list nhạy cảm như check-path",
-    "/api/config":           "whitelist merge — chỉ key `terminal` (bool); spawn ttyd đi qua term-gate đòi mã kết nối, agent đã có mã nên không leo thang; reversible",
+    "/api/new-task":         "đổi session não + marker cleared vào history — prompt_lock serialize, não chết thì respawn y prompt-thường; không ghi file user, không chạy lệnh; mất context là việc user tự bấm",
+    "/api/upload-paste":     "ghi ảnh vào workspace/inbox tên do server đặt; whitelist mime + cap 10MB — y save-page, file nằm trong vùng não đọc được sẵn",
+    "/api/pick-folder":      "mở hộp chọn folder native (macOS osascript / Windows WinForms / Linux zenity) — chỉ trả path user tự chọn trong dialog; serialized + 1 dialog/lần, không ghi gì",
+    "/api/reveal":           "`open -R`/`explorer /select,` = chỉ highlight, không thực thi file; path giới hạn dưới ~ + deny-list nhạy cảm như check-path",
+    "/api/config":           "whitelist merge — chỉ key `terminal` (bool) + `language` (vi|en); spawn ttyd đi qua term-gate đòi mã kết nối, agent đã có mã nên không leo thang; reversible",
 }
 
 fail = False

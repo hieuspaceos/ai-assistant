@@ -15,9 +15,10 @@
 body {
   height: 100vh; display: flex; flex-direction: column;
   font-size: var(--text-md);
-  /* chừa dải giấy phía dưới cho cụm nút chế độ nổi của portal cha */
-  padding-bottom: 52px;
 }
+/* chừa dải giấy phía dưới cho cụm nút chế độ nổi của portal cha —
+   CHỈ khi modebar thật sự hiện (terminal bật); tắt → chat giãn hết */
+body.has-modebar { padding-bottom: 52px; }
 
 #messages {
   flex: 1; overflow-y: auto; padding: var(--space-lg) var(--space-md) var(--space-xs);
@@ -136,16 +137,83 @@ body {
 .msg.typing i:nth-child(2) { animation-delay: .18s; }
 .msg.typing i:nth-child(3) { animation-delay: .36s; }
 @keyframes tdot { 0%, 60%, 100% { transform: translateY(0); opacity: .35; } 30% { transform: translateY(-4px); opacity: 1; } }
+
+/* card xin phép đã hết hạn (replay sau restart) — vẽ mờ, khoá nút */
+.perm.stale { opacity: .5; }
+.perm.stale button { cursor: default; }
+
+/* nút Việc mới — tròn nhỏ bên trái ô nhập */
+#newtask {
+  border: 0; border-radius: var(--radius-pill); align-self: flex-end;
+  height: 44px; padding: 0 var(--space-md); font-size: var(--text-sm);
+  font-weight: 500; cursor: pointer; font-family: var(--font-display);
+  background: none; color: var(--color-accent-deep);
+  box-shadow: inset 0 0 0 1.5px var(--color-rule-2);
+  transition: box-shadow var(--dur-micro) var(--ease-out);
+  white-space: nowrap;
+}
+#newtask:hover { box-shadow: inset 0 0 0 1.5px var(--color-accent); }
+#newtask.confirm { background: var(--color-paper-3); color: var(--color-ink); }
+
+/* chip "tin đang xếp" — tối đa 1 tin chờ trợ lý rảnh */
+#queuechip {
+  display: none; align-items: center; gap: var(--space-sm);
+  padding: var(--space-2xs) var(--space-md); font-size: var(--text-xs);
+  color: var(--color-muted); font-family: var(--mono);
+}
+#queuechip button {
+  border: 0; background: none; color: var(--color-accent-deep);
+  cursor: pointer; font-size: var(--text-sm); padding: 0 var(--space-2xs);
+}
+
+/* pill "↓ Tin mới" — chỉ hiện khi đang đọc tin cũ mà có tin về */
+#newmsg {
+  position: fixed; right: var(--space-md); bottom: 96px; z-index: 9;
+  border: 0; border-radius: var(--radius-pill); height: 32px;
+  padding: 0 var(--space-md); font-size: var(--text-sm); font-weight: 500;
+  font-family: var(--font-display); cursor: pointer; display: none;
+  background: var(--color-accent); color: var(--color-accent-ink);
+  box-shadow: 0 2px 10px rgba(0,0,0,.18);
+}
+
+/* menu gợi ý /skill — mở khi gõ "/" đầu ô nhập */
+#slashmenu {
+  position: fixed; left: var(--space-md); bottom: 66px; z-index: 10;
+  background: var(--color-paper); border-radius: var(--radius-card);
+  box-shadow: 0 4px 18px rgba(0,0,0,.16); display: none;
+  max-height: 240px; overflow-y: auto; min-width: 260px;
+  padding: var(--space-2xs);
+}
+#slashmenu button {
+  display: block; width: 100%; text-align: left; border: 0; background: none;
+  padding: var(--space-xs) var(--space-sm); border-radius: 8px; cursor: pointer;
+  font-size: var(--text-sm); font-family: var(--font-display); color: var(--color-ink);
+}
+#slashmenu button .sk { color: var(--color-accent-deep); font-family: var(--mono); }
+#slashmenu button .ds { display: block; color: var(--color-muted); font-size: var(--text-xs); margin-top: 2px; }
+#slashmenu button:hover, #slashmenu button.sel { background: var(--color-paper-2); }
+
+/* chip 📂 bấm mở vị trí file/folder trợ lý nhắc tới */
+.reveal-chip {
+  border: 0; background: var(--color-paper-3); border-radius: 6px;
+  font-size: .85em; cursor: pointer; padding: 0 5px; margin-left: 3px;
+  color: var(--color-accent-deep); font-family: var(--font-display);
+}
+.reveal-chip:hover { background: var(--color-accent-soft); }
 </style>
 </head>
 <body>
   <div id="status">Trợ lý đang làm việc…</div>
   <div id="messages"></div>
   <div class="hint-chips" id="chips"></div>
+  <div id="queuechip"><span id="queue-text"></span><button id="queue-x" type="button" title="Huỷ tin đang xếp">×</button></div>
   <div id="inputbar">
+    <button id="newtask" type="button" title="Bắt đầu việc mới — trợ lý quên hết phần trò chuyện này">＋</button>
     <textarea id="input" rows="1" placeholder="Nhắn cho trợ lý… (VD: /phong-van)" autocomplete="off"></textarea>
     <button id="send">Gửi</button>
   </div>
+<button id="newmsg" type="button">↓ Tin mới</button>
+<div id="slashmenu" role="listbox"></div>
 <script src="bridge-token.js"></script>
 <script>
 // chỉ cho phép trỏ bridge về localhost — tham số lạ (link độc) bị bỏ qua
@@ -163,6 +231,41 @@ const input = document.getElementById('input');
 const sendBtn = document.getElementById('send');
 const statusEl = document.getElementById('status');
 const chipsEl = document.getElementById('chips');
+const newmsgBtn = document.getElementById('newmsg');
+const queueChip = document.getElementById('queuechip');
+const queueText = document.getElementById('queue-text');
+const slashEl = document.getElementById('slashmenu');
+
+// Chỉ tự cuộn xuống khi học viên đang ở sát đáy — đang đọc tin cũ mà
+// tin mới trôi tới thì hiện pill "↓ Tin mới" thay vì giật màn hình.
+function nearBottom() {
+  return msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 80;
+}
+function scrollMaybe() {
+  if (nearBottom() || replaying) {
+    msgs.scrollTop = msgs.scrollHeight;
+    newmsgBtn.style.display = 'none';
+  } else newmsgBtn.style.display = 'block';
+}
+msgs.addEventListener('scroll', () => {
+  if (nearBottom()) newmsgBtn.style.display = 'none';
+});
+newmsgBtn.onclick = () => {
+  msgs.scrollTop = msgs.scrollHeight;
+  newmsgBtn.style.display = 'none';
+};
+
+// modebar (nút Chat/Terminal nổi của portal cha) chỉ hiện khi terminal
+// bật → cha báo qua postMessage; iframe mới load thì tự hỏi cha.
+window.addEventListener('message', e => {
+  if (e.origin !== location.origin || !e.data) return;
+  if (e.data.t === 'modebar')
+    document.body.classList.toggle('has-modebar', !!e.data.on);
+});
+try {
+  if (window.parent !== window)
+    window.parent.postMessage({t: 'modebar?'}, location.origin);
+} catch {}
 
 // chuỗi UI theo ngôn ngữ trong config (onboarding chọn vi/en)
 const STR = {
@@ -178,6 +281,8 @@ const STR = {
     deadMsg: 'trợ lý đang tắt — mở lại app bằng file start rồi tải lại trang này',
     nativeHint: 'Xác nhận trong hộp thoại vừa hiện trên màn hình máy bạn — trợ lý không tự bấm được nút đó.',
     nativeTimeout: 'Hộp thoại tự đóng sau ~10 phút nếu không trả lời — khi đó việc đang làm sẽ dừng, bạn nhờ lại nhé.',
+    newTask: '＋', newTaskSure: 'Chắc không?',
+    newMsg: '↓ Tin mới', revealTitle: 'Mở vị trí này',
   },
   en: {
     hints: [{label: 'Start the interview', text: '/interview'},
@@ -191,6 +296,8 @@ const STR = {
     deadMsg: 'the assistant is off — reopen the app with the start file, then reload this page',
     nativeHint: 'Confirm in the dialog on your screen — the assistant cannot click that button for you.',
     nativeTimeout: 'The dialog closes itself after ~10 minutes with no answer — the task then stops, just ask again.',
+    newTask: '＋', newTaskSure: 'Sure?',
+    newMsg: '↓ New', revealTitle: 'Open this location',
   },
 };
 let S = STR.vi;
@@ -205,6 +312,8 @@ function applyStrings() {
   input.placeholder = S.ph;
   sendBtn.textContent = S.send;
   statusEl.textContent = S.busy;
+  document.getElementById('newtask').textContent = S.newTask;
+  document.getElementById('newmsg').textContent = S.newMsg;
 }
 applyStrings();
 let botName = '';
@@ -233,7 +342,7 @@ function agentBubble() {
   curBubble = document.createElement('div');
   curBubble.className = 'msg agent';
   msgs.appendChild(curBubble);
-  msgs.scrollTop = msgs.scrollHeight;
+  scrollMaybe();
   return curBubble;
 }
 // Stream render: trước đây marked.parse TOÀN VĂN mỗi chunk → O(n²) trên
@@ -246,7 +355,8 @@ function flushBubble() {
   if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
   if (curBubble && curBubble.dataset.raw)
     curBubble.innerHTML = md(curBubble.dataset.raw);
-  msgs.scrollTop = msgs.scrollHeight;
+    decoratePaths(curBubble);
+  scrollMaybe();
 }
 function addText(t) {
   if (!curBubble) agentBubble();
@@ -256,7 +366,8 @@ function addText(t) {
   if (!rafId) rafId = requestAnimationFrame(() => {
     rafId = 0;
     b.innerHTML = md(b.dataset.raw);   // đọc b đã capture, KHÔNG đọc curBubble
-    msgs.scrollTop = msgs.scrollHeight;
+    decoratePaths(b);
+    scrollMaybe();
   });
 }
 function addUser(t) {
@@ -264,7 +375,7 @@ function addUser(t) {
   curBubble = null;
   const d = document.createElement('div');
   d.className = 'msg user'; d.textContent = t;
-  msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight;
+  msgs.appendChild(d); scrollMaybe();
 }
 let typingEl = null;
 function addTyping() {
@@ -273,7 +384,7 @@ function addTyping() {
   typingEl.className = 'msg agent typing';
   typingEl.innerHTML = '<i></i><i></i><i></i>';
   msgs.appendChild(typingEl);
-  msgs.scrollTop = msgs.scrollHeight;
+  scrollMaybe();
 }
 function removeTyping() { if (typingEl) { typingEl.remove(); typingEl = null; } }
 
@@ -296,6 +407,7 @@ function startBusyClock() {
     // + mở nút thay vì để học viên ngồi chờ.
     if (!connected && Date.now() - busyAt > 20000) {
       setBusy(false);
+      clearQueue();
       addErr(S.deadMsg);
     }
   }, 1000);
@@ -360,13 +472,13 @@ function addPerm(ev) {
     };
     btns.appendChild(b);
   });
-  d.appendChild(btns); msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight;
+  d.appendChild(btns); msgs.appendChild(d); scrollMaybe();
 }
 function addErr(msg) {
   const d = document.createElement('div');
   d.className = 'msg agent thinking';
   d.textContent = S.errPfx + msg;
-  msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight;
+  msgs.appendChild(d); scrollMaybe();
 }
 function setBusy(b) {
   statusEl.style.display = b ? 'block' : 'none';
@@ -384,36 +496,192 @@ async function cancelTurn() {
   try { await bfetch(BRIDGE + '/api/cancel', {method: 'POST'}); }
   catch (e) { setBusy(false); addErr(S.deadMsg); }
 }
-function say(t) { agentBubble(); curBubble.dataset.raw = t; curBubble.innerHTML = md(t); }
+function say(t) { agentBubble(); curBubble.dataset.raw = t; curBubble.innerHTML = md(t); decoratePaths(curBubble); }
+
+// Path trợ lý nhắc trong code (`...`) → kèm chip 📂 mở đúng vị trí đó
+// qua /api/reveal (bridge tự guard: chỉ dưới ~, không vùng nhạy cảm).
+const PATH_RE = /^(~[\/\\]|[A-Za-z]:[\/\\]|\/|workspace[\/\\]|[\w.\-]+[\/\\][\w.\-\\\/ ]*)$/;
+function decoratePaths(el) {
+  if (!el) return;
+  el.querySelectorAll('code').forEach(c => {
+    const t = (c.textContent || '').trim();
+    if (c.dataset.chipped || t.length < 4 || t.length > 300 || !PATH_RE.test(t)) return;
+    c.dataset.chipped = '1';
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'reveal-chip'; b.textContent = '📂';
+    b.title = S.revealTitle;
+    b.onclick = async () => {
+      try {
+        const r = await bfetch(BRIDGE + '/api/reveal', {method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({path: t})});
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || d.ok === false) addErr(d.err || 'không mở được chỗ này');
+      } catch { addErr('không mở được — trợ lý đang tắt?'); }
+    };
+    c.appendChild(b);
+  });
+}
 
 function grow() {
   input.style.height = 'auto';
   input.style.height = Math.min(input.scrollHeight, 160) + 'px';
 }
 input.addEventListener('input', grow);
+input.addEventListener('input', () => { slashIdx = 0; slashFilter(); });
+
+// Dán ảnh (chụp màn hình…) → upload về workspace/inbox rồi chèn path
+// vào ô nhập — não đọc được file trong vùng cho phép.
+input.addEventListener('paste', e => {
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+  for (const it of items) {
+    if (it.kind === 'file' && it.type.startsWith('image/')) {
+      e.preventDefault();
+      const f = it.getAsFile();
+      const rd = new FileReader();
+      rd.onload = async () => {
+        try {
+          const res = await bfetch(BRIDGE + '/api/upload-paste', {method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({data: rd.result, mime: f.type})});
+          const d = await res.json().catch(() => ({}));
+          if (res.ok && d.path) {
+            input.value += (input.value && !input.value.endsWith(' ') ? ' ' : '') + d.path;
+            grow();
+          } else addErr(d.err || 'dán ảnh không được');
+        } catch { addErr('dán ảnh không được — thử lại'); }
+      };
+      rd.readAsDataURL(f);
+      return;
+    }
+  }
+});
+
+// Slash-menu: gõ "/" ở đầu ô → gợi ý skill đã cài (GET /api/skills)
+let skillsCache = null, slashIdx = 0;
+const escH = s => String(s).replace(/[&<>"']/g,
+  c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+async function loadSkills() {
+  if (skillsCache) return skillsCache;
+  try {
+    const d = await (await bfetch(BRIDGE + '/api/skills')).json();
+    skillsCache = d.skills || [];
+  } catch { skillsCache = []; }
+  return skillsCache;
+}
+function slashFilter() {
+  const m = /^\/([a-zA-Z0-9_-]*)$/.exec(input.value);
+  if (!m) { slashEl.style.display = 'none'; return; }
+  const q = m[1].toLowerCase();
+  loadSkills().then(list => {
+    const hits = list.filter(s => s.name.toLowerCase().includes(q)).slice(0, 8);
+    if (!hits.length) { slashEl.style.display = 'none'; return; }
+    slashEl.innerHTML = '';
+    hits.forEach((s, i) => {
+      const b = document.createElement('button');
+      b.innerHTML = '<span class="sk">/' + escH(s.name) + '</span>' +
+        (s.desc ? '<span class="ds">' + escH(s.desc) + '</span>' : '');
+      if (i === slashIdx) b.classList.add('sel');
+      b.onmousedown = e => { e.preventDefault(); pickSlash('/' + s.name); };
+      slashEl.appendChild(b);
+    });
+    slashEl.style.display = 'block';
+  });
+}
+function pickSlash(cmd) {
+  input.value = cmd + ' ';
+  slashEl.style.display = 'none';
+  input.focus(); grow();
+}
+// Menu đang mở → phím điều hướng nuốt sự kiện (trả true); đóng → false.
+function slashKey(e) {
+  if (slashEl.style.display !== 'block') return false;
+  const n = slashEl.children.length;
+  if (!n) return false;
+  if (e.key === 'ArrowDown') { slashIdx = (slashIdx + 1) % n; slashFilter(); return true; }
+  if (e.key === 'ArrowUp') { slashIdx = (slashIdx - 1 + n) % n; slashFilter(); return true; }
+  if (e.key === 'Tab' || e.key === 'Enter') {
+    const sel = slashEl.children[slashIdx];
+    if (sel) { e.preventDefault(); sel.dispatchEvent(new MouseEvent('mousedown')); }
+    return true;
+  }
+  if (e.key === 'Escape') { slashEl.style.display = 'none'; return true; }
+  return false;
+}
+
+let queuedMsg = null;   // tối đa 1 tin xếp chờ trợ lý rảnh
+let pendingEcho = null; // tin mình vừa gửi — bridge bắn user_msg về → bỏ echo trùng
+function queueMsg(t) {
+  queuedMsg = t;
+  queueText.textContent = '⏳ ' + (t.length > 60 ? t.slice(0, 60) + '…' : t);
+  queueChip.style.display = 'flex';
+}
+function clearQueue() { queuedMsg = null; queueChip.style.display = 'none'; }
+document.getElementById('queue-x').onclick = clearQueue;
 
 async function send() {
-  if (sendBtn.dataset.mode === 'stop') return;   // đang chạy → nút là Dừng; giữ draft
+  if (sendBtn.dataset.mode === 'stop') {
+    // đang chạy → nút là Dừng; tin mới XẾP CHỜ (tối đa 1), tự gửi khi xong
+    const t = input.value.trim();
+    if (t) { input.value = ''; grow(); queueMsg(t); }
+    return;
+  }
   if (sendBtn.disabled) return;
   const t = input.value.trim();
   if (!t) return;
   input.value = '';
   grow();
   addUser(t);
+  pendingEcho = t.slice(0, 4000);   // bridge cắt user_msg ở 4000 — khớp cùng biên
   setBusy(true);
   try {
-    await bfetch(BRIDGE + '/api/prompt', {method: 'POST',
+    const res = await bfetch(BRIDGE + '/api/prompt', {method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({text: t})});
+    if (!res.ok) {
+      // 409 bận / 503 não chết / 413… — res.ok phải check, im lặng là
+      // học viên tưởng tin đã đi mà thực ra bridge từ chối
+      const d = await res.json().catch(() => ({}));
+      addErr(d.err || 'trợ lý chưa nhận được tin — thử lại nhé');
+      setBusy(false);
+      pendingEcho = null;   // bridge từ chối → không có user_msg về
+    }
   } catch (e) {
     addErr('không nói chuyện được với trợ lý, thử tải lại trang');
     setBusy(false);
+    pendingEcho = null;
   }
 }
+
+// Nút ＋ Việc mới — xác nhận 2 chạm (đổi nhãn 3s) rồi gọi /api/new-task;
+// event "cleared" từ bridge sẽ tự xoá màn hình, khỏi dọn tay ở đây.
+const newtaskBtn = document.getElementById('newtask');
+newtaskBtn.onclick = async () => {
+  if (!newtaskBtn.classList.contains('confirm')) {
+    newtaskBtn.classList.add('confirm');
+    newtaskBtn.textContent = S.newTaskSure;
+    setTimeout(() => {
+      newtaskBtn.classList.remove('confirm');
+      newtaskBtn.textContent = S.newTask;
+    }, 3000);
+    return;
+  }
+  newtaskBtn.classList.remove('confirm');
+  newtaskBtn.textContent = S.newTask;
+  try {
+    const res = await bfetch(BRIDGE + '/api/new-task', {method: 'POST'});
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      addErr(d.err || 'trợ lý đang bận — bấm Dừng trước đã');
+    }
+  } catch { addErr('không gọi được trợ lý — thử lại sau'); }
+};
 sendBtn.onclick = () =>
   (sendBtn.dataset.mode === 'stop') ? cancelTurn() : send();
 // Enter = gửi, Shift+Enter = xuống dòng; isComposing = đang gõ dấu tiếng Việt/IME
 input.addEventListener('keydown', e => {
+  if (slashKey(e)) { e.preventDefault(); return; }
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
 });
 
@@ -427,6 +695,19 @@ function handleEvent(ev) {
   else if (ev.t === 'text') { removeTyping(); addText(ev.text); }
   else if (ev.t === 'tool') addTool(ev.title, ev.status);
   else if (ev.t === 'perm') { removeTyping(); flushBubble(); addPerm(ev); }
+  else if (ev.t === 'user_msg') {
+    // replay 2 chiều: tin học viên cũng nằm trong history. Tin MÌNH vừa
+    // gửi được bridge echo lại → pendingEcho đánh dấu, bỏ bản trùng.
+    if (pendingEcho !== null && ev.text === pendingEcho) pendingEcho = null;
+    else addUser(ev.text);
+  }
+  else if (ev.t === 'cleared') {
+    // "Việc mới" — xoá khung + tin đang xếp, chào lại như buổi đầu
+    msgs.innerHTML = '';
+    curBubble = null; pendingEcho = null; clearQueue();
+    say(greeting());
+    curBubble = null;
+  }
   else if (ev.t === 'perm_done') {
     // bridge đã có quyết định (hộp thoại native/cancel) → đóng card treo
     // ev.id do não tự khai — có thể chứa " phá querySelector (SyntaxError
@@ -439,8 +720,15 @@ function handleEvent(ev) {
     if (String(ev.id).startsWith('local-') && window.parent !== window)
       window.parent.postMessage({t: 'gateDone'}, location.origin);
   }
-  else if (ev.t === 'done') { flushBubble(); setBusy(false); curBubble = null; }
-  else if (ev.t === 'err') { flushBubble(); addErr(ev.msg); setBusy(false); }
+  else if (ev.t === 'done') {
+    flushBubble(); setBusy(false); curBubble = null;
+    // tin xếp chờ → gửi luôn khi lượt vừa xong
+    if (queuedMsg) { const q = queuedMsg; clearQueue(); input.value = q; send(); }
+  }
+  else if (ev.t === 'err') {
+    flushBubble(); addErr(ev.msg); setBusy(false);
+    clearQueue();   // lỗi giữa chừng — tin xếp bỏ luôn, không tự thử lại
+  }
   else if (ev.t === 'warn') addErr(ev.msg);   // cảnh báo bridge (VD hộp
   // thoại xin phép chết giữa chừng) — hiển thị như lỗi nhưng KHÔNG
   // setBusy(false): lượt não vẫn đang chạy
@@ -448,6 +736,7 @@ function handleEvent(ev) {
 
 let since = 0;
 let connected = false;
+let pendingPermIds = null;   // id perm còn sống bridge báo khi reset
 async function poll() {
   try {
     const t0 = Date.now();
@@ -462,6 +751,8 @@ async function poll() {
       msgs.innerHTML = '';
       curBubble = null;
       setBusy(false);
+      pendingEcho = null;   // reset = trạng thái mới — echo cũ không còn nghĩa
+      pendingPermIds = new Set((data.perm_pending || []).map(String));
     }
     if (!connected) {
       connected = true;
@@ -474,6 +765,17 @@ async function poll() {
     (data.events || []).forEach(handleEvent);
     replaying = false;
     flushBubble();        // bubble cuối replay có thể đang mở dở
+    if (pendingPermIds) {
+      // card perm replay lên mà id không còn sống ở bridge → mờ + khoá
+      // nút (bấm chỉ được 404 — mờ thì học viên hiểu ngay đã hết hạn)
+      [...msgs.querySelectorAll('[data-perm-id]')].forEach(c => {
+        if (!pendingPermIds.has(c.dataset.permId)) {
+          c.classList.add('stale');
+          c.querySelectorAll('button').forEach(b => { b.disabled = true; });
+        }
+      });
+      pendingPermIds = null;
+    }
     // Server bỏ qua `wait` (chat-bridge.ps1 — loop đơn luồng không giữ
     // request được) → trả rỗng ngay: phải tự nghỉ nhịp cũ, không lặp chặt.
     // Có event hoặc đã chờ lâu (long-poll thật) → repoll ngay để đón kịp.

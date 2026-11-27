@@ -17,7 +17,7 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 | File | Vai trò |
 |---|---|
 | `serve.py` / `serve.ps1` | Static server: chặn dotfiles, Host check chống rebinding, CSP `sandbox` opaque-origin `/workspace/`+`/intro/`, Range, keep-alive |
-| `chat-bridge.py` / `.ps1` | Chat portal ↔ não ACP (`brain.json` chọn não, `/api/brain` đổi nóng); API config/permissions/connections/secrets/save-page; long-poll + prompt_lock + respond-gate + `/api/cancel` (nút ■ Dừng → notification `session/cancel`, idempotent, não phớt lờ thì lượt vẫn chạy tới done — không kill process); spawn não qua Seatbelt (macOS) |
+| `chat-bridge.py` / `.ps1` | Chat portal ↔ não ACP (`brain.json` chọn não, `/api/brain` đổi nóng); API config/permissions/connections/secrets/save-page/skills/upload-paste; long-poll + prompt_lock + respond-gate + `/api/cancel` (nút ■ Dừng → `session/cancel`) + `/api/new-task` (nút ＋ Việc mới → `session/new`/respawn + marker `cleared` trong history); stderr não → `.logs/brain-stderr.log` + card lỗi dịch-allowlist; spawn não qua Seatbelt (macOS) |
 | `term-gate.sh` / `.ps1` | Cửa gác giữa ttyd và não — đòi mã kết nối (từ `?arg=`) trước khi exec não; macOS bọc sandbox-exec. `.cmd` chỉ là forwarder không-arg (batch không đọc argv an toàn) |
 | `read-brain.ps1` | Đọc `brain.json` → in `cmd|terminal` ĐÃ validate (charset + deny-list) — `start.bat`/`chat-terminal.ps1` dùng chung, tránh expansion injection trong batch |
 | `gen-sandbox.py` | Sinh `.devin/agent.sb` từ `permissions.json` — whitelist write + deny-enumerate read + deny exec binary thoát-sandbox; `_grant_ok` re-validate từng grant lúc build (path_sensitive trên realpath + symlink-divergence) — enforcement point chặn TOCTOU |
@@ -44,7 +44,7 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 | File | Vai trò |
 |---|---|
 | `test-bridges.py` | Smoke test endpoint: auth 401, save-page sandbox, brain whitelist — spawn bridge thật trên port động |
-| `test-parity.py` | Diff tập endpoint `/api/*` giữa chat-bridge `.py` ↔ `.ps1` — bắt drift (`DARWIN_ONLY`: pick-folder, reveal) |
+| `test-parity.py` | Diff tập endpoint `/api/*` giữa chat-bridge `.py` ↔ `.ps1` — bắt drift (`DARWIN_ONLY` rỗng — pick-folder/reveal đã port cả ps1) |
 | `test-packs.py` | Diff `.devin/skills/` ↔ `skill-packs/` + kiểm recipes trỏ đúng skill — bắt "quên đồng bộ pack" |
 | `test-gates.py` | Mọi endpoint POST `/api/*` phải khai `GATED` (handler gọi `gate_local`/`New-Gate`) hoặc `OPEN_OK` — bắt "write đặc quyền quên consent gate"; `.py` enumerate `POST_ROUTES` dict rồi quét source method đích (`.ps1` vẫn regex-parse) |
 | `test-walkthrough.py` | Validator walkthrough.json: kinds/fields/`{{var}}`/cond/media tồn tại + từ cấm ("đơn giản", "chỉ cần"…) — skill `/tao-cong-cu` bắt buộc chạy sau khi sinh |

@@ -24,7 +24,7 @@ Event (JSON trong mảng events):
   {"t":"done"}                       - agent nói xong một lượt
   {"t":"err","msg":"..."}
 """
-import hmac, json, os, platform, re, runpy, secrets, shutil, subprocess, sys, tempfile, threading, time, unicodedata, urllib.parse, urllib.request
+import collections, hmac, json, os, platform, re, runpy, secrets, shutil, subprocess, sys, tempfile, threading, time, unicodedata, urllib.parse, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -228,7 +228,7 @@ LOG_MAX_BYTES = 1024 * 1024   # mỗi .logs/*.log giữ tối đa 1MB
 
 def hist_write(ev):
     global _hist_permed, _hist_f, _hist_writes, _hist_flush_at
-    if ev.get("t") == "perm":
+    if ev.get("t") in ("perm", "perm_done"):
         return          # card xin phép là transient — không ghi vào file
     # serialize ghi: hai thread (reader não + handler API) viết cùng lúc
     # xen kẽ → dòng jsonl rách; replay bỏ qua dòng lỗi nhưng mất event
@@ -298,21 +298,35 @@ def replay_history():
     max_run = 0
     try:
         with open(HIST_FP, encoding="utf-8-sig") as f:
-            for line in f:
-                try:
-                    ev = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if ev.get("t") == "perm":
-                    continue        # card xin phép là transient — bỏ
-                try:
-                    max_run = max(max_run, int(ev.get("run_id") or 0))
-                except (TypeError, ValueError):
-                    pass
-                with store_lock:
-                    event_store.append(ev)
+            lines = f.readlines()
     except OSError:
         return
+    # Nút "Việc mới" ghi marker {t:"cleared"} — replay chỉ đọc SAU marker
+    # gần nhất (hội thoại trước đó bị quên có chủ đích). File vẫn giữ
+    # nguyên — cleared là ranh giới hiển thị, không phải xoá dữ liệu.
+    start = 0
+    for i, line in enumerate(lines):
+        try:
+            ev = json.loads(line)
+        except (json.JSONDecodeError, AttributeError):
+            continue
+        if ev.get("t") == "cleared":
+            start = i + 1
+        try:
+            # run_id quét TOÀN file (kể cả trước cleared) — lượt mới không
+            # được đụng lại số của lượt đã "quên", beacon đếm sẽ lệch
+            max_run = max(max_run, int(ev.get("run_id") or 0))
+        except (TypeError, ValueError, AttributeError):
+            pass
+    for line in lines[start:]:
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if ev.get("t") == "perm":
+            continue            # card xin phép là transient — bỏ
+        with store_lock:
+            event_store.append(ev)
     # F-018: tiếp tục run_id từ phiên trước — restart mà reset về 0 thì
     # history jsonl (append-only) trộn run_id 2 phiên, dashboard đếm sai
     run_id[0] = max_run
@@ -830,12 +844,23 @@ def _append(ev):
         event_store.append(ev)
         if ev.get("t") in ("ready", "done", "err"):
             # lượt mới/kết thúc/lỗi → perm cũ hết hạn; giết luôn dialog
-            # native đang mở kẻo mồ côi trên màn hình tới hết TTL
-            for _r in perm_pending.values():
+            # native đang mở kẻo mồ côi trên màn hình tới hết TTL.
+            # Phát perm_done cho từng card bị clear — UI đóng card thay
+            # vì treo giả (card replay trong event_store trông y hệt
+            # card sống nếu không có event đóng đi kèm).
+            for _rid, _r in perm_pending.items():
                 _kill_proc(_r)
+                event_store.append({"t": "perm_done", "id": _rid})
             perm_pending.clear()
+            # KHÔNG clear local_pending — card gate nội bộ (cấp quyền,
+            # kết nối…) cố tình sống qua lượt để học viên duyệt sau.
             if prompt_lock.locked():   # kết lượt (kể cả não chết → err) → mở
                 prompt_lock.release()
+        if ev.get("t") == "cleared":
+            # "Việc mới" = quên mọi trạng thái chờ: card gate nội bộ đang
+            # treo cũng chết theo (UI đã xoá màn hình — để sót thì card
+            # mồ côi tới hết TTL, respond sau đó 404 khó hiểu).
+            local_pending.clear()
         excess = len(event_store) - MAX_EVENTS
         if excess > 0:
             del event_store[:excess]
@@ -872,6 +897,48 @@ def _sandbox_wrap(argv):
         return argv                     # thiếu tool → chạy thường, không kẹt
     return ["/usr/bin/sandbox-exec", "-f", sb] + argv
 
+def _no_window_flags():
+    """Windows: con console-subsystem (devin.exe, powershell…) pop cửa sổ
+    cmd trước mặt học viên — chặn bằng CREATE_NO_WINDOW + ẩn cửa sổ."""
+    if platform.system() != "Windows":
+        return {}
+    si = subprocess.STARTUPINFO()
+    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    return {"creationflags": subprocess.CREATE_NO_WINDOW,
+            "startupinfo": si}
+
+# stderr của não → .logs/brain-stderr.log (có thể chứa token/path/stack —
+# KHÔNG broadcast, KHÔNG vào chat-history). Chỉ bản dịch tiếng Việt của
+# nó đi lên UI khi não chết.
+BRAIN_STDERR_FP = os.path.join(os.path.dirname(HIST_FP), "brain-stderr.log")
+_err_card_last = {}          # loại lỗi → monotonic — não crash-loop qua
+ERR_CARD_DEDUP_S = 60        # watchdog respawn không spam chat >1 card/phút
+
+def _brain_err_msg(tail):
+    """Dịch ~4KB stderr gần nhất của não vừa chết thành câu học viên đọc
+    được. Regex là ALLOWLIST dấu hiệu, không phải forward stderr thô."""
+    blob = "\n".join(tail)[-4096:].lower()
+    if not blob.strip():
+        return ("crash", "não vừa tắt ngay khi mở — gửi lại tin nhắn để "
+                "mình thử lại, hoặc đổi não khác trong Cài đặt")
+    if re.search(r"unauthorized|401|token expired|login required|oauth|"
+                 r"not logged|authentication", blob):
+        return ("auth", "phiên đăng nhập của não đã hết — đăng nhập lại "
+                "giúp mình nhé (vào Cài đặt → mục Bộ não)")
+    if re.search(r"rate.?limit|quota|insufficient", blob):
+        return ("quota", "não đang bị giới hạn lượt dùng — chờ một lát "
+                "rồi nhắn lại, hoặc đổi não khác trong Cài đặt")
+    return ("dead", "trợ lý vừa dừng đột ngột — chạy lại file start rồi "
+            "thử lại")
+
+def _brain_err_card(tail):
+    kind, msg = _brain_err_msg(tail)
+    now = time.monotonic()
+    if now - _err_card_last.get(kind, 0) < ERR_CARD_DEDUP_S:
+        return
+    _err_card_last[kind] = now
+    broadcast({"t": "err", "msg": msg})
+
 class Acp:
     def __init__(self, brain):
         self.next_id = 10
@@ -881,6 +948,7 @@ class Acp:
         self.lock = threading.Lock()
         self._waiters = {}   # mid → Event — call_sync chờ reply theo id
         self._replies = {}   # mid → message trả lời (chỉ id đang chờ)
+        self._stderr_tail = collections.deque(maxlen=64)  # stderr gần nhất
         self.proc = None
         self.brain_id = brain.get("id", brain["cmd"])
         try:
@@ -899,8 +967,8 @@ class Acp:
                 _sandbox_wrap([brain["cmd"]] +
                               [str(a) for a in brain.get("args") or []]),
                 cwd=CWD, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL, text=True, bufsize=1,
-                env=benv)
+                stderr=subprocess.PIPE, text=True, bufsize=1,
+                env=benv, errors="replace", **_no_window_flags())
         except OSError:
             # binary não chưa cài → báo UI, bridge vẫn sống để học viên đổi não
             self.dead = True
@@ -909,6 +977,37 @@ class Acp:
                               "' — não trợ lý chưa cài. Vào mục Cài đặt đổi sang não khác."})
             return
         threading.Thread(target=self._reader, daemon=True).start()
+        # stderr PHẢI luôn có người đọc (kể cả khi handshake fail) — pipe
+        # đầy mà không ai đọc thì não treo vì bị chặn ghi.
+        threading.Thread(target=self._stderr_reader, daemon=True).start()
+
+    def _stderr_reader(self):
+        """Đọc stderr của não → .logs/brain-stderr.log + giữ tail để dịch
+        lỗi khi chết. Không cho stderr lọt vào broadcast/history (log có
+        thể chứa token, path, stack trace)."""
+        try:
+            f = open(BRAIN_STDERR_FP, "a", encoding="utf-8")
+        except OSError:
+            f = None
+        try:
+            for line in self.proc.stderr:
+                line = line.rstrip("\n")
+                if not line:
+                    continue
+                self._stderr_tail.append(line[:500])
+                if f:
+                    try:
+                        f.write(line + "\n")
+                        f.flush()
+                    except OSError:
+                        f = None
+        except (ValueError, OSError):
+            pass
+        try:
+            if f:
+                f.close()
+        except OSError:
+            pass
 
     def _write(self, obj):
         self.proc.stdin.write(json.dumps(obj, ensure_ascii=False) + "\n")
@@ -980,8 +1079,10 @@ class Acp:
         for ev in list(self._waiters.values()):
             ev.set()
         if not self.expect_death:
-            broadcast({"t": "err",
-                       "msg": "trợ lý vừa dừng đột ngột — chạy lại file start rồi thử lại"})
+            # dịch stderr tail thành card lỗi học viên đọc được (stderr
+            # thô chỉ nằm trong .logs/brain-stderr.log — có thể chứa
+            # token/path, không đưa lên UI)
+            _brain_err_card(self._stderr_tail)
 
     def _dispatch(self, m):
         # Reply của một call_sync đang chờ — ghi trước, vẫn cho các nhánh
@@ -1576,10 +1677,12 @@ class Handler(BaseHTTPRequestHandler):
         "/api/pick-folder":   "_g_pick_folder_probe",
         "/api/bots":          "_g_bots",
         "/api/install-brain": "_g_install_brain",
+        "/api/skills":        "_g_skills",
     }
     POST_ROUTES = {
         "/api/prompt":        "_h_prompt",
         "/api/cancel":        "_h_cancel",
+        "/api/new-task":      "_h_new_task",
         "/api/respond":       "_h_respond",
         "/api/brain":         "_h_brain",
         "/api/delete-lesson": "_h_delete_lesson",
@@ -1599,6 +1702,8 @@ class Handler(BaseHTTPRequestHandler):
         "/api/install-brain": "_h_install_brain",
         "/api/pick-folder":   "_h_pick_folder",
         "/api/reveal":        "_h_reveal",
+        "/api/upload-paste":  "_h_upload_paste",
+        "/api/support-bundle":"_h_support_bundle",
     }
 
     def do_GET(self):
@@ -1628,8 +1733,10 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             cl = 0
         cl = max(0, cl)     # số âm → read(-n) đọc tới timeout, giữ slot
-        # save-page + bot-import cần limit lớn hơn — file clone/base64 zip
-        cap = 8_000_000 if path in ("/api/save-page", "/api/bot-import") else 1_000_000
+        # save-page + bot-import cần limit lớn hơn — file clone/base64 zip;
+        # upload-paste nhận ảnh base64 (cap 10MB sau giải mã → ~14MB trên dây)
+        cap = (8_000_000 if path in ("/api/save-page", "/api/bot-import")
+               else 15_000_000 if path == "/api/upload-paste" else 1_000_000)
         if cl > cap:
             self._json({"err": "body quá lớn"}, 413); return
         body = self.rfile.read(cl)
@@ -1697,7 +1804,12 @@ class Handler(BaseHTTPRequestHandler):
                 total = event_base + len(event_store)
                 reset = since < 0 or since < event_base or since > total
             evs = list(event_store) if reset else list(event_store[since - event_base:])
-        self._json({"events": evs, "next": total, "reset": reset})
+            # reset = replay toàn bộ: card 'perm' trong store trông y hệt
+            # card sống — kèm id còn pending để UI mờ card đã xử lý
+            live_perms = [str(r) for r in
+                          list(perm_pending) + list(local_pending)] if reset else []
+        self._json({"events": evs, "next": total, "reset": reset,
+                    "perm_pending": live_perms})
 
     def _g_permissions(self):
         self._json(load_json(PERM_FP, {"folders": []}))
@@ -1721,36 +1833,71 @@ class Handler(BaseHTTPRequestHandler):
                     os.path.isdir(p) if p and not path_sensitive(p) else False})
 
     def _g_pick_folder_probe(self):
-        """UI hỏi có hiện nút 'duyệt folder' không — chỉ macOS có hộp
-        chọn folder qua osascript; OS khác → UI giấu nút, giữ ô gõ tay."""
-        self._json({"ok": True, "supported":
-                    sys.platform == "darwin"
-                    and shutil.which("osascript") is not None})
+        """UI hỏi có hiện nút 'duyệt folder' không — macOS qua osascript,
+        Windows qua PowerShell FolderBrowserDialog, Linux qua zenity;
+        OS nào không có cách → UI giấu nút, giữ ô gõ tay."""
+        supported = (
+            (sys.platform == "darwin" and shutil.which("osascript"))
+            or (sys.platform == "win32" and shutil.which("powershell"))
+            or (sys.platform.startswith("linux") and shutil.which("zenity")))
+        self._json({"ok": True, "supported": bool(supported)})
 
-    def _h_pick_folder(self, data):
-        """Mở hộp chọn folder của macOS — nút 'duyệt' kiểu đính kèm file
-        cho người không biết gõ path. Serial một hộp; timeout giết hộp
-        treo khi học viên bỏ đi."""
-        if sys.platform != "darwin" or not shutil.which("osascript"):
-            return self._json({"ok": False, "err": "không hỗ trợ"})
-        if not _pick_folder_lock.acquire(timeout=1):
-            return self._json({"ok": False,
-                               "err": "đang có hộp chọn mở"}, 409)
-        try:
+    def _pick_folder_os(self):
+        """Mở hộp chọn folder của OS, trả path user tự chọn hoặc None.
+        Dialog thuộc process con — code chỉ chờ + đọc stdout 1 dòng."""
+        if sys.platform == "darwin" and shutil.which("osascript"):
             p = subprocess.run(
                 ["osascript", "-e",
                  'POSIX path of (choose folder with prompt '
                  '"Chọn folder trợ lý được đọc")'],
                 capture_output=True, text=True, timeout=180)
             out = (p.stdout or "").strip()
-            if p.returncode != 0 or not out:
+            return out if p.returncode == 0 and out else None
+        if sys.platform == "win32" and shutil.which("powershell"):
+            # FolderBrowserDialog — không cần tkinter (PyInstaller kéo tk
+            # nặng). -STA bắt buộc cho WinForms; TopMost để hộp không chìm
+            # sau cửa sổ trình duyệt khi bridge chạy ẩn.
+            p = subprocess.run(
+                ["powershell", "-NoProfile", "-STA", "-Command",
+                 "Add-Type -AssemblyName System.Windows.Forms;"
+                 "$d=New-Object System.Windows.Forms.FolderBrowserDialog;"
+                 "$d.Description='Chọn folder trợ lý được đọc';"
+                 "$d.ShowNewFolderButton=$false;"
+                 "$f=New-Object System.Windows.Forms.Form;"
+                 "$f.TopMost=$true;"
+                 "if($d.ShowDialog($f) -eq 'OK'){$d.SelectedPath}"],
+                capture_output=True, text=True, timeout=120,
+                **_no_window_flags())
+            out = (p.stdout or "").strip()
+            return out if p.returncode == 0 and out else None
+        if sys.platform.startswith("linux") and shutil.which("zenity"):
+            p = subprocess.run(
+                ["zenity", "--file-selection", "--directory",
+                 "--title=Chọn folder trợ lý được đọc"],
+                capture_output=True, text=True, timeout=180)
+            out = (p.stdout or "").strip()
+            return out if p.returncode == 0 and out else None
+        return None
+
+    def _h_pick_folder(self, data):
+        """Mở hộp chọn folder của OS — nút 'duyệt' kiểu đính kèm file
+        cho người không biết gõ path. Serial một hộp; timeout giết hộp
+        treo khi học viên bỏ đi."""
+        if not _pick_folder_lock.acquire(timeout=1):
+            return self._json({"ok": False,
+                               "err": "đang có hộp chọn mở"}, 409)
+        try:
+            out = self._pick_folder_os()
+            if not out:
                 return self._json({"ok": True, "cancelled": True})
+            if not os.path.isdir(out):
+                return self._json({"ok": False, "err": "không phải folder"})
             # Dạng ~/... để khớp preset "📁 Downloads" — path tuyệt đối
             # trùng Downloads sẽ sinh mục trùng trong danh sách chọn.
             home = os.path.expanduser("~")
             if out == home or out.startswith(home + os.sep):
                 out = "~" + out[len(home):]
-            self._json({"ok": True, "path": out.rstrip("/")})
+            self._json({"ok": True, "path": out.rstrip("/").rstrip("\\")})
         except subprocess.TimeoutExpired:
             self._json({"ok": True, "cancelled": True})
         except Exception:
@@ -1759,13 +1906,16 @@ class Handler(BaseHTTPRequestHandler):
             _pick_folder_lock.release()
 
     def _h_reveal(self, data):
-        """Nút 'Mở trong Finder' của walkthrough — `open -R <path>` =
-        REVEAL trong Finder (chọn sẵn item), KHÔNG phải `open` thường:
-        `open` thực thi .app/.command → agent (có sẵn token) gọi endpoint
-        là chạy được file ngoài sandbox. -R không bao giờ chạy file.
+        """Nút 'Mở trong Finder' của walkthrough + chip 📂 trong chat —
+        `open -R`/`explorer /select,` = REVEAL (chọn sẵn item), KHÔNG
+        phải `open` thường: `open` thực thi .app/.command → agent (có sẵn
+        token) gọi endpoint là chạy được file ngoài sandbox. explorer
+        /select, tương đương — cũng không bao giờ chạy file.
         Cùng chống-oracle của check-path: chỉ dưới ~, không đụng .devin,
         không vùng nhạy (deny-list)."""
-        if sys.platform != "darwin":
+        if sys.platform not in ("darwin", "win32") \
+                and not (sys.platform.startswith("linux")
+                         and shutil.which("xdg-open")):
             return self._json({"ok": False, "err": "không hỗ trợ"})
         p = os.path.abspath(os.path.expanduser(str(data.get("path") or "")))
         home = os.path.abspath(os.path.expanduser("~"))
@@ -1776,9 +1926,142 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": False, "err": "path này không mở được"})
         if not os.path.exists(p):
             return self._json({"ok": False, "err": "chưa thấy path này"})
-        subprocess.Popen(["open", "-R", p],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        kw = dict(stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                  **_no_window_flags())
+        if sys.platform == "darwin":
+            subprocess.Popen(["open", "-R", p], **kw)
+        elif sys.platform == "win32":
+            # explorer /select, = chọn sẵn item (parity `open -R`);
+            # trả exit code 1 kể cả khi thành công → Popen không check rc.
+            if os.path.isfile(p):
+                subprocess.Popen(["explorer", "/select,", p], **kw)
+            else:
+                subprocess.Popen(["explorer", p], **kw)
+        else:
+            # Linux: xdg-open không có "select" chuẩn — mở folder chứa.
+            subprocess.Popen(["xdg-open",
+                              p if os.path.isdir(p) else os.path.dirname(p)],
+                             **kw)
         self._json({"ok": True})
+
+    def _g_skills(self):
+        """Danh sách skill cho slash-menu trong chat — đọc tên folder
+        trong .devin/skills/ (mỗi folder = một /lệnh) + mô tả ngắn từ
+        frontmatter SKILL.md. Chỉ metadata, không trả nội dung file."""
+        out = []
+        try:
+            for name in sorted(os.listdir(SKILLS_DIR)):
+                fp = os.path.join(SKILLS_DIR, name, "SKILL.md")
+                if name.startswith(".") or not os.path.isfile(fp):
+                    continue
+                desc = ""
+                try:
+                    with open(fp, encoding="utf-8-sig") as f:
+                        for line in f:
+                            line = line.strip()
+                            if line.startswith("description:"):
+                                desc = line.split(":", 1)[1] \
+                                         .strip().strip('"\'')[:120]
+                                break
+                except OSError:
+                    pass
+                out.append({"name": name, "desc": desc})
+        except OSError:
+            pass
+        self._json({"ok": True, "skills": out})
+
+    def _h_upload_paste(self, data):
+        """Dán ảnh vào ô chat → lưu workspace/inbox/paste-<ts>.<ext> —
+        não đọc được file trong vùng cho phép sẵn. Tên file SERVER tự
+        đặt: tên gốc clipboard có thể mang path/ký tự lạ. Cap 10MB sau
+        giải mã; chỉ whitelist mime ảnh."""
+        import base64
+        raw = str(data.get("data") or "")
+        # data URL ("data:image/png;base64,....") hoặc base64 trần
+        if raw.startswith("data:") and "," in raw:
+            mime = raw.split(",", 1)[0][5:].split(";")[0].lower()
+            raw = raw.split(",", 1)[1]
+        else:
+            mime = str(data.get("mime") or "image/png").lower()
+        ext = {"image/png": "png", "image/jpeg": "jpg",
+               "image/gif": "gif", "image/webp": "webp",
+               "image/bmp": "bmp"}.get(mime)
+        if not ext:
+            return self._json({"err": "chỉ nhận ảnh (png/jpg/gif/webp)"}, 400)
+        try:
+            blob = base64.b64decode(raw, validate=True)
+        except Exception:
+            return self._json({"err": "dữ liệu ảnh lỗi"}, 400)
+        if not blob or len(blob) > 10 * 1024 * 1024:
+            return self._json({"err": "ảnh quá lớn (tối đa 10MB)"}, 413)
+        try:
+            inbox = os.path.join(MC_DIR, "inbox")
+            os.makedirs(inbox, exist_ok=True)
+            name = "paste-%d.%s" % (int(time.time() * 1000), ext)
+            fp = os.path.join(inbox, name)
+            with open(fp, "wb") as f:
+                f.write(blob)
+        except OSError:
+            return self._json({"err": "không ghi được file"}, 500)
+        self._json({"ok": True, "path": "workspace/inbox/" + name})
+
+    def _h_support_bundle(self, data):
+        """Nút "Gói nhật ký lỗi" trong Cài đặt → zip .logs (bỏ file >5MB
+        và chat-history*.jsonl — nội dung trò chuyện riêng tư không đi
+        theo file gửi người khác) + config.json → Desktop. Đích CỐ ĐỊNH
+        (Desktop → OneDrive/Desktop → Downloads), không nhận từ client
+        (chống oracle ghi file). Gate bắt buộc: nhật ký rời máy."""
+        title = ("Gói nhật ký lỗi thành file zip trên Desktop? "
+                 "(nhật ký có thể chứa tên file bạn đã xử lý — chỉ gửi "
+                 "cho người bạn tin)")
+        def _apply():
+            import zipfile
+            logs_dir = os.path.dirname(HIST_FP)
+            home = os.path.expanduser("~")
+            dest_dir = home
+            for cand in ("Desktop",
+                         os.path.join("OneDrive", "Desktop"),
+                         "Downloads"):
+                d = os.path.join(home, cand)
+                if os.path.isdir(d):
+                    dest_dir = d
+                    break
+            zf = os.path.join(dest_dir,
+                              "troly-logs-%s.zip" % time.strftime("%Y%m%d-%H%M"))
+            with zipfile.ZipFile(zf, "w", zipfile.ZIP_DEFLATED) as z:
+                try:
+                    for fn in os.listdir(logs_dir):
+                        if fn.startswith("chat-history"):
+                            continue
+                        fp = os.path.join(logs_dir, fn)
+                        if os.path.isfile(fp) \
+                                and os.path.getsize(fp) <= 5 * 1024 * 1024:
+                            z.write(fp, fn)
+                except OSError:
+                    pass
+                # config chỉ lấy key vô hại — tuyệt đối không kèm secrets,
+                # token, hay file trong .devin/
+                cfg = load_json(CONFIG_FP, {})
+                safe = {k: v for k, v in cfg.items()
+                        if k in ("language", "learner_name", "terminal")}
+                z.writestr("config.json",
+                           json.dumps(safe, ensure_ascii=False, indent=1))
+            # mở sẵn vị trí file — tái dùng đúng guard/platform của reveal
+            kw = dict(stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                      **_no_window_flags())
+            try:
+                if sys.platform == "darwin":
+                    subprocess.Popen(["open", "-R", zf], **kw)
+                elif sys.platform == "win32":
+                    subprocess.Popen(["explorer", "/select,", zf], **kw)
+                elif shutil.which("xdg-open"):
+                    subprocess.Popen(["xdg-open", dest_dir], **kw)
+            except Exception:
+                pass
+            broadcast({"t": "warn",
+                       "msg": "đã gói nhật ký xong — file nằm ở " + zf})
+        rid = gate_local(title, _apply)
+        self._gate_resp(rid, "chờ xác nhận gói nhật ký")
 
     # ---- Terminal (ttyd) — tuỳ chọn nâng cao, mặc định TẮT ----
     # config.terminal=true thì mới spawn ttyd (launcher đọc cùng flag
@@ -1810,12 +2093,19 @@ class Handler(BaseHTTPRequestHandler):
             return False
 
     def _h_config(self, data):
-        """Cài đặt nhỏ do user lật trong portal — hiện chỉ whitelist key
-        `terminal` (bật/tắt tab Terminal). terminal:true → spawn ttyd
-        ngay (khỏi restart); false → giết process theo pidfile/port."""
+        """Cài đặt nhỏ do user lật trong portal — whitelist key
+        `terminal` (bật/tắt tab Terminal) + `language` (vi/en).
+        terminal:true → spawn ttyd ngay (khỏi restart); false → giết
+        process theo pidfile/port."""
         patch = {}
         if "terminal" in data:
             patch["terminal"] = bool(data.get("terminal"))
+        if "language" in data:
+            # đổi ngôn ngữ sau onboarding — chỉ nhận 2 giá trị hợp lệ,
+            # giữ tinh thần whitelist (không mở patch tự do)
+            lang = str(data.get("language") or "")
+            if lang in ("vi", "en"):
+                patch["language"] = lang
         if not patch:
             return self._json({"err": "không có key nào được phép"}, 400)
         cfg = load_json(CONFIG_FP, {})
@@ -1913,6 +2203,11 @@ class Handler(BaseHTTPRequestHandler):
                                    "gửi lại sau vài giây"}, 503); return
             broadcast({"t": "warn", "msg": "mình vừa nạp lại quyền "
                                            "mới — làm tiếp ngay nhé"})
+        # Lời của HỌC VIÊN cũng là một event — reload/replay mới thấy
+        # đủ hai chiều (trước đây history chỉ có lời trợ lý). Broadcast
+        # sau khi giữ lock, trước khi forward cho não — thứ tự event
+        # đúng với thứ tự hiển thị.
+        broadcast({"t": "user_msg", "text": str(data.get("text", ""))[:4000]})
         try:
             acp.call("session/prompt", {
                 "sessionId": acp.session_id,
@@ -1936,6 +2231,57 @@ class Handler(BaseHTTPRequestHandler):
                           "params": {"sessionId": acp.session_id}})
             except (BrokenPipeError, OSError):
                 pass
+        self._json({"ok": True})
+
+    def _h_new_task(self, data):
+        """Nút "Việc mới" — hội thoại sạch context một chạm. Giữ
+        prompt_lock suốt session/new (prompt chen giữa sẽ đáp vào session
+        CŨ rồi bị quên); event "ready" từ _dispatch/_append tự mở lock
+        khi xong — chỉ release tay trong nhánh fail."""
+        with store_lock:
+            locked = prompt_lock.acquire(blocking=False)
+            if locked:
+                turn_gen[0] += 1
+                run_id[0] += 1
+        if not locked:
+            self._json({"err": "trợ lý đang xử lý câu trước"}, 409); return
+        ok = False
+        try:
+            # "cleared" phải đi TRƯỚC khi prompt_lock mở (event "ready"
+            # phát trong _dispatch/manual-đều mở lock): nhờ vậy mọi
+            # user_msg chen vào sau này luôn nằm sau ranh giới — nếu
+            # ngược lại, tin kẹp giữa ready↔cleared bị replay bỏ quên
+            # dù reply của nó thuộc việc mới. Marker vừa qua long-poll
+            # (UI xoá khung ngay) vừa tự ghi history làm ranh giới —
+            # replay_history chỉ đọc sau marker gần nhất; KHÔNG xoá file.
+            if acp is None or acp.dead:
+                broadcast({"t": "cleared"})
+                spawn_brain()          # não chết → spawn mới luôn
+            else:
+                # Đường nhẹ: session/new thứ hai trên process đang sống
+                # (ACP cho phép nhiều session). Não trả sessionId → đổi
+                # sang session sạch; não từ chối → fallback respawn.
+                r = acp.call_sync("session/new",
+                                  {"cwd": CWD, "mcpServers": []})
+                sid = (r or {}).get("result") or {}
+                sid = sid.get("sessionId") if isinstance(sid, dict) else None
+                if sid:
+                    acp.session_id = sid
+                    broadcast({"t": "cleared"})
+                    # broadcast ready TAY — _dispatch chỉ tự phát ready
+                    # khi session_id rỗng (đường spawn lần đầu)
+                    broadcast({"t": "ready", "sessionId": sid})
+                else:
+                    broadcast({"t": "cleared"})
+                    spawn_brain()
+            ok = acp is not None and not acp.dead and acp.session_id
+        finally:
+            if not ok and prompt_lock.locked():
+                prompt_lock.release()   # không ready nào tới → mở tay,
+                                        # kẻo mọi prompt sau 409 mãi
+        if not ok:
+            self._json({"err": "chưa mở được việc mới — thử lại sau "
+                               "vài giây"}, 503); return
         self._json({"ok": True})
 
     def _h_respond(self, data):

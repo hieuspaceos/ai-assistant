@@ -18,9 +18,9 @@ def endpoints(fp):
 # thì tự động ra khỏi warn. (audit-6 F5: 5 endpoint bots/bot-import/
 # install-brain đã port sang ps1; /api/config ps1 đã có từ trước.)
 PY_ONLY_OK = set()
-# pick-folder/reveal trong .py là darwin-only — chạy .py trên Windows
-# cũng trả "không hỗ trợ", portal degrade êm nên không phải regression.
-DARWIN_ONLY = {"/api/pick-folder", "/api/reveal"}
+# ux-polish ph-06: pick-folder/reveal đã port cả .ps1 (WinForms dialog +
+# explorer /select,) — không còn darwin-only. Giữ set rỗng để khai sau.
+DARWIN_ONLY = set()
 
 py = endpoints(os.path.join(ROOT, "tools", "chat-bridge.py"))
 ps = endpoints(os.path.join(ROOT, "tools", "chat-bridge.ps1"))

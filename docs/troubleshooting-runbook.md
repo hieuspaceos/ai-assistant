@@ -77,7 +77,11 @@ token cũ, không ghi đè). Muốn ép rotate tay: `rm .devin/bridge.token`
 + chạy lại `start`; portal/extension cũ hết hạn — extension tự pair
 lại khi mở portal, hoặc dán mã mới trong trang options của nó.
 
-Log: `.logs/{portal,chat-bridge,ext-bridge,ttyd}.log` dưới root.
+Log: `.logs/{portal,chat-bridge,ext-bridge,ttyd,brain-stderr}.log`
+dưới root. `brain-stderr.log` là stderr của process não (KHÔNG lên UI —
+có thể chứa token; chat chỉ nhận card lỗi tiếng Việt đã dịch). Gói log
+gửi support: Cài đặt → "Gói nhật ký lỗi" → zip `.logs/` (trừ
+`chat-history*`) ra Desktop.
 
 ## 2. Khởi động
 
@@ -86,7 +90,8 @@ Log: `.logs/{portal,chat-bridge,ext-bridge,ttyd}.log` dưới root.
 | Portal không lên | port 8080 bị chiếm | `lsof -i :8080` (macOS) / `netstat -ano \| findstr 8080` (Win); xem `.logs/portal.log` |
 | `{"connected":false}` mọi action | extension chưa nạp | Mở `chrome://extensions` → bật "Trợ Lý AI"; sau khi sửa `extension/*.js` → `{"action":"reload"}` |
 | Icon extension hiện `!` | chưa có mã kết nối | Mở portal qua file `start` — auto-pair tự chạy; không được thì ⚙ Cài đặt → "Mã kết nối" → copy → dán vào options của extension |
-| Chat không trả lời | não ACP chết / license / chưa đăng nhập | Chạy lệnh não tay (`brain.json` → `cmd`) xem lỗi; xem `.logs/chat-bridge.log`; bridge tự thử bật lại ở lượt gửi sau |
+| Chat không trả lời | não ACP chết / license / chưa đăng nhập | Chạy lệnh não tay (`brain.json` → `cmd`) xem lỗi; xem `.logs/chat-bridge.log` + `.logs/brain-stderr.log` (stderr thật của não); bridge tự thử bật lại ở lượt gửi sau |
+| Card lỗi não hiện nhưng stderr log rỗng (Windows) | não spawn qua `TroLy.AgentSpawn` (user `troly-agent`) → stderr route về NUL — card vẫn đúng loại lỗi nhưng tail trống | Bắt chưa xong (AgentSpawn C# dup2) — chạy lệnh não tay trong PowerShell để xem lỗi thật; `.py`/đường non-sandbox log bình thường |
 | Chat báo "không chạy được 'X'" | não `X` trong `brain.json` chưa cài | Panel ⚙ Cài đặt → Bộ não → chọn não khác; hoặc cài `X` rồi gửi lại |
 | Nút Gửi kẹt "đang làm việc" sau khi app bị giết/khởi động lại giữa chừng | bridge chết mid-turn → respawn replay event cũ → client không nhận được `done`/`reset` | Đã vá (F-029): `replay_history()` chêm `err` khi event cuối là text/tool/warn/perm + watchdog 20s mất kết nối mở khoá nút. Tin gửi đúng lúc bridge chết vẫn mất — nói học viên nhắn lại; nút "■ Dừng" (`/api/cancel`) dùng được ngay khi có lượt mới |
 | Đổi não mà chat vẫn não cũ | bridge chưa reload | `POST /api/brain` tự restart agent; kiểm `GET /api/health` → trường `brain` |

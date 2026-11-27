@@ -72,6 +72,35 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
+    # Trang lỗi êm (ux-polish ph-07): học viên thấy câu tiếng Việt + link
+    # về trang chính thay vì HTML kỹ thuật mặc định ("Error response...
+    # Error code 404"). Chỉ portal tĩnh — bridge API trả JSON riêng.
+    def send_error(self, code, message=None, explain=None):
+        msgs = {
+            403: "Trang này không mở được từ đây — quay lại trang chính nhé.",
+            404: "Không thấy thứ bạn mở — có thể nó chưa được tạo. "
+                 "Quay lại trang chính rồi chọn trong danh sách nhé.",
+            416: "Không đọc được đoạn file này.",
+        }
+        note = msgs.get(code, "Có lỗi nhỏ — quay lại trang chính rồi thử lại nhé.")
+        body = ("<!DOCTYPE html><html lang=vi><meta charset=utf-8>"
+                "<meta name=viewport content='width=device-width,initial-scale=1'>"
+                "<title>Ừm…</title><body style='font-family:system-ui,sans-serif;"
+                "max-width:34em;margin:4em auto;padding:0 1em;line-height:1.7;color:#333'>"
+                "<h2 style='font-weight:500'>Ừm, có gì đó chưa ổn</h2>"
+                "<p>%s</p><p><a href='/web/'>← Về trang chính</a></p>"
+                "</body></html>" % note)
+        b = body.encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(b)))
+        self.end_headers()
+        # getattr: parse lỗi (414 URI dài, timeout...) gọi send_error TRƯỚC
+        # khi self.command được gán — self.command thô sẽ AttributeError
+        # ngay trong đường lỗi.
+        if getattr(self, "command", None) != "HEAD":
+            self.wfile.write(b)
+
     def end_headers(self):
         # vendor (font/marked/purify) không đổi theo request → cache 1h;
         # chỗ khác giữ no-store (manifest/course luôn cần bản mới nhất).

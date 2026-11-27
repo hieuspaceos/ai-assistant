@@ -43,6 +43,15 @@ query string (Cloudflare caches by URL).
    via ttyd — **off by default**, toggle in Settings; skipping ttyd
    saves RAM). Chat goes through `tools/chat-bridge.ps1` → the ACP brain
    picked by `brain.json` (`tools/chat-bridge.py` on macOS/Linux).
+   The chat itself: `＋` = start a fresh conversation
+   (`/api/new-task` — history is kept, the marker is a boundary not a
+   delete), `■` = stop the current turn, typing `/` opens a skill
+   autocomplete menu, pasting a screenshot uploads it to
+   `workspace/inbox/` and inserts the path, a message typed while the
+   brain is busy queues (max 1) and sends itself when done, paths the
+   assistant mentions get a 📂 chip to reveal them in Finder/Explorer,
+   and brain crashes surface as friendly error cards (raw stderr goes
+   to `.logs/brain-stderr.log`, never to the chat).
 5. The agent asks: which tools do you use? What repetitive work eats
    your time? → drafts a plan → the learner approves it.
 6. For each pain point it packages a **tool**: a new skill

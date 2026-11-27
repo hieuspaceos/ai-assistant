@@ -52,6 +52,10 @@ const I18N = {
     adminLink: 'Dành cho quản trị viên (IT) →',
     advancedTitle: 'Nâng cao',
     termToggle: 'Hiện chế độ Terminal (màn hình lệnh — chỉ khi bạn biết mình đang làm gì)',
+    langTitle: 'Ngôn ngữ',
+    supportBtn: 'Gói nhật ký lỗi (gửi khi cần hỗ trợ)',
+    supportSent: 'Đã gửi thẻ xác nhận vào chat — bấm Đồng ý để gói nhật ký ra Desktop.',
+    supportFail: 'Không gói được — trợ lý đang tắt?',
     delPermTitle: 'Gỡ quyền', recheckTitle: 'Kiểm tra lại',
     btnOpen: 'Mở trang', btnSetup: 'Cài',
     openTitle: 'Mở trang này trên trình duyệt', setupTitle: 'Điền thông tin kết nối',
@@ -157,6 +161,10 @@ const I18N = {
     adminLink: 'For IT administrators →',
     advancedTitle: 'Advanced',
     termToggle: 'Show Terminal mode (command screen — only if you know what you\'re doing)',
+    langTitle: 'Language',
+    supportBtn: 'Bundle error logs (send when you need help)',
+    supportSent: 'Confirmation card sent to chat — click Agree to bundle logs to Desktop.',
+    supportFail: 'Could not bundle — is the assistant off?',
     delPermTitle: 'Remove access', recheckTitle: 'Check again',
     btnOpen: 'Open', btnSetup: 'Set up',
     openTitle: 'Open this page in your browser', setupTitle: 'Enter connection details',
@@ -845,6 +853,16 @@ function applyTerminalUI() {
   // thì toggle vô nghĩa); #terminal-status vẫn giữ để báo bridge chết.
   $('#mode-chat').hidden = !terminalOn;
   $('#mode-cli').hidden = !terminalOn;
+  pushModebar();
+}
+// chat.html chừa dải giấy dưới cho cụm nút chế độ NỔI — chỉ khi nó thật
+// sự hiện (terminal bật). Tắt → chat giãn hết chiều cao, hết khoảng chết.
+function pushModebar() {
+  try {
+    const f = $('#chat-frame');
+    if (f && f.contentWindow)
+      f.contentWindow.postMessage({t: 'modebar', on: terminalOn}, location.origin);
+  } catch {}
 }
 async function initChat() {
   chatChecked = true;
@@ -872,7 +890,10 @@ async function setChatMode(mode) {
 
   if (mode === 'chat') {
     if (await ping(BRIDGE_URL, '/api/health', true)) {
-      if (!chatFrame.src) chatFrame.src = '/web/chat.html?bridge=' + encodeURIComponent(BRIDGE_URL);
+      if (!chatFrame.src) {
+        chatFrame.src = '/web/chat.html?bridge=' + encodeURIComponent(BRIDGE_URL);
+        chatFrame.onload = pushModebar;   // iframe tải xong → báo modebar
+      }
       status.innerHTML = '';
     } else {
       status.innerHTML = `<span class="warn">${t('warnChat')}</span>`;
@@ -974,8 +995,29 @@ $('#settings-btn').onclick = async () => {
   renderConnCode();
   renderFolders();
   bfetch(BRIDGE_URL + '/api/config').then(r => r.json())
-    .then(d => { terminalOn = !!d.terminal; $('#term-toggle').checked = terminalOn; })
+    .then(d => {
+      terminalOn = !!d.terminal; $('#term-toggle').checked = terminalOn;
+      $('#lang-sel').value = (d.language === 'en') ? 'en' : 'vi';
+    })
     .catch(() => { $('#term-toggle').checked = terminalOn; });
+  $('#lang-sel').onchange = async (e) => {
+    // đổi ngôn ngữ → portal + chat phải tải lại mới áp dụng chuỗi i18n
+    await bfetch(BRIDGE_URL + '/api/config', {
+      method: 'POST', body: JSON.stringify({ language: e.target.value })
+    }).catch(() => {});
+    location.reload();
+  };
+  $('#support-bundle').onclick = async () => {
+    // "Gói nhật ký lỗi" — bridge gate bằng thẻ xác nhận trong chat
+    const btn = $('#support-bundle');
+    btn.disabled = true;
+    try {
+      const r = await bfetch(BRIDGE_URL + '/api/support-bundle', { method: 'POST' });
+      const d = await r.json().catch(() => ({}));
+      uiAlert('Gói nhật ký', d.pending ? t('supportSent') : (d.err || t('supportFail')));
+    } catch { uiAlert('Gói nhật ký', t('supportFail')); }
+    btn.disabled = false;
+  };
   $('#term-toggle').onchange = async (e) => {
     terminalOn = e.target.checked;
     applyTerminalUI();
@@ -1698,9 +1740,12 @@ $('#wf-issue').onclick = async () => {
 // thẻ consent gate chạy xong trong iframe chat (đổi trợ lý, xoá bài,
 // sửa quyền…) → làm mới chip trợ lý + manifest cho khớp state trên đĩa
 window.addEventListener('message', (e) => {
-  if (e.origin === location.origin && e.data && e.data.t === 'gateDone') {
+  if (e.origin !== location.origin || !e.data) return;
+  if (e.data.t === 'gateDone') {
     loadBots();
     loadManifest();
+  } else if (e.data.t === 'modebar?') {
+    pushModebar();
   }
 });
 

@@ -3,6 +3,35 @@
 Các quyết định kiến trúc và **tại sao** — để sau này không gỡ ngược lại
 vì quên lý do. Mới nhất lên đầu.
 
+## 2026 — UX polish đợt 1 (plan 261127-1100): stderr không lộ, cleared là ranh giới không phải xoá, modebar postMessage
+
+**stderr của não → `.logs/brain-stderr.log`, KHÔNG broadcast.** Vì:
+stderr có thể chứa token/path/stack — đưa lên chat là rò bí mật vào
+history+event store. UI chỉ nhận card lỗi tiếng Việt dịch từ regex
+allowlist (auth/quota/crash/dead, dedup 60s — watchdog respawn không
+spam). `expect_death`/`ExpectDeath` phân biệt "bridge tự giết"
+(đổi não/watchdog → im lặng) vs crash thật.
+
+**`cleared` = marker ranh giới trong `chat-history.jsonl`, KHÔNG xoá
+file.** Vì: history append-only là nguồn audit + `run_id` phải quét
+toàn file (reset về 0 thì beacon đếm trộn 2 phiên). `replay_history`
+chỉ đọc sau marker gần nhất. `cleared` broadcast TRƯỚC khi `prompt_lock`
+mở — tin chen vào sau luôn nằm sau ranh giới, không bị replay quên
+mà reply của nó lại còn.
+
+**`local_pending` chết theo `cleared`, sống qua `done`/`err`/`ready`.**
+Card gate nội bộ (cấp quyền, gói log…) vẫn hợp lệ khi não đổi lượt —
+nhưng "Việc mới" = học viên chủ động quên hết, card chờ để lại chỉ là
+mồ côi (UI đã xoá, respond sau đó 404).
+
+**Cụm nút Chat/Terminal (modebar) báo hiện/ẩn qua postMessage
+`modebar`/`modebar?`.** Vì: iframe chat.html không đọc được DOM cha —
+padding dưới tĩnh chừa khoảng chết khi terminal tắt (mặc định).
+
+**Terminal = tuỳ chọn opt-in (`config.terminal`), KHÔNG auto-cài
+ttyd.** Vì: `start.bat` từng `winget install ttyd` âm thầm — cài phần
+mềm ngoài ý muốn vi phạm niềm tin. Tắt → không spawn, không nhắc.
+
 ## 2026 — Chuẩn tool = walkthrough + guide; chia `tools/` thành 3 dir
 
 **Tool sinh ra chỉ gồm `walkthrough.json` + `guide.md` (+ `sample-files/`

@@ -297,6 +297,14 @@ function Test-RwGrantOk($p) {
 
 # Dòng stdout của acp chạy qua event -> queue, main loop xử lý
 $lineQueue = New-Object 'System.Collections.Concurrent.ConcurrentQueue[string]'
+# stderr của não → queue → Drain-Queue ghi .logs\brain-stderr.log (parity
+# _stderr_reader bên .py). KHÔNG broadcast thô — stderr có thể chứa token.
+$script:BrainErrQ = New-Object 'System.Collections.Concurrent.ConcurrentQueue[string]'
+$script:BrainErrTail = New-Object System.Collections.ArrayList   # 64 dòng gần nhất cho card dịch
+$script:LastErrCardAt = @{}      # loại lỗi → epoch — dedup 60s (ERR_CARD_DEDUP_S)
+$BrainErrLogFp = Join-Path $WorkDir ".logs\brain-stderr.log"
+$script:AcpErrSub = $null        # subscription ErrorDataReceived (đường non-sandbox)
+$script:ExpectDeath = $false     # bridge tự giết não (đổi não/watchdog) → không bắn card crash
 
 # ---------- sandbox: spawn não dưới user hạn chế "troly-agent" ----------
 # Khi .devin\agent-user.cred tồn tại (setup-agent-user.ps1 đã chạy), não
@@ -511,6 +519,9 @@ function Test-BrainAlive {
 }
 
 function Stop-Brain {
+    # Bridge TỰ giết (đổi não / watchdog / shutdown) — đánh dấu để EOF
+    # không bị đọc thành crash card (parity expect_death bên .py).
+    $script:ExpectDeath = $true
     # Sandbox: giết cả cây qua Job Object (non-admin không Kill được
     # process user khác — handle Job của chính bridge mới là đường đi).
     if ($script:AcpHandle -ne [IntPtr]::Zero) {
@@ -565,14 +576,51 @@ function Push-Event($ev) {
     if (-not $ev.Contains("run_id")) { $ev["run_id"] = $script:RunId }
     [void]$script:EventStore.Add($ev)
     if ($ev.t -in @("ready", "done", "err")) {
-        $script:PermPending.Clear()   # lượt mới/kết thúc/lỗi → perm cũ hết hạn
+        # parity _append bên .py: mỗi card perm bị huỷ theo lượt bắn kèm
+        # perm_done — UI xám card cũ, không chờ vô hạn. LocalPending cố
+        # ý KHÔNG đụng — card gate nội bộ sống qua lượt.
+        foreach ($k in @($script:PermPending.Keys)) {
+            [void]$script:EventStore.Add([ordered]@{
+                t = "perm_done"; id = $k; run_id = $script:RunId })
+        }
+        $script:PermPending.Clear()
         $script:PromptBusy = $false   # kết lượt (kể cả não chết → err) → mở prompt
+    }
+    if ($ev.t -eq "cleared") {
+        # "Việc mới" = quên mọi trạng thái chờ — parity _append bên .py:
+        # card gate nội bộ đang treo chết theo (UI đã xoá màn hình).
+        $script:LocalPending.Clear()
     }
     if ($script:EventStore.Count -gt $MaxEvents) {
         $excess = $script:EventStore.Count - $MaxEvents
         $script:EventStore.RemoveRange(0, $excess)
         $script:EventBase += $excess
     }
+}
+
+function Push-BrainErrCard {
+    # parity _brain_err_card bên .py — stderr KHÔNG broadcast thô (có thể
+    # chứa token/path); chỉ bản dịch tiếng Việt của regex-allowlist lên UI.
+    if ($script:ExpectDeath) { return }   # bridge tự giết → không phải crash
+    $blob = (($script:BrainErrTail | ForEach-Object { [string]$_ }) -join "`n")
+    if ($blob.Length -gt 4096) { $blob = $blob.Substring($blob.Length - 4096) }
+    $blob = $blob.ToLower()
+    $kind = "dead"; $msg = "trợ lý vừa dừng đột ngột — chạy lại file start rồi thử lại"
+    if (-not $blob.Trim()) {
+        $kind = "crash"
+        $msg = "não vừa tắt ngay khi mở — gửi lại tin nhắn để mình thử lại, hoặc đổi não khác trong Cài đặt"
+    } elseif ($blob -match 'unauthorized|401|token expired|login required|oauth|not logged|authentication') {
+        $kind = "auth"
+        $msg = "phiên đăng nhập của não đã hết — đăng nhập lại giúp mình nhé (vào Cài đặt → mục Bộ não)"
+    } elseif ($blob -match 'rate.?limit|quota|insufficient') {
+        $kind = "quota"
+        $msg = "não đang bị giới hạn lượt dùng — chờ một lát rồi nhắn lại, hoặc đổi não khác trong Cài đặt"
+    }
+    $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    if ($script:LastErrCardAt[$kind] -and
+        ($now - $script:LastErrCardAt[$kind]) -lt 60) { return }
+    $script:LastErrCardAt[$kind] = $now
+    Push-Event ([ordered]@{ t = "err"; msg = $msg })
 }
 
 function Start-BrainSandboxed($brain, $cred) {
@@ -624,6 +672,7 @@ function Start-BrainSandboxed($brain, $cred) {
     # drain trong Drain-Queue (vốn đã chạy mỗi request, đơn luồng).
     $script:AcpTask = $script:AcpOut.ReadLineAsync()
     $script:AcpDead = $false
+    $script:ExpectDeath = $false   # spawn xong → từ đây chết = crash thật
     # initialize PHẢI có result trước khi session/new — bắn liền nhau
     # thì não trả "Invalid request" và SessionId mãi rỗng → prompt kẹt
     $mid = Call-Acp "initialize" @{
@@ -646,10 +695,10 @@ function Start-Brain {
     # rồi bắt tay ACP chuẩn (initialize + session/new).
     $brain = Get-Brain
     Stop-Brain   # giết não cũ — cả hai đường (Process.Kill / Job Object)
-    if ($script:AcpSub) {
-        try { Unregister-Event -SourceIdentifier $script:AcpSub.SourceIdentifier } catch {}
-        $script:AcpSub = $null
+    foreach ($sub in @($script:AcpSub, $script:AcpErrSub)) {
+        try { if ($sub) { Unregister-Event -SourceIdentifier $sub.SourceIdentifier } } catch {}
     }
+    $script:AcpSub = $null; $script:AcpErrSub = $null
     foreach ($s in @($script:AcpIn, $script:AcpOut)) {
         try { if ($s) { $s.Dispose() } } catch {}
     }
@@ -666,8 +715,12 @@ function Start-Brain {
     $psi.WorkingDirectory = $WorkDir
     $psi.RedirectStandardInput = $true
     $psi.RedirectStandardOutput = $true
-    # KHÔNG redirect stderr: buffer đầy mà không ai đọc → agent bị khóa chết.
-    # (bản .py dùng stderr=DEVNULL tương đương)
+    # stderr PHẢI đọc đều — buffer đầy mà không ai đọc → agent bị khóa chết.
+    # ErrorDataReceived đổ vào BrainErrQ → Drain-Queue ghi .logs (parity
+    # stderr=PIPE + _stderr_reader bên .py). Đường sandbox: C# AgentSpawn
+    # vẫn dup stderr → NUL — khoảng trống đã biết, chưa chạm C#.
+    $psi.RedirectStandardError = $true
+    $psi.StandardErrorEncoding = [System.Text.Encoding]::UTF8
     $psi.UseShellExecute = $false
     $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
     # env scrub (parity content_guard.scrub_env): não kế thừa TOÀN BỘ env
@@ -718,7 +771,14 @@ function Start-Brain {
             $Event.MessageData.Enqueue($EventArgs.Data.Trim())
         }
     }
+    $script:AcpErrSub = Register-ObjectEvent -InputObject $script:AcpProc -EventName ErrorDataReceived -MessageData $script:BrainErrQ -Action {
+        if ($null -ne $EventArgs.Data -and $EventArgs.Data.Trim()) {
+            $Event.MessageData.Enqueue($EventArgs.Data.Trim())
+        }
+    }
     $script:AcpProc.BeginOutputReadLine()
+    $script:AcpProc.BeginErrorReadLine()
+    $script:ExpectDeath = $false   # spawn xong → từ đây chết = crash thật
     $mid = Call-Acp "initialize" @{
         protocolVersion = 1
         clientCapabilities = @{
@@ -734,6 +794,13 @@ function Start-Brain {
 }
 
 function Drain-Queue {
+    # stderr não → file + vòng đệm tail cho card dịch (parity _stderr_reader).
+    $el = $null
+    while ($script:BrainErrQ.TryDequeue([ref]$el)) {
+        try { [IO.File]::AppendAllText($BrainErrLogFp, ($el + "`r`n")) } catch {}
+        [void]$script:BrainErrTail.Add($el)
+        if ($script:BrainErrTail.Count -gt 64) { $script:BrainErrTail.RemoveAt(0) }
+    }
     # Đường sandbox: đã có task ReadLineAsync xong chưa → đổ vào queue.
     # EOF (Result=null) hoặc pipe gãy → không đặt task mới; IsAlive trong
     # Test-BrainAlive lo phần phát hiện não chết.
@@ -743,6 +810,9 @@ function Drain-Queue {
         $script:AcpTask = if ($null -ne $l) {
             $script:AcpOut.ReadLineAsync()
         } else { $null }
+        if ($null -eq $l -and -not $script:AcpDead) {
+            Push-BrainErrCard   # stdout đóng giữa chừng = não vừa chết
+        }
     }
     $line = $null
     while ($lineQueue.TryDequeue([ref]$line)) {
@@ -1391,6 +1461,13 @@ try {
             Stop-Brain
             $script:AcpDead = $true   # prompt tiếp theo đi đường Start-Brain self-heal
         }
+        # Não rớt giữa chừng ngoài watchdog (đường non-sandbox không có
+        # EOF detection) → card lỗi đã dịch (parity _reader EOF bên .py).
+        if (-not $script:AcpDead -and $script:SessionId -and
+            -not (Test-BrainAlive)) {
+            $script:AcpDead = $true
+            Push-BrainErrCard
+        }
         try {
             $path = $ctx.Request.Url.AbsolutePath
             $origin = $ctx.Request.Headers["Origin"]
@@ -1420,7 +1497,9 @@ try {
             # trang clone nhúng ảnh base64; mọi POST khác 1MB)
             if ($ctx.Request.HttpMethod -eq "POST") {
                 $cap = if ($path -eq "/api/save-page" -or
-                           $path -eq "/api/bot-import") { 8000000 } else { 1000000 }
+                           $path -eq "/api/bot-import") { 8000000 }
+                       elseif ($path -eq "/api/upload-paste") { 15000000 }
+                       else { 1000000 }
                 if ($ctx.Request.ContentLength64 -gt $cap) {
                     Send-Json $ctx @{ err = "body quá lớn" } 413
                     continue
@@ -1459,7 +1538,10 @@ try {
                 $reset = ($since -lt 0) -or ($since -lt $script:EventBase) -or ($since -gt $total)
                 if ($reset) {
                     $evs = @($script:EventStore)
-                    Send-Json $ctx @{ events = $evs; next = $total; reset = $true }
+                    # parity .py — kèm id perm còn sống để UI phân biệt
+                    # card replay-thật vs card đã hết hạn trước restart.
+                    Send-Json $ctx @{ events = $evs; next = $total; reset = $true
+                                      perm_pending = @($script:PermPending.Keys) + @($script:LocalPending.Keys) }
                 } else {
                     $idx = $since - $script:EventBase
                     $evs = @($script:EventStore.GetRange($idx, $script:EventStore.Count - $idx))
@@ -1524,6 +1606,11 @@ try {
                         $script:PromptBusy = $true
                         $script:PromptSince = Get-Date
                         $script:RunId += 1   # parity .py — đếm lượt thật cho beacon
+                        # Lời học viên cũng là event — replay đủ hai chiều
+                        # (parity user_msg bên .py). Cắt 4000 như .py.
+                        $utext = [string]$body.text
+                        if ($utext.Length -gt 4000) { $utext = $utext.Substring(0,4000) }
+                        Push-Event ([ordered]@{ t = "user_msg"; text = $utext })
                         Call-Acp "session/prompt" @{
                             sessionId = $script:SessionId
                             prompt = @(@{ type = "text"; text = $body.text })
@@ -1543,6 +1630,243 @@ try {
                     try { Send-Acp ([ordered]@{ jsonrpc = "2.0"; method = "session/cancel"; params = @{ sessionId = $script:SessionId } }) } catch {}
                 }
                 Send-Json $ctx @{ ok = $true }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/new-task") {
+                # Nút "Việc mới" — parity _h_new_task bên .py. PromptBusy
+                # đóng vai prompt_lock: giữ busy suốt session/new để prompt
+                # không chen vào session cũ; Push-Event ready tự mở busy.
+                if ($script:PromptBusy) {
+                    Send-Json $ctx @{ err = "trợ lý đang xử lý câu trước" } 409
+                } else {
+                    $script:PromptBusy = $true
+                    $script:RunId += 1
+                    $ok = $false
+                    try {
+                        # "cleared" phải đi TRƯỚC khi PromptBusy mở (ready
+                        # tự mở busy): tin chen vào sau luôn nằm sau ranh
+                        # giới — parity _h_new_task bên .py.
+                        if ($script:AcpDead -or -not (Test-BrainAlive)) {
+                            Push-Event ([ordered]@{ t = "cleared" })
+                            Start-Brain      # não chết → spawn mới luôn
+                        } else {
+                            # Đường nhẹ: session/new thứ hai trên process
+                            # đang sống; não trả sessionId → đổi session.
+                            $mid = Call-Acp "session/new" @{ cwd = $WorkDir; mcpServers = @() }
+                            $r = Wait-AcpReply $mid 30
+                            if ($r -and $r.result -and $r.result.sessionId) {
+                                $script:SessionId = [string]$r.result.sessionId
+                                Push-Event ([ordered]@{ t = "cleared" })
+                                # ready TAY — Drain-Queue chỉ tự bắn ready
+                                # khi SessionId rỗng (đường spawn lần đầu)
+                                Push-Event ([ordered]@{ t = "ready"; sessionId = $script:SessionId })
+                            } else {
+                                Push-Event ([ordered]@{ t = "cleared" })
+                                Start-Brain
+                            }
+                        }
+                        $ok = (-not $script:AcpDead) -and [bool]$script:SessionId
+                    } catch { $ok = $false }
+                    if (-not $ok) {
+                        $script:PromptBusy = $false   # không ready nào tới → mở tay
+                        Send-Json $ctx @{ err = "chưa mở được việc mới — thử lại sau vài giây" } 503
+                    } else {
+                        Send-Json $ctx @{ ok = $true }
+                    }
+                }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "GET" -and $path -eq "/api/skills") {
+                # Slash-menu trong chat — parity _g_skills: tên folder
+                # skill + mô tả ngắn từ frontmatter SKILL.md.
+                $sk = @()
+                if (Test-Path $SkillsDir) {
+                    foreach ($d in (Get-ChildItem $SkillsDir -Directory | Sort-Object Name)) {
+                        $sfp = Join-Path $d.FullName "SKILL.md"
+                        if (-not (Test-Path $sfp)) { continue }
+                        $desc = ""
+                        foreach ($ln in (Get-Content $sfp -Encoding UTF8 -TotalCount 30)) {
+                            if ($ln.Trim() -match '^description:\s*(.+)$') {
+                                $desc = $Matches[1].Trim().Trim('"' + "'")
+                                if ($desc.Length -gt 120) { $desc = $desc.Substring(0,120) }
+                                break
+                            }
+                        }
+                        $sk += @{ name = $d.Name; desc = $desc }
+                    }
+                }
+                Send-Json $ctx @{ ok = $true; skills = $sk }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "GET" -and $path -eq "/api/pick-folder") {
+                # probe — ps1 chỉ chạy trên Windows, WinForms luôn sẵn
+                Send-Json $ctx @{ ok = $true; supported = $true }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/pick-folder") {
+                # parity _h_pick_folder — FolderBrowserDialog qua powershell
+                # -STA (bắt buộc cho WinForms; host có thể đang MTA). Loop
+                # đơn luồng nên dialog tạm chặn request khác — chấp nhận
+                # được, dialog mở vài giây; timeout 120s giết hộp treo.
+                $psi2 = New-Object System.Diagnostics.ProcessStartInfo
+                $psi2.FileName = "powershell"
+                $psi2.Arguments = '-NoProfile -STA -Command "Add-Type -AssemblyName System.Windows.Forms;' +
+                    '$d=New-Object System.Windows.Forms.FolderBrowserDialog;' +
+                    "$d.Description='Chọn folder trợ lý được đọc';" +
+                    '$d.ShowNewFolderButton=$false;' +
+                    '$f=New-Object System.Windows.Forms.Form;$f.TopMost=$true;' +
+                    "if(`$d.ShowDialog(`$f) -eq 'OK'){`$d.SelectedPath}" + '"'
+                $psi2.RedirectStandardOutput = $true
+                $psi2.UseShellExecute = $false
+                $psi2.CreateNoWindow = $true
+                $out = ""
+                try {
+                    $p2 = [System.Diagnostics.Process]::Start($psi2)
+                    if ($p2.WaitForExit(120000)) {
+                        $out = ([string]$p2.StandardOutput.ReadToEnd()).Trim()
+                    } else { try { $p2.Kill() } catch {} }
+                } catch {}
+                if (-not $out) {
+                    Send-Json $ctx @{ ok = $true; cancelled = $true }
+                } elseif (-not (Test-Path $out -PathType Container)) {
+                    Send-Json $ctx @{ ok = $false; err = "không phải folder" }
+                } else {
+                    $home2 = $env:USERPROFILE
+                    if ($out -eq $home2 -or $out.StartsWith($home2 + "")) {
+                        $out = "~" + $out.Substring($home2.Length)
+                    }
+                    Send-Json $ctx @{ ok = $true; path = $out.TrimEnd('/','') }
+                }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/reveal") {
+                # parity _h_reveal — explorer /select, = chọn sẵn item,
+                # KHÔNG bao giờ thực thi file (parity `open -R` macOS).
+                # Guard y check-path: chỉ dưới ~, không .devin, không nhạy.
+                $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
+                $body = $reader.ReadToEnd() | ConvertFrom-Json
+                $p = ""
+                try { $p = [IO.Path]::GetFullPath((Expand-Path ([string]$body.path))) } catch {}
+                $home2 = [IO.Path]::GetFullPath($env:USERPROFILE)
+                $dev = Join-Path $WorkDir ".devin"
+                if (-not $p -or
+                    -not ($p.StartsWith($home2 + "") -or $p.StartsWith($home2 + "/")) -or
+                    $p -eq $dev -or $p.StartsWith($dev + "") -or
+                    (Test-SensitivePath $p)) {
+                    Send-Json $ctx @{ ok = $false; err = "path này không mở được" }
+                } elseif (-not (Test-Path $p)) {
+                    Send-Json $ctx @{ ok = $false; err = "chưa thấy path này" }
+                } else {
+                    # explorer trả exit 1 kể cả khi thành công → không check rc
+                    if (Test-Path $p -PathType Leaf) {
+                        Start-Process explorer -ArgumentList "/select,`"$p`""
+                    } else {
+                        Start-Process explorer -ArgumentList "`"$p`""
+                    }
+                    Send-Json $ctx @{ ok = $true }
+                }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/upload-paste") {
+                # parity _h_upload_paste — ảnh dán vào chat → workspace                # inbox\paste-<ts>.<ext>; tên server tự đặt; mime whitelist.
+                $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
+                $body = $reader.ReadToEnd() | ConvertFrom-Json
+                $raw = [string]$body.data
+                $mime = [string]$body.mime
+                if ($raw.StartsWith("data:") -and $raw.Contains(",")) {
+                    $mime = ($raw.Split(',')[0]).Substring(5).Split(';')[0].ToLower()
+                    $raw = $raw.Substring($raw.IndexOf(',') + 1)
+                } elseif (-not $mime) { $mime = "image/png" }
+                $ext = @{ "image/png" = "png"; "image/jpeg" = "jpg"
+                          "image/gif" = "gif"; "image/webp" = "webp"
+                          "image/bmp" = "bmp" }[$mime.ToLower()]
+                if (-not $ext) {
+                    Send-Json $ctx @{ err = "chỉ nhận ảnh (png/jpg/gif/webp)" } 400
+                } else {
+                    $blob = $null
+                    try { $blob = [Convert]::FromBase64String($raw) } catch {}
+                    if (-not $blob -or $blob.Length -gt 10MB) {
+                        Send-Json $ctx @{ err = "ảnh lỗi hoặc quá lớn (tối đa 10MB)" } 413
+                    } else {
+                        $inbox = Join-Path $McDir "inbox"
+                        New-Item -ItemType Directory -Force -Path $inbox | Out-Null
+                        $name = "paste-{0}.{1}" -f [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds(), $ext
+                        try {
+                            [IO.File]::WriteAllBytes((Join-Path $inbox $name), $blob)
+                            Send-Json $ctx @{ ok = $true; path = "workspace/inbox/$name" }
+                        } catch {
+                            Send-Json $ctx @{ err = "không ghi được file" } 500
+                        }
+                    }
+                }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/support-bundle") {
+                # parity _h_support_bundle — zip .logs (bỏ chat-history* +
+                # file >5MB) + config đã lọc key → Desktop; đích CỐ ĐỊNH.
+                $title = "Gói nhật ký lỗi thành file zip trên Desktop? (nhật ký có thể chứa tên file bạn đã xử lý — chỉ gửi cho người bạn tin)"
+                $applySb = {
+                    $logsDir = Join-Path $WorkDir ".logs"
+                    $home2 = $env:USERPROFILE
+                    $dest = $home2
+                    foreach ($c in @("Desktop", "OneDrive\Desktop", "Downloads")) {
+                        $d2 = Join-Path $home2 $c
+                        if (Test-Path $d2 -PathType Container) { $dest = $d2; break }
+                    }
+                    $stage = Join-Path $env:TEMP ("troly-logs-" + [guid]::NewGuid().ToString("N").Substring(0,8))
+                    New-Item -ItemType Directory -Force -Path $stage | Out-Null
+                    foreach ($f in (Get-ChildItem $logsDir -File -ErrorAction SilentlyContinue)) {
+                        if ($f.Name -like "chat-history*") { continue }
+                        if ($f.Length -le 5MB) { Copy-Item $f.FullName $stage }
+                    }
+                    $cfg = Copy-Props (Load-Json $ConfigFp @{})
+                    $safe = @{}
+                    foreach ($k in @("language","learner_name","terminal")) {
+                        if ($cfg.ContainsKey($k)) { $safe[$k] = $cfg[$k] }
+                    }
+                    [IO.File]::WriteAllText((Join-Path $stage "config.json"),
+                        ($safe | ConvertTo-Json -Depth 5), [Text.UTF8Encoding]::new($false))
+                    $zf = Join-Path $dest ("troly-logs-" + (Get-Date -Format "yyyyMMdd-HHmm") + ".zip")
+                    try { Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $zf -Force } catch {}
+                    Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
+                    if (Test-Path $zf) {
+                        try { Start-Process explorer -ArgumentList "/select,`"$zf`"" } catch {}
+                        Push-Event ([ordered]@{ t = "warn"; msg = "đã gói nhật ký xong — file nằm ở $zf" })
+                    }
+                }.GetNewClosure()
+                $rid = New-Gate $title $applySb
+                Send-Json $ctx @{ pending = $rid; msg = "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để gói nhật ký" } 202
+            }
+            elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/config") {
+                # parity _h_config — whitelist `terminal` + `language`.
+                $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
+                $body = $reader.ReadToEnd() | ConvertFrom-Json
+                $patch = @{}
+                if ($body.PSObject.Properties["terminal"]) { $patch["terminal"] = [bool]$body.terminal }
+                if ($body.PSObject.Properties["language"] -and
+                    ([string]$body.language) -in @("vi","en")) {
+                    $patch["language"] = [string]$body.language
+                }
+                if (-not $patch.Count) {
+                    Send-Json $ctx @{ err = "không có key nào được phép" } 400
+                } else {
+                    $cfg = Copy-Props (Load-Json $ConfigFp @{})
+                    foreach ($k in $patch.Keys) { $cfg[$k] = $patch[$k] }
+                    Save-Json $ConfigFp $cfg
+                    # terminal:true → bật chat-terminal.ps1 ngay (khỏi
+                    # restart); false → giết ttyd đang giữ cổng 7681 +
+                    # process chat-terminal giám sát nếu có.
+                    if ($patch.ContainsKey("terminal")) {
+                        if ($patch["terminal"]) {
+                            $termPs = Join-Path $WorkDir "tools\chat-terminal.ps1"
+                            if (Test-Path $termPs) {
+                                try { Start-Process powershell -ArgumentList @('-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',"`"$termPs`"") -WindowStyle Hidden } catch {}
+                            }
+                        } else {
+                            try {
+                                Get-CimInstance Win32_Process -Filter "Name like 'powershell%'" -ErrorAction SilentlyContinue |
+                                    Where-Object { $_.CommandLine -match 'chat-terminal\.ps1' } |
+                                    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+                                Get-NetTCPConnection -LocalPort 7681 -State Listen -ErrorAction SilentlyContinue |
+                                    ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
+                            } catch {}
+                        }
+                    }
+                    Send-Json $ctx @{ ok = $true }
+                }
             }
             elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/brain") {
                 # Đổi não: {"id": <preset>} hoặc lệnh tự nhập {"cmd","args","terminal"}.

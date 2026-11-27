@@ -135,8 +135,19 @@ $handler = {
       }
       $fs.Close()
     } else {
+      # Trang loi em — parity send_error cua serve.py (ux-polish ph-07)
       $res.StatusCode = 404
-      $msg = [Text.Encoding]::UTF8.GetBytes('Khong tim thay file')
+      $page = "<!DOCTYPE html><html lang=vi><meta charset=utf-8>" +
+        "<meta name=viewport content='width=device-width,initial-scale=1'>" +
+        "<title>Um…</title><body style='font-family:system-ui,sans-serif;" +
+        "max-width:34em;margin:4em auto;padding:0 1em;line-height:1.7;color:#333'>" +
+        "<h2 style='font-weight:500'>Um, co gi do chua on</h2>" +
+        "<p>Khong thay thu ban mo — co the no chua duoc tao. " +
+        "Quay lai trang chinh roi chon trong danh sach nhe.</p>" +
+        "<p><a href='/web/'>← Ve trang chinh</a></p></body></html>"
+      $msg = [Text.Encoding]::UTF8.GetBytes($page)
+      $res.ContentType = 'text/html; charset=utf-8'
+      $res.ContentLength64 = $msg.Length
       $res.OutputStream.Write($msg, 0, $msg.Length)
     }
     $res.Close()

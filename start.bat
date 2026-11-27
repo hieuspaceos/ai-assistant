@@ -3,7 +3,7 @@ rem ============================================================
 rem  TRO LY AI - mo khoa hoc cua ban
 rem  Double-click file nay de bat dau hoc.
 rem  File nay mo toi 4 thu: trang web khoa hoc + chat bridge +
-rem  cau noi extension + terminal (neu co ttyd).
+rem  cau noi extension + terminal (neu ban bat trong Cai dat).
 rem ============================================================
 cd /d "%~dp0"
 
@@ -52,25 +52,29 @@ rem set env de ttyd/nao ke thua ---
 powershell -NoProfile -Command "[IO.File]::WriteAllText('.devin\bridge.token', ([BitConverter]::ToString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(24))).Replace('-','').ToLower())"
 for /f "usebackq delims=" %%i in (".devin\bridge.token") do set "BRIDGE_TOKEN=%%i"
 
-rem --- Kiem tra ttyd (de nhung terminal vao trang web) ---
-where ttyd >nul 2>nul
-if errorlevel 1 (
-  echo  Chua co ttyd - dang cai tu dong qua winget...
-  winget install --id tsl0922.ttyd -e --accept-source-agreements --accept-package-agreements >nul 2>nul
+rem --- Terminal trong portal la TUY CHON (Cai dat - Hien che do Terminal),
+rem mac dinh TAT — doc workspace\config.json giong launcher.py:terminal_enabled().
+rem Parse qua ConvertFrom-Json (config do hoc vien sua trong portal) thay vi
+rem for /f tho — gia tri la vao env la injection trong batch.
+set "TERM_ON=false"
+if exist workspace\config.json (
+  for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try{(Get-Content 'workspace\config.json' -Raw | ConvertFrom-Json).terminal}catch{'false'}"`) do set "TERM_ON=%%i"
 )
 
-rem --- Mo tro ly AI: 2 dich vu song song ---
-rem   1. chat-bridge (cong 7682): che do "Chat" kieu tin nhan, de dung nhu Zalo
-rem   2. ttyd (cong 7681): che do "Terminal" - CLI that nhung tren web
+rem --- Mo tro ly AI: chat-bridge (cong 7682), che do "Chat" kieu tin nhan ---
 start "Tro ly AI chat - dung dong cua so nay" /min powershell -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0tools\chat-bridge.ps1"
 
-where ttyd >nul 2>nul
-if not errorlevel 1 (
-  start "Tro ly AI terminal - dung dong cua so nay" /min powershell -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0tools\chat-terminal.ps1"
-) else (
-  echo  [!] Khong cai duoc ttyd. Che do "Terminal" se khong hoat dong,
-  echo      nhung che do "Chat" van dung binh thuong.
-  echo      Ban cung co the mo Windows Terminal va go "%BRAIN_TERM%" de hoc.
+rem --- ttyd (cong 7681) CHI khi hoc vien da bat Terminal trong Cai dat ---
+rem Khong tu cai ttyd bang winget nua — cai phan mem im lang ngoai y muon
+rem la vi pham niem tin; thieu thi goi y cai tay.
+if /i "%TERM_ON%"=="True" (
+  where ttyd >nul 2>nul
+  if not errorlevel 1 (
+    start "Tro ly AI terminal - dung dong cua so nay" /min powershell -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0tools\chat-terminal.ps1"
+  ) else (
+    echo  [!] Terminal dang bat nhung chua co ttyd.
+    echo      Cai tay: winget install --id tsl0922.ttyd -e
+  )
 )
 
 rem --- Cau noi cho extension "Tro Ly AI" trong trinh duyet (cong 7684) ---

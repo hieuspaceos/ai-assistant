@@ -676,10 +676,21 @@ def main():
         check("31b. prompt đầu → 200", s == 200 or b4 is None, str(s))
         th.join(timeout=6); el = time.time() - t0
         r = got.get("r") or (-1, {}, {})
+        # ux-polish: /api/prompt giờ bắn user_msg TRƯỚC khi forward não →
+        # long-poll dậy sớm đúng ý đồ nhưng response đầu chưa chắc đã có
+        # "pong" — poll tiếp cho tới khi thấy hoặc hết giờ.
+        evs = list(r[1].get("events", []))
+        nxt_c = r[1].get("next", nxt4)
+        while (r[0] == 200 and not any(e.get("text") == "pong" for e in evs)
+               and time.time() - t0 < 5):
+            r = http("GET", b4 +
+                     f"/api/poll?since={nxt_c}&wait=1000&token={TOKEN}")
+            evs += r[1].get("events", [])
+            nxt_c = r[1].get("next", nxt_c)
         check("31c. long-poll dậy sớm khi có event",
               b4 is None or (r[0] == 200 and el < 2.5
-              and any(e.get("text") == "pong" for e in r[1].get("events", []))),
-              f"{el:.2f}s {str(r[1])[:60]}")
+              and any(e.get("text") == "pong" for e in evs)),
+              f"{el:.2f}s {str(evs)[:60]}")
 
         # 32: não giả không bao giờ gửi stopReason → lượt vẫn mở → busy
         s, b, _ = http("POST", b4 + f"/api/prompt?token={TOKEN}", {"text": "nữa"}) \
