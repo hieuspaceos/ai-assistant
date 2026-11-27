@@ -8,14 +8,14 @@ Chỉ là bản đồ điều hướng. Hành vi thật nằm trong source, skil
 
 | Đối tượng | Đọc |
 |---|---|
-| Dev mới vào dự án | `project-overview-pdr.md` → `system-architecture.md` → `code-standards.md` |
+| Dev mới vào dự án | `strategy.md` → `project-overview-pdr.md` → `system-architecture.md` → `code-standards.md` |
 | Sửa/thêm tính năng | `codebase-summary.md` → `api-reference.md` → `decision-log.md` |
 | Làm việc với skill | `skills-system.md` → `.devin/skills/*/SKILL.md` |
 | Pipeline clone web | `clone-pipeline.md` |
 | Deploy / cài cho học viên | `../SETUP.md` → `troubleshooting-runbook.md` |
 | Triển khai cty / fleet | `fleet.md` → `distribution.md` → `../deploy/DEPLOY.md` |
 | Bảo mật / quyền truy cập | `SECURITY.md` |
-| Biết dự án đi đâu | `project-roadmap.md` |
+| Biết dự án đi đâu | `strategy.md` → `project-roadmap.md` |
 
 Entry gốc: [`README.md`](../README.md) · Quy tắc session: [`AGENTS.md`](../AGENTS.md)
 
@@ -25,6 +25,8 @@ Entry gốc: [`README.md`](../README.md) · Quy tắc session: [`AGENTS.md`](../
 
 | Document | Sở hữu |
 |---|---|
+| `strategy.md` | Sứ mệnh, luận điểm thời đại, moat, đối thủ, nguyên tắc quyết định — la bàn khi lạc hướng |
+| `competitor-research.md` | Ledger học từ đối thủ: ai làm gì, lấy gì, tránh gì, đọc source ở đâu (stateful) |
 | `project-overview-pdr.md` | Mục tiêu sản phẩm, đối tượng, non-goals |
 | `system-architecture.md` | Ranh giới runtime, luồng dữ liệu giữa các process |
 | `api-reference.md` | Endpoint của 3 bridge + action của extension. Truth: `tools/*.py` |
