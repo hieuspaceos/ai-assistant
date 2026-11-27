@@ -940,7 +940,9 @@ def main():
                                {"path": la, "access": "read-write"})
                 check("46b. permissions LaunchAgents → 400", s == 400, str(s))
         else:
-            src = open(os.path.join(TOOLS, "chat-bridge.py"),
+            # ~/Library không tồn tại (Linux CI) → check source-level:
+            # path_sensitive (giờ nằm ở path_guard.py) phải so ancestor
+            src = open(os.path.join(TOOLS, "path_guard.py"),
                        encoding="utf-8").read()
             check("46. path_sensitive so 2 chiều (ancestor)",
                   "s.startswith(rpl + os.sep)" in src)
