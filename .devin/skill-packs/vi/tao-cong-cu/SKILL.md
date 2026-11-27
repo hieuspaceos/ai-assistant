@@ -62,7 +62,7 @@ này làm trên file/app nào? đầu ra mong muốn là gì?
 4. **Viết guide.md** theo `templates/lesson.md` — bản đọc của chính
    walkthrough đó (cùng các bước, dạng trang để đọc lại nhanh / in ra).
 5. **Tự soát trước khi xong**:
-   - chạy `python3 tools/test-walkthrough.py` — phải PASS
+   - chạy `python3 tests/test-walkthrough.py` — phải PASS
    - mỗi step đúng MỘT hành động; `prefill`/`placeholder` chạy được
    - `{{bien}}` trong prefill phải khớp `var` của step input/pick-file
      đứng trước

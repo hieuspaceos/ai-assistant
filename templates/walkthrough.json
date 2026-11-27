@@ -1,5 +1,5 @@
 {
-  "_comment": "TEMPLATE WALKTHROUGH — agent điền khi sinh bài mới. Màn hướng dẫn từng-bước TƯƠNG TÁC trong portal: modal nhỏ + spotlight chỉ đúng chỗ cần bấm, nhiều bước LÀM ĐƯỢC LUÔN trong modal. Song song với guide.md (bản đọc). Quy tắc: mỗi step = MỘT hành động; body lời thường ELI10; cấm 'đơn giản/chỉ cần/hiển nhiên/dễ'. Chạy tools/test-walkthrough.py để kiểm file trước khi xong.",
+  "_comment": "TEMPLATE WALKTHROUGH — agent điền khi sinh bài mới. Màn hướng dẫn từng-bước TƯƠNG TÁC trong portal: modal nhỏ + spotlight chỉ đúng chỗ cần bấm, nhiều bước LÀM ĐƯỢC LUÔN trong modal. Song song với guide.md (bản đọc). Quy tắc: mỗi step = MỘT hành động; body lời thường ELI10; cấm 'đơn giản/chỉ cần/hiển nhiên/dễ'. Chạy tests/test-walkthrough.py để kiểm file trước khi xong.",
 
   "_kinds": {
     "say":        "Chỉ đọc + nút Tiếp. Intro, giải thích, VÀ mọi việc tay ngoài portal (kéo file gửi Zalo, export trong app...) — kind phủ địa hết.",

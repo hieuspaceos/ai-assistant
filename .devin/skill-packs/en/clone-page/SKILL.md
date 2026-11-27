@@ -359,7 +359,7 @@ and nobody saw it until comparing block by block.
   color off by a few rgb units). Watch text in light cards on dark
   sections: inheriting the dark section's `color` makes text
   "disappear" on white cards — set the ink color inside cards.
-- **Diff automatically, not just by eye** — `tools/clone-compare.py`:
+- **Diff automatically, not just by eye** — `scripts/clone-compare.py`:
   `harvest <clone-file> <tabId>` measures styles of every
   `data-cs-ref` element on the clone tab → `styles <ref-styles.json>
   <clone-styles.json>` reports each px/rgb mismatch, matching elements

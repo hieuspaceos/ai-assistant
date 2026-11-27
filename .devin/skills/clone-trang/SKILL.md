@@ -340,7 +340,7 @@ từng khối.
   màu sai ≤ vài đơn vị rgb). Chú ý chữ trong card sáng trên nền tối:
   kế thừa `color` của section tối làm chữ "mất" trên card trắng —
   phải gán lại màu mực trong card.
-- **So tự động, đừng chỉ so mắt** — `tools/clone-compare.py`:
+- **So tự động, đừng chỉ so mắt** — `scripts/clone-compare.py`:
   `harvest <file-clone> <tabId>` đo styles mọi phần tử `data-cs-ref`
   trên tab clone → `styles <ref-styles.json> <clone-styles.json>` báo
   từng chỗ lệch px/rgb, khớp phần tử theo `data-cs-ref` nên không bị

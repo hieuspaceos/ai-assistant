@@ -65,7 +65,7 @@ AT MOST 2 questions first: which files/app does this work on? what does
 4. **Write guide.md** per `templates/lesson.md` — the readable version
    of the same walkthrough (same steps, page form for re-reading/print).
 5. **Self-check before finishing**:
-   - run `python3 tools/test-walkthrough.py` — must PASS
+   - run `python3 tests/test-walkthrough.py` — must PASS
    - each step is ONE action; `prefill`/`placeholder` runnable
    - `{{var}}` in prefills must match a `var` from an earlier
      input/pick-file step

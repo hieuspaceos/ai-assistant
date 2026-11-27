@@ -119,7 +119,7 @@ content or file contents.
   flow vendor → collector → machines; the macOS `troly` binary is
   also Developer ID codesigned + notarized in CI
   (`scripts/sign-macos.sh` locally — cert in keychain,
-  `tools/entitlements.plist` for the PyInstaller-bundled Python), so
+  `scripts/entitlements.plist` for the PyInstaller-bundled Python), so
   Gatekeeper opens it without the right-click dance with stage + rollback; per-org
   **packs** (skills/workflows/rules) push company customization to
   every machine without touching code.

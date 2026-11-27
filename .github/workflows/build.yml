@@ -114,7 +114,7 @@ jobs:
           shred -u cert.p12 2>/dev/null || rm -fP cert.p12
 
           codesign --force --options runtime --timestamp \
-              --entitlements tools/entitlements.plist \
+              --entitlements scripts/entitlements.plist \
               --keychain "$KC" --sign "$SIGN_IDENTITY" dist/troly
 
           ditto -c -k --keepParent dist/troly troly-notary.zip
