@@ -77,7 +77,14 @@ extension = cánh tay trên trình duyệt · serve.py = file tĩnh.
   cap, parse JSON) + `getattr` — thêm endpoint = thêm key + một method
   `_g_*`/`_h_*`, và `test-gates.py` enumerate dict thay regex-parse.
 - Agent chết/chưa cài: bridge không chết theo — báo lỗi về UI và tự
-  thử bật lại ở prompt kế tiếp.
+  thử bật lại ở prompt kế tiếp. `prompt_lock` có đường thoát riêng:
+  `POST /api/cancel` → notification ACP `session/cancel` (nút "■ Dừng",
+  idempotent — não phớt lờ thì lượt vẫn chạy tới done).
+- Bridge respawn (supervisor/`--restart`): `replay_history()` phát lại
+  event từ `chat-history.jsonl`; nếu event cuối là text/tool/warn/perm
+  (lượt chết giữa chừng, chưa `done`) → chêm `err` để client mở khoá
+  nút Gửi — F-029: trước vá, không `reset` không `done` nên chat kẹt
+  "đang làm việc" mãi; `web/chat.html` thêm watchdog 20s mất kết nối.
 - Gửi prompt vào session ACP (`prompt_lock` — một lượt tại một thời
   điểm, tranh chấp → 409), long-poll output, quản lý permissions/
   connections/config/secrets, lưu trang clone (`/api/save-page`).

@@ -176,11 +176,14 @@ ai-assistant/
 ├── tools/update.py            # pull signed release: no-redirect → sha256 → ed25519 → stage → apply at boot + rollback
 ├── tools/apply-pack.py        # apply org pack (skills/workflows/rules) — lint pack phía máy: exec_allowlist first-token deny, open_url http(s)-only, drive/env paths, permissions_template qua path_guard; never overrides consent
 ├── scripts/make-license.py      # vendor: sign license.json (HMAC org|seats|expiry|issued)
-├── scripts/sign-release.py + ed25519.py  # vendor: sign release offline (private key never in repo)
+├── scripts/sign-release.py      # vendor: sign release offline — uses tools/ed25519.py + tools/vendor-pubkey (private key never in repo)
 ├── scripts/sign-macos.sh + entitlements.plist  # macOS: codesign Developer ID (hardened runtime) + notarytool --wait + quarantine verify — CI gọi cùng bước, keychain profile troly-notary
 ├── tools/backup.py            # snapshot .devin/ + workspace/ before update/pack-apply
 ├── tools/content_guard.py     # UNTRUSTED-content wrapper, injection detect, env allowlist scrub
-├── tests/test-*.py            # stdlib smoke tests: bridge endpoints, .py↔.ps1 parity, fleet lifecycle, worker 2-tier, packs sync
+├── tools/install-brain.py/.ps1 # one-button brain install for auto:true presets (Gemini=portable Node, Devin=installer)
+├── tools/ensure-deps.py        # private .venv in the data dir for skill deps (openpyxl, python-docx) — idempotent, runs at boot
+├── tools/render-video.py + scene-player.html + tts-vieneu.py  # dormant media pipeline (kept for later — the default tool flow doesn't use it)
+├── tests/test-*.py            # stdlib smoke tests: bridge endpoints, .py↔.ps1 parity, fleet lifecycle, worker 2-tier, packs sync, walkthrough schema
 ├── worker/                    # port of collector.py → Cloudflare Workers + D1 + R2 (hosted tier, /fleet/)
 ├── collector-web/             # fleet dashboard: login (account or admin key) + role-based tabs
 ├── deploy/                    # company install kit: install.ps1/sh, DEPLOY.md, force-install.md, vendor-infra.md
@@ -190,7 +193,7 @@ ai-assistant/
 ├── plans/                     # multi-phase work plans (executed and in-flight)
 ├── web/                       # portal: index.html + app.js + styles.css + clone-view.html (clone editor)
 ├── scripts/clone-compare.py     # /clone-trang "compare" phase: style-diff + pixel-diff, no Pillow
-├── templates/                 # walkthrough.json (15 step kinds) + lesson.md guide scaffold
+├── templates/                 # walkthrough.json (16 step kinds) + lesson.md guide scaffold
 │   │                          #   (+ exercise/video-script/slide-deck kept for the builders — unused by default)
 ├── tests/test-walkthrough.py  # validator: kinds/fields/{{var}}/cond/media exists/banned words — generator must run it
 ├── .devin/

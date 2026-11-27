@@ -4,14 +4,18 @@ Sự cố đã gặp thật + cách xử lý. Cập nhật khi gặp lỗi mới
 
 ## 0. Chạy test trước khi release/sửa bridge
 
-Ba script stdlib, không cần dep — chạy trên máy dev trước khi đóng gói
-hoặc sau khi đụng `tools/*.py`, `tools/*.ps1`, `.devin/skill*/`:
+Test nằm trong `tests/` (runtime trong `tools/`, build trong
+`scripts/`). Ba script stdlib, không cần dep — chạy trên máy dev trước
+khi đóng gói hoặc sau khi đụng `tools/*.py`, `tools/*.ps1`,
+`.devin/skill*/`:
 
 ```bash
 python3 tests/test-bridges.py   # endpoint-level: auth, save-page, brain…
 python3 tests/test-parity.py    # endpoint .py ↔ .ps1 phải khớp
 python3 tests/test-packs.py     # skill active ↔ packs ↔ recipes
 python3 tests/test-gates.py     # endpoint POST phải khai GATED/OPEN_OK
+python3 tests/test-walkthrough.py  # schema + từ cấm của mọi walkthrough.json
+python3 tests/test-deny-parity.py  # BRAIN_CMD_DENY đồng nhất ở 5 file
 ```
 
 Sau khi đụng phần fleet: `test-fleet.py` (collector thật + parity
@@ -84,6 +88,7 @@ Log: `.logs/{portal,chat-bridge,ext-bridge,ttyd}.log` dưới root.
 | Icon extension hiện `!` | chưa có mã kết nối | Mở portal qua file `start` — auto-pair tự chạy; không được thì ⚙ Cài đặt → "Mã kết nối" → copy → dán vào options của extension |
 | Chat không trả lời | não ACP chết / license / chưa đăng nhập | Chạy lệnh não tay (`brain.json` → `cmd`) xem lỗi; xem `.logs/chat-bridge.log`; bridge tự thử bật lại ở lượt gửi sau |
 | Chat báo "không chạy được 'X'" | não `X` trong `brain.json` chưa cài | Panel ⚙ Cài đặt → Bộ não → chọn não khác; hoặc cài `X` rồi gửi lại |
+| Nút Gửi kẹt "đang làm việc" sau khi app bị giết/khởi động lại giữa chừng | bridge chết mid-turn → respawn replay event cũ → client không nhận được `done`/`reset` | Đã vá (F-029): `replay_history()` chêm `err` khi event cuối là text/tool/warn/perm + watchdog 20s mất kết nối mở khoá nút. Tin gửi đúng lúc bridge chết vẫn mất — nói học viên nhắn lại; nút "■ Dừng" (`/api/cancel`) dùng được ngay khi có lượt mới |
 | Đổi não mà chat vẫn não cũ | bridge chưa reload | `POST /api/brain` tự restart agent; kiểm `GET /api/health` → trường `brain` |
 | Tab Terminal trống | ttyd chưa cài | Chế độ Chat vẫn dùng được; cài ttyd hoặc bỏ qua |
 

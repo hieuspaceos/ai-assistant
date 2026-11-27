@@ -10,7 +10,7 @@ phải có mục riêng — `scripts/build-release.sh` fail nếu thiếu.
   cụ sinh ra kèm `walkthrough.json` trong folder bài → portal hiện nút
   **"▶ Dùng ngay"** mở modal hướng dẫn từng-bước làm thật (gõ lệnh gửi
   thẳng vào chat, chờ quyền/run tự qua bước, spotlight sáng đúng chỗ
-  bấm, mở kết quả trong Finder). 15 step kinds (say/prompt/input/
+  bấm, mở kết quả trong Finder). 16 step kinds (say/prompt/input/
   choice/pick-file/open-url/wait-perm/wait-run/auto/spotlight/open/
   watch/download/check/copy/done) + flow (cond/optional/then_probe/
   media) + resume localStorage. Schema: `templates/walkthrough.json`;
@@ -59,6 +59,14 @@ phải có mục riêng — `scripts/build-release.sh` fail nếu thiếu.
   parity collector.py ↔ worker/index.js (endpoint set, worker-only
   khai trong WORKER_ONLY).
 - Upload release giờ chỉ master (trước đây admin_key org cũng đẩy được).
+- **Nút "■ Dừng" trong chat** — nút Gửi đổi thành "■ Dừng" trong lúc
+  trợ lý chạy: `POST /api/cancel` → notification ACP `session/cancel`
+  (không id). Idempotent — không có lượt vẫn `{ok}`; não phớt lờ cancel
+  thì lượt cứ chạy tới done, endpoint không kill process. Enter lúc
+  busy giữ draft thay vì gửi vào 409 mất chữ. Port đủ `.py`/`.ps1`.
+- `tests/test-deny-parity.py` — BRAIN_CMD_DENY sống ở 5 file
+  (cmd_deny.py canonical + 4 mirror tay): một chỗ thêm interpreter mà
+  quên mirror = não "python3.13" lọt qua trên một nền.
 
 ### Sửa
 - **Audit skill bank** (sau khi kho công thức lên):
@@ -119,6 +127,40 @@ phải có mục riêng — `scripts/build-release.sh` fail nếu thiếu.
 - `tools/beacon.py`: stdout/stderr `reconfigure(errors="backslashreplace")`
   — console/log Windows là cp1252, print tiếng Việt raise
   UnicodeEncodeError giết cả vòng beacon ngay tại chỗ in lỗi.
+- **Audit-6 — 13 finding parity/drift `.py`↔`.ps1`** (plan
+  `plans/261127-0827`):
+  - serve.ps1 CSP chỉ `.html`/`.htm` → `.svg` độc trong `workspace/` XSS
+    được origin portal (trộm bridge_token); giờ đủ 9 suffix khớp .py.
+  - secrets-wipe ps1 port đúng logic .py — trước đây so nhầm key nên
+    first-save mất user/password.
+  - Expand-Path ps1 resolve junction/reparse-point — `.Target` (PS 5.1,
+    `.LinkTarget` chỉ có từ PS6 nên check cũ silent no-op).
+  - worker `/api/org-ping` hoist trước admin gate + PING_KEY riêng.
+  - Port 5 endpoint sang chat-bridge.ps1: `/api/bots`, `/api/bot`,
+    `/api/bot-import(+confirm)`, `/api/install-brain` + kèm
+    `tools/install-brain.ps1` mirror (máy Windows học viên không có
+    Python); `pick-folder`/`reveal` → DARWIN_ONLY.
+  - walkthrough `open-url` siết http(s)-only 2 lớp: validator +
+    renderer app.js (URL `{{var}}` enforce lúc chạy).
+  - `/api/emit-event` whitelist bỏ `pack_applied`/`update_applied` —
+    agent tự emit được giả báo "đã update" (F8).
+- **F-029 — chat kẹt "đang làm việc" mãi khi bridge chết giữa lượt**:
+  kill bridge mid-turn → supervisor respawn → `replay_history()` nạp
+  event cũ → cursor client vẫn hợp lệ → không `reset`, không `done` →
+  nút Gửi khoá vĩnh viễn, tin gửi lúc chết mất ngầm. Vá 2 lớp: bridge
+  chêm `err` sau replay nếu event cuối là text/tool/warn/perm/
+  perm:auto/perm_done (turn chết giữa chừng), và watchdog chat.html —
+  mất kết nối >20s khi busy → mở khoá nút + báo "trợ lý đang tắt".
+- **tool-01/tool-02 về chuẩn tool mới** — bỏ `slides.html`, `video.mp4`,
+  `video-script.md`, `scene.json`, `exercise.md`; mỗi tool giờ =
+  `guide.md` + `walkthrough.json` + `sample-files/` (manifest
+  `has_walkthrough:true`, các cờ media false).
+- **Chia `tools/` → `tools/` + `tests/` + `scripts/`**: tools/ chỉ còn
+  30 file runtime; 12 test + 9 build/release-script tách ra.
+  tests/+scripts/ không nằm trong `CODE_DIRS` → bản cài nhẹ ~150KB và
+  `update.py` whitelist `tools/` reject đúng entry lạ. Fix kèm:
+  `sign-release.py` sys.path+pubkey → ROOT/tools, CI `build.yml`
+  entitlements path, 6 SKILL.md cập nhật đường validator.
 
 ## [1.0.3] — 2025-11-25
 

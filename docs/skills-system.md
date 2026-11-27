@@ -83,8 +83,10 @@ Pipeline clone (`data-cs-*` markers): xem `clone-pipeline.md`.
   sinh bài, portal đọc hiển thị. Format: danh sách `{id, title, folder,
   has_slides, has_video, has_exercise, has_walkthrough, ...}` — tab
   portal hiện/ẩn theo cờ; `has_walkthrough` → nút "▶ Dùng ngay".
+  Tool mới chỉ `has_walkthrough:true` (ba cờ media false — chuẩn
+  guide + walkthrough, không slide/video/bài tập).
 - **Walkthrough**: `tool-XX/walkthrough.json` — schema trong
-  `templates/walkthrough.json` (15 kinds + cond/optional/then_probe/
+  `templates/walkthrough.json` (16 kinds + cond/optional/then_probe/
   media); runner `web/app.js`, validator `tests/test-walkthrough.py`.
 - **`data-cs-*` markers** — contract giữa `clone-trang` (sinh),
   `clone-view.html` (sửa), `trang-moi` (nhân bản): `data-cs`,

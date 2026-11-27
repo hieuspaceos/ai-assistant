@@ -3,6 +3,28 @@
 Các quyết định kiến trúc và **tại sao** — để sau này không gỡ ngược lại
 vì quên lý do. Mới nhất lên đầu.
 
+## 2026 — Chuẩn tool = walkthrough + guide; chia `tools/` thành 3 dir
+
+**Tool sinh ra chỉ gồm `walkthrough.json` + `guide.md` (+ `sample-files/`
+tuỳ chọn).** Không còn `slides.html`/`video.mp4`/`exercise.md` —
+walkthrough là sản phẩm chính vì học viên là người đi làm, cần làm
+được ngay chứ không học bài. `guide.md` là bản đọc của chính các bước
+đó (xem lại/in). Manifest giữ cờ `has_slides/has_video/has_exercise`
+nhưng luôn `false` với tool mới; `has_walkthrough` mở nút "▶ Dùng
+ngay". Pipeline media (slide-builder/video-builder +
+`render-video.py`/`scene-player.html`/`tts-vieneu.py`) GIỮ LẠI dormant
+cho khi nào cần clip minh hoạ (kind `watch`) — luồng mặc định không
+gọi. tool-01/02 đã convert, xoá ~4MB file media cũ.
+
+**`tools/` chỉ chứa runtime; `tests/` + `scripts/` tách ra.** Vì:
+`CODE_DIRS` trong launcher copy nguyên `tools/` vào bản cài — test và
+build-script đi theo là thừa (~150KB/máy) và 54 file một đống khó đọc.
+Sau chia: tests resolve ROOT = parent-parent nên không vỡ path;
+`update.py` whitelist `tools/` tự reject entry `tests/`/`scripts/` lạ. Giữ lại trong tools/: `ed25519.py`
++ `vendor-pubkey` (update.py cần verify — `scripts/sign-release.py`
+`sys.path` trỏ ngược vào tools/), `setup-agent-user.ps1` + media
+dormant.
+
 ## 2026 — Audit đợt 5: parity worker↔collector, marker Cf, consent mid-dialog
 
 **Worker port nguyên repair flow của collector (`pending_key`).** Vì:

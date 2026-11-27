@@ -12,45 +12,69 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 | `start.bat` / `start.sh` | Launcher: serve :8080 + chat-bridge :7682 + ext-bridge :7684 + ttyd :7681 (chỉ khi `config.terminal` — mặc định TẮT, tiết RAM) + mở browser |
 | `brain.json` | "Não" agent đang dùng — `{id,label,cmd,args,terminal}`; mặc định devin, đổi trong onboarding/panel Cài đặt hoặc `POST /api/brain` |
 
-## tools/ — các bridge và tiện ích
+## tools/ — các bridge và tiện ích (chỉ runtime — ship vào bản cài)
 
 | File | Vai trò |
 |---|---|
 | `serve.py` / `serve.ps1` | Static server: chặn dotfiles, Host check chống rebinding, CSP `sandbox` opaque-origin `/workspace/`+`/intro/`, Range, keep-alive |
-| `chat-bridge.py` / `.ps1` | Chat portal ↔ não ACP (`brain.json` chọn não, `/api/brain` đổi nóng); API config/permissions/connections/secrets/save-page; long-poll + prompt_lock + respond-gate; spawn não qua Seatbelt (macOS) |
+| `chat-bridge.py` / `.ps1` | Chat portal ↔ não ACP (`brain.json` chọn não, `/api/brain` đổi nóng); API config/permissions/connections/secrets/save-page; long-poll + prompt_lock + respond-gate + `/api/cancel` (nút ■ Dừng → notification `session/cancel`, idempotent, não phớt lờ thì lượt vẫn chạy tới done — không kill process); spawn não qua Seatbelt (macOS) |
 | `term-gate.sh` / `.ps1` | Cửa gác giữa ttyd và não — đòi mã kết nối (từ `?arg=`) trước khi exec não; macOS bọc sandbox-exec. `.cmd` chỉ là forwarder không-arg (batch không đọc argv an toàn) |
 | `read-brain.ps1` | Đọc `brain.json` → in `cmd|terminal` ĐÃ validate (charset + deny-list) — `start.bat`/`chat-terminal.ps1` dùng chung, tránh expansion injection trong batch |
 | `gen-sandbox.py` | Sinh `.devin/agent.sb` từ `permissions.json` — whitelist write + deny-enumerate read + deny exec binary thoát-sandbox; `_grant_ok` re-validate từng grant lúc build (path_sensitive trên realpath + symlink-divergence) — enforcement point chặn TOCTOU |
 | `path_guard.py` | Policy đường dẫn nhạy cảm dùng CHUNG: `_SENSITIVE_DIRS`/`_SENSITIVE_ROOTS`, `path_sensitive` (two-way, case-insensitive, realpath), `rw_grant_ok` — chat-bridge kiểm lúc request/apply, gen-sandbox kiểm lúc phát quyền. Tên underscore bắt buộc (script gạch ngang import được); lọc `isabs` sau expanduser — entry không resolve được trên nền đó bị loại (Windows `~\…` trên POSIX và ngược lại) |
+| `cmd_deny.py` | Deny-list interpreter/exec-helper dùng CHUNG (`BRAIN_CMD_DENY` + version regex + first_token/pattern_cmd_denied) — chat-bridge validate cmd não, apply-pack lint, exec_allowed; mirror tay trong term-gate.sh/ps1 + read-brain.ps1 + chat-bridge.ps1 (drift bị `tests/test-deny-parity.py` bắt) |
 | `setup-agent-user.ps1` | Windows sandbox (admin một lần): tạo user hạn chế `troly-agent`, ACL icacls tương đương Seatbelt, credential DPAPI → `.devin/agent-user.cred`; `chat-bridge.ps1` spawn não cross-user qua `CreateProcessWithLogonW` (`TroLy.AgentSpawn` + Job Object) — verify trên CI `test-windows` |
-| `launcher.py` | Supervisor của bản đóng gói (`troly`/`TroLyAI.exe`) — tự dựng `~/TroLyAI`, spawn 4 process |
-| `build.sh` | Đóng gói binary một file (PyInstaller) |
+| `launcher.py` | Supervisor của bản đóng gói (`troly`/`TroLyAI.exe`) — tự dựng `~/TroLyAI`, spawn 4 process; copy code theo `CODE_DIRS`/`CODE_FILES` (tests/ + scripts/ KHÔNG ship — bản cài nhẹ hơn ~150KB) |
 | `chat-terminal.ps1` | Chạy ttyd theme sáng font lớn (Windows), qua term-gate |
 | `ext-bridge.py` | HTTP `/api/browser` ↔ WS extension — lái trình duyệt thật; WS auth trước handshake, cap 64MB |
-| `clone-compare.py` | So clone vs nguồn: `harvest`/`styles`/`shot` — pha 4 của /clone-trang |
-| `scene-player.html` | Player cho `scene.json` của bài (demo có điều khiển) |
-| `render-video.py` / `tts-vieneu.py` | Render `video.mp4` từ `scene.json`: chụp frame scene-player bằng trình duyệt headless + ghép ffmpeg, xuất kèm `.vtt` theo timing; giọng đọc ưu tiên VieNeu-TTS local (Apache-2.0, env `TTS_PY`/`TTS_VOICE`), fallback `say`/SAPI |
-| `test-bridges.py` | Smoke test endpoint: auth 401, save-page sandbox, brain whitelist — spawn bridge thật trên port động |
-| `test-parity.py` | Diff tập endpoint `/api/*` giữa chat-bridge `.py` ↔ `.ps1` — bắt drift |
-| `test-packs.py` | Diff `.devin/skills/` ↔ `skill-packs/` + kiểm recipes trỏ đúng skill — bắt "quên đồng bộ pack" |
-| `test-gates.py` | Mọi endpoint POST `/api/*` phải khai `GATED` (handler gọi `gate_local`/`New-Gate`) hoặc `OPEN_OK` — bắt "write đặc quyền quên consent gate"; `.py` enumerate `POST_ROUTES` dict rồi quét source method đích (`.ps1` vẫn regex-parse) |
+| `install-brain.py` / `.ps1` | Cài não một nút cho preset `auto:true`: Gemini = portable Node pin-sha256 vào `DATA/node` + `npm i -g` (không cần admin), Devin = installer chính thức; gọi qua `POST /api/install-brain`, tiến trình poll bằng GET cùng path |
+| `ensure-deps.py` | Tạo `.venv/` RIÊNG trong folder dữ liệu + pip các gói skill cần (openpyxl, python-docx) — idempotent, launcher gọi nền mỗi boot; không đụng Python hệ thống (tránh "externally-managed-environment") |
+| `scene-player.html` | Player cho `scene.json` (demo có điều khiển) — pipeline media dormant, luồng tool mặc định không dùng |
+| `render-video.py` / `tts-vieneu.py` | Render `video.mp4` từ `scene.json`: chụp frame scene-player bằng trình duyệt headless + ghép ffmpeg, xuất kèm `.vtt` theo timing; giọng đọc ưu tiên VieNeu-TTS local (Apache-2.0, env `TTS_PY`/`TTS_VOICE`), fallback `say`/SAPI — dormant cùng scene-player |
 | `beacon.py` / `.ps1` | Máy nhân viên → collector: pair (pending → approve ghi `pending_key` → pair sau nhận `machine_key`) rồi snapshot 15' (đếm lượt/version/license — không nội dung); pending poll 60s, fail backoff 300s×3 |
 | `collector.py` | Trung tâm fleet (3 tier cùng code): pairing + approve/revoke + repair (re-pair máy approved → cờ `repair`, cấp lại key qua `pending_key` — migration v2), license check, dashboard, store `releases/` + `packs/` phát xuống, mirror upstream 6h. Khoá 3 tầng: `beacon_secret`/`admin_key` per-org, `telemetry.key` chỉ org-ping, `vendor_read_key` rollup-only + `release_key` upload release |
-| `worker/` | **Port của collector.py** sang Cloudflare Workers + D1 + R2 — tier vendor-hosted ĐANG CHẠY tại `troly.hieuspace.com/fleet/`; `wrangler.toml` (route/cron/binding), `src/index.js`, `schema.sql`; thêm tầng tài khoản admin 2-role (admins/sessions/audit trong D1) |
 | `update.py` | Máy kéo release: manifest no-redirect → sha256 + ed25519 (`ed25519.py` vendored, `vendor-pubkey`) → stage `.devin/update-stage/` → launcher apply + rollback |
+| `ed25519.py` + `vendor-pubkey` | Pure-Python ed25519 vendored (update.py verify sig release — không phụ thuộc pip) + pubkey của vendor; `TROLY_VENDOR_PUBKEY` override cho test |
 | `apply-pack.py` | Áp config-pack cty vào `.devin/` — lint exec_allowlist, permissions/exec_allowlist chỉ máy mới, rules.local.md |
-| `make-license.py` | Vendor: cấp license.json ký HMAC theo org/seats/expiry |
-| `sign-release.py` + `ed25519.py` | Vendor: ký release offline (`--gen-key` sinh cặp khoá, privkey KHÔNG vào repo) |
-| `sign-macos.sh` + `entitlements.plist` | macOS: codesign Developer ID + notarize (`notarytool --wait`) + verify quarantine — CI gọi cùng chuỗi qua secrets, local qua keychain profile `troly-notary` |
-| `build-release.sh` | Release-readiness gate: test suite + secret-scan zip + changelog + git sạch |
-| `sync-fork.sh` | Hút phần IMA-only từ `../ima-assistant` → `packs/ima/pack.json` (skill diff, config, workflows, rules) |
 | `content_guard.py` | Lớp ranh giới: wrap UNTRUSTED (sanitize marker + NFKC fold + id hash), detect_injection advisory, scrub_env allowlist spawn, exec_allowed glob |
 | `backup.py` | Snapshot `.devin/`+`workspace/` trước update/pack-apply — giữ 5 bản |
-| `build-ext.sh` | Zip `extension/` → `dist/troly-ext-<ver>.zip` upload Web Store — lint giữ `key` (EXT_ID), connectable localhost-only |
+
+## tests/ — test suite (stdlib, KHÔNG ship vào bản cài)
+
+| File | Vai trò |
+|---|---|
+| `test-bridges.py` | Smoke test endpoint: auth 401, save-page sandbox, brain whitelist — spawn bridge thật trên port động |
+| `test-parity.py` | Diff tập endpoint `/api/*` giữa chat-bridge `.py` ↔ `.ps1` — bắt drift (`DARWIN_ONLY`: pick-folder, reveal) |
+| `test-packs.py` | Diff `.devin/skills/` ↔ `skill-packs/` + kiểm recipes trỏ đúng skill — bắt "quên đồng bộ pack" |
+| `test-gates.py` | Mọi endpoint POST `/api/*` phải khai `GATED` (handler gọi `gate_local`/`New-Gate`) hoặc `OPEN_OK` — bắt "write đặc quyền quên consent gate"; `.py` enumerate `POST_ROUTES` dict rồi quét source method đích (`.ps1` vẫn regex-parse) |
+| `test-walkthrough.py` | Validator walkthrough.json: kinds/fields/`{{var}}`/cond/media tồn tại + từ cấm ("đơn giản", "chỉ cần"…) — skill `/tao-cong-cu` bắt buộc chạy sau khi sinh |
+| `test-deny-parity.py` | BRAIN_CMD_DENY sống ở 5 file (cmd_deny.py canonical + 4 mirror tay trong term-gate/read-brain/chat-bridge.ps1) — bắt drift kênh code-exec |
 | `test-fleet.py` | GATE plan 1: collector thật, đủ vòng đời pair→approve→beacon→revoke + parity endpoint-set collector↔worker (`WORKER_ONLY` khai rõ) |
 | `test-worker.py` | Integration worker: `wrangler dev` + D1 local — bootstrap lock, login/session, orgs+license HMAC, cross-org 403/404, rotate-secret, audit, last-master lock |
 | `test-distribution.py` | GATE plan 2: ký→verify→stage→apply pack→rollback hermetic |
 | `test-content-guard.py` | GATE plan 6: wrap byte-shape, sanitize, fold+detect, allowlist, scrub, live /api/emit-event |
+| `test-agent-spawn.ps1` | Smoke test S4 (Windows, cần admin): compile C# AgentSpawn nhúng trong chat-bridge.ps1 → spawn cross-user `troly-agent` → verify deny-read + ACL |
+| `test-fakebrain.cs` | Não ACP giả cho CI S4 (build thành fakebrain.exe): trả initialize/session/new + echo `pong:<user>` — chứng minh não chạy dưới troly-agent thật |
+
+## scripts/ — build, ký, release (KHÔNG ship vào bản cài)
+
+| File | Vai trò |
+|---|---|
+| `build.sh` | Đóng gói binary một file (PyInstaller) |
+| `build-release.sh` | Release-readiness gate: test suite + secret-scan zip + changelog + git sạch |
+| `build-ext.sh` | Zip `extension/` → `dist/troly-ext-<ver>.zip` upload Web Store — lint giữ `key` (EXT_ID), connectable localhost-only |
+| `sign-macos.sh` + `entitlements.plist` | macOS: codesign Developer ID + notarize (`notarytool --wait`) + verify quarantine — CI gọi cùng chuỗi qua secrets, local qua keychain profile `troly-notary` |
+| `sign-release.py` | Vendor: ký release offline bằng ed25519 (`sys.path` trỏ `tools/ed25519.py` + pubkey `tools/vendor-pubkey`; `--gen-key` sinh cặp khoá, privkey KHÔNG vào repo) |
+| `make-license.py` | Vendor: cấp license.json ký HMAC theo org/seats/expiry |
+| `sync-fork.sh` | Hút phần IMA-only từ `../ima-assistant` → `packs/ima/pack.json` (skill diff, config, workflows, rules) |
+| `clone-compare.py` | So clone vs nguồn: `harvest`/`styles`/`shot` — pha 4 của /clone-trang |
+
+## worker/ + collector-web/ — fleet hosted tier
+
+| Đường | Vai trò |
+|---|---|
+| `worker/` | **Port của collector.py** sang Cloudflare Workers + D1 + R2 — tier vendor-hosted ĐANG CHẠY tại `troly.hieuspace.com/fleet/`; `wrangler.toml` (route/cron/binding), `src/index.js`, `schema.sql`; thêm tầng tài khoản admin 2-role (admins/sessions/audit trong D1) |
+| `collector-web/` | Dashboard fleet (`index.html`): login 2 cửa (tài khoản / dán key) + tab theo vai trò — Máy, Công ty, Tài khoản, Nhật ký, Pack; cũng ship vào bản cài làm trang admin local cho IT |
 
 ## deploy/ — bộ cài cho đội triển khai
 
@@ -58,6 +82,7 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 |---|---|
 | `DEPLOY.md` | Hướng dẫn cài N máy: kiến trúc 30s, bộ cài cty, 3 tier collector, nghiệm thu, vận hành, rollback |
 | `install.ps1` / `install.sh` | Cài 1 máy: copy code (loại state/machine-local), ttyd, license+fleet vào `.devin/`, shortcut/LaunchAgent |
+| `install-brain.ps1` | IT cài sẵn não trước khi giao máy (fleet) — portable Node pin-sha256 + `npm i -g` não + trình cài Devin; khác `tools/install-brain.*` là chạy ngoài portal, không qua POST |
 | `force-install.md` | Extension qua policy: Registry/GPO/plist `ExtensionInstallForcelist` — tự cài + tự update |
 | `CHECKLIST.md` | Bản in 1 trang tick từng máy |
 | `vendor-infra.md` | Hạ tầng vendor trên troly.hieuspace.com: site, /releases/, /fleet/ hosted collector, org-ping |
@@ -94,7 +119,7 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 
 ## templates/
 
-`walkthrough.json` — schema màn hướng dẫn tương tác (15 step kinds:
+`walkthrough.json` — schema màn hướng dẫn tương tác (16 step kinds:
 say/prompt/input/choice/pick-file/open-url/wait-perm/wait-run/auto/
 spotlight/open/watch/download/check/copy/done + cond/optional/
 then_probe/media). `lesson.md` — khung guide.md (bản đọc của
@@ -182,5 +207,7 @@ Kế hoạch nhiều phase đã/thực thi — mỗi folder `YYMMDD-HHMM-<tên>/
   vendor-infra.md. `site/` — landing + privacy (Chrome Store).
 - Docs: docs/fleet.md, docs/distribution.md, docs/SECURITY.md,
   docs/case-study-ima.md (skeleton), docs/troubleshooting-runbook.md.
-- Test: test-fleet, test-worker, test-distribution, test-content-guard,
-  test-packs, test-gates, test-parity, test-bridges.
+- Test (`tests/`): test-fleet, test-worker, test-distribution,
+  test-content-guard, test-packs, test-gates, test-parity, test-bridges,
+  test-walkthrough, test-deny-parity, test-agent-spawn.ps1
+  (+ test-fakebrain.cs build cho CI Windows).
