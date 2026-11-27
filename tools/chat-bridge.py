@@ -295,6 +295,7 @@ def rotate_history():
 
 def replay_history():
     global event_base
+    max_run = 0
     try:
         with open(HIST_FP, encoding="utf-8-sig") as f:
             for line in f:
@@ -304,10 +305,17 @@ def replay_history():
                     continue
                 if ev.get("t") == "perm":
                     continue        # card xin phép là transient — bỏ
+                try:
+                    max_run = max(max_run, int(ev.get("run_id") or 0))
+                except (TypeError, ValueError):
+                    pass
                 with store_lock:
                     event_store.append(ev)
     except OSError:
         return
+    # F-018: tiếp tục run_id từ phiên trước — restart mà reset về 0 thì
+    # history jsonl (append-only) trộn run_id 2 phiên, dashboard đếm sai
+    run_id[0] = max_run
     with store_lock:
         excess = len(event_store) - MAX_EVENTS
         if excess > 0:
@@ -444,7 +452,8 @@ def _perm_title(tc):
     file/lệnh đích — duyệt mù là không được."""
     t = str(tc.get("title") or "").strip()
     if t and t.lower() not in _PERM_GENERIC:
-        return t[:200]
+        # bỏ tiền tố "./" lộ path thô (F-019) — "Read ./x/y" → "Read x/y"
+        return re.sub(r"(?<![\w/])\./", "", t)[:200]
     verb = _PERM_KIND.get(str(tc.get("kind") or "").lower(),
                           "làm một việc")
     return ("Trợ lý muốn " + verb + _title_detail(tc))[:200]
@@ -466,7 +475,7 @@ def _tool_title(u):
         verb = _PERM_KIND.get(str(u.get("kind") or "").lower(),
                               "làm một việc")
         t = verb[0].upper() + verb[1:]
-    return t[:200]
+    return re.sub(r"(?<![\w/])\./", "", t)[:200]
 
 def _kill_proc(rec):
     """Giết osascript của card khi card bị huỷ/evict/clear — không kill
@@ -535,7 +544,12 @@ def _native_confirm(rid):
     # bấm từ chối (audit-3 CAO-1). Bỏ cancel button thì "Không" trả
     # stdout bình thường, Esc cũng không dismiss được — từ chối chỉ còn
     # đường declined, không còn đường xuống fallback.
-    script = ("display dialog " + _asq(title) +
+    # F-028: display dialog trần thuộc process osascript vô hình — đổi
+    # tab/cửa sổ là học viên mất dấu. Gán dialog vào System Events +
+    # activate thì nó nổi frontmost, dễ tìm lại.
+    script = ('activate\n'
+              'display dialog ' +
+              _asq(title) +
               ' with title "Trợ Lý AI — xin phép" with icon note '
               'buttons {"Không", "Đồng ý"} default button "Không" '
               'giving up after ' + str(int(PERM_TTL)))
@@ -566,10 +580,12 @@ def _native_confirm(rid):
             # "Không" / hết hạn gave-up = quyết định CÓ NGƯỜI → đóng card,
             # KHÔNG fallback (y _perm_native_confirm). Chỉ stdout hoàn toàn
             # rỗng (osascript lỗi/bị terminate từ chat) mới là GUI hỏng.
-            declined = "button returned:Không" in out or "gave up:true" in out
+            timed_out = "gave up:true" in out
+            declined = "button returned:Không" in out or timed_out
             gui_failed = p.returncode != 0 and not approved and not declined
         except Exception:
             approved = False
+            timed_out = False
             gui_failed = True
             try:
                 p.kill()
@@ -593,6 +609,11 @@ def _native_confirm(rid):
     with store_lock:
         rec = local_pending.pop(rid, None)
     broadcast({"t": "perm_done", "id": rid})
+    # F-011: hết hạn ≠ từ chối — nói rõ cho học viên, khỏi tưởng mình
+    # bấm sai hay trợ lý hỏng im lặng
+    if timed_out:
+        broadcast({"t": "warn", "msg": "hết giờ xin phép — việc đang chờ "
+                   "đã dừng, bạn nhờ lại nhé"})
     if rec is None or not approved:
         return
     try:
@@ -621,8 +642,12 @@ def _perm_native_confirm(rid):
             "Trợ lý muốn làm một việc"
     # KHÔNG khai "cancel button": nút cancel khi bấm = error -128 (stdout
     # rỗng) → không phân biệt được "người từ chối" với "dialog hỏng" —
-    # cứ bấm Không là phải báo cancel cho não ngay, không downgrade card
-    script = ("display dialog " + _asq(title) +
+    # cứ bấm Không là phải báo cancel cho não ngay, không downgrade card.
+    # F-028: System Events + activate để dialog nổi frontmost, học viên
+    # đổi tab không mất dấu hộp xin phép.
+    script = ('activate\n'
+              'display dialog ' +
+              _asq(title) +
               ' with title "Trợ Lý AI — xin phép" with icon note '
               'buttons {"Không", "Đồng ý"} default button "Không" '
               'giving up after ' + str(int(PERM_TTL)))
@@ -658,10 +683,12 @@ def _perm_native_confirm(rid):
             # trước fallback về card Origin nhưng não forge Origin duyệt
             # được → giờ xử như từ chối (audit-5 N5); chỉ spawn-fail
             # (p is None, headless thật) mới fallback.
-            declined = "button returned:Không" in out or "gave up:true" in out
+            timed_out = "gave up:true" in out
+            declined = "button returned:Không" in out or timed_out
             gui_failed = p.returncode != 0 and not approved and not declined
         except Exception:
             approved = False
+            timed_out = False
             gui_failed = True
             try:
                 p.kill()
@@ -682,6 +709,11 @@ def _perm_native_confirm(rid):
     broadcast({"t": "perm_done", "id": rid})
     if rec is None:
         return
+    # F-011: hết hạn ≠ từ chối — nói rõ "hết giờ" cho cả học viên lẫn não,
+    # khỏi Lan tưởng mình bấm sai hay trợ lý hỏng im lặng
+    if timed_out:
+        broadcast({"t": "warn", "msg": "hết giờ xin phép — việc đang chờ "
+                   "đã dừng, bạn nhờ lại nhé"})
     pick = _pick_allow(rec.get("opts", [])) if approved else None
     if pick is not None:
         payload = {"jsonrpc": "2.0", "id": rid,
@@ -690,7 +722,9 @@ def _perm_native_confirm(rid):
     else:
         payload = {"jsonrpc": "2.0", "id": rid,
                    "error": {"code": -32800,
-                             "message": "học viên không đồng ý"}}
+                             "message": ("hết giờ chờ học viên duyệt"
+                                         if timed_out else
+                                         "học viên không đồng ý")}}
     try:
         if acp and not acp.dead:
             acp.send(payload)
@@ -1197,7 +1231,13 @@ def run_probe(probe):
             with urllib.request.urlopen(req, timeout=6) as r:
                 d = json.loads(r.read(1048576))
             if not d.get("ok"):
-                return {"ok": False, "msg": "trình duyệt chưa nối — mở Chrome/Edge lên trước"}
+                # đưa lời giải thích của ext-bridge (chính xác hơn: chưa
+                # pair ext, ext timeout, hay mất kết nối) thay vì chung
+                # chung "mở Chrome/Edge" — F-020: trinh-duyet đã nối mà
+                # app khác bảo "chưa nối" là Lan bối rối
+                return {"ok": False, "msg": str(d.get("err") or
+                        "trình duyệt chưa nối — mở trình duyệt có cài "
+                        "tiện ích Trợ Lý AI lên trước")}
             needle = str(probe.get("url_contains") or "").lower()
             ok = bool(needle) and any(
                 needle in str(t.get("url", "")).lower() for t in d.get("tabs", []))
