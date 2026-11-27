@@ -29,7 +29,8 @@ NODE_DIST = {
         "aec2514ea1ceb2ba52455e9ec65986f6749a06dd759e5db2a72e6889668c9735"),
     ("Darwin", "x86_64"):  (f"node-{NODE_VER}-darwin-x64.tar.gz",
         "82bb96078a24ca50b9c9a38f2379e6be6d87171fcd400fc14c8934b3bce96e2f"),
-    ("Linux", "x86_64"):   (f"node-{NODE_VER}-linux-x64.tar.gz", None),
+    ("Linux", "x86_64"):   (f"node-{NODE_VER}-linux-x64.tar.gz",
+        "518674de2b621728a5e4486f5fb3b7d2900bb3cc4aa97969edaa463db99f9778"),
 }
 
 BRAIN = sys.argv[1] if len(sys.argv) > 1 else ""

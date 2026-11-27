@@ -23,6 +23,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 
 KINDS = {
     "say", "prompt", "input", "choice", "pick-file", "open-url",
@@ -98,6 +99,13 @@ def check_file(path, errs):
         if k == "spotlight" and not (
                 isinstance(s.get("target"), str) and s["target"].strip()):
             fail(errs, w, "spotlight cần target (CSS selector)")
+        # audit-6 F6: open-url chỉ nhận http(s) — javascript: kế thừa
+        # origin portal. URL chứa {{biến}} chưa resolve → renderer
+        # app.js check lại lúc chạy (defense 2 lớp).
+        if k == "open-url":
+            u = str(s.get("url") or "")
+            if u and "{{" not in u and not re.match(r"^https?://", u, re.I):
+                fail(errs, w, "open-url url chỉ nhận http(s): %s" % u[:60])
 
         # cond — đúng một probe, var cần equals
         c = s.get("cond")
@@ -139,7 +147,38 @@ def check_file(path, errs):
         fail(errs, name, "bước 1 nên là 'say' (intro)")
 
 
+def _wt_errs(steps):
+    """Ghi steps ra file tạm rồi chạy check_file — self-test validator."""
+    fd, fp = tempfile.mkstemp(suffix=".json", prefix="wt-selftest-")
+    with os.fdopen(fd, "w") as f:
+        json.dump({"title": "selftest", "steps": steps}, f)
+    errs = []
+    try:
+        check_file(fp, errs)
+    finally:
+        os.unlink(fp)
+    return errs
+
+
 def main():
+    # audit-6 F6: validator phải bắt open-url scheme lạ, thả http(s) và
+    # URL chứa {{biến}} (biến chỉ check được lúc chạy — renderer soát lại)
+    _intro = [{"kind": "say", "body": "x"}]
+    if not _wt_errs(_intro + [{"kind": "open-url",
+                              "url": "javascript:alert(1)"}]):
+        print("FAIL selftest — javascript: lọt validator open-url")
+        return 1
+    for u in ("https://example.com", "http://x.vn/a?b=1"):
+        if _wt_errs(_intro + [{"kind": "open-url", "url": u}]):
+            print("FAIL selftest — url hợp lệ bị chặn:", u)
+            return 1
+    _var_steps = _intro + [{"kind": "input", "var": "u",
+                            "body": "nhập link"},
+                           {"kind": "open-url", "url": "{{u}}"}]
+    if _wt_errs(_var_steps):
+        print("FAIL selftest — {{biến}} trong url bị chặn oan")
+        return 1
+
     root = (sys.argv[1] if len(sys.argv) > 1 else "./workspace")
     errs, files = [], []
     if os.path.isdir(root):

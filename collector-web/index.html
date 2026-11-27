@@ -970,7 +970,7 @@ function openDrawer(mid) {
     }, {
       health: snap.health, brain: snap.brain, config: snap.config,
       bots: snap.bots, perms: snap.perms, conns: snap.conns,
-      counts: d.ev_stats || {},
+      counts: d.ev_stats || {}, tool_fail: snap.tool_fail,
     }, S === I18N.en ? AdmRender.I18N.en : AdmRender.I18N.vi);
     const skl = snap.skills || [];
     $('#adm-skills').innerHTML = skl.length

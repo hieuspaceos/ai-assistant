@@ -70,6 +70,14 @@ def sign_manifest(version, zip_fp, url=None):
             "url": url or os.path.basename(zip_fp),
             "sha256": sha, "sig": sig}
 
+# audit-6 F7: mọi entry NODE_DIST phải pin sha256 — None = binary làm
+# não chỉ qua HTTPS trần (Linux x64 từng sót pin).
+_ib = open(os.path.join(TOOLS, "install-brain.py"), encoding="utf-8").read()
+_nd0 = _ib.find("NODE_DIST = {")
+_nd1 = _ib.find("\n}", _nd0)
+check(_nd0 > 0 and ", None" not in _ib[_nd0:_nd1],
+      "install-brain.py NODE_DIST pin sha256 đủ mọi nền (audit-6 F7)")
+
 # --- máy nhân viên giả: DATA dir riêng ---
 mdata = os.path.join(tmp, "machine")
 os.makedirs(os.path.join(mdata, ".devin"))

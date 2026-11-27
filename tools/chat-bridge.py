@@ -2643,10 +2643,12 @@ class Handler(BaseHTTPRequestHandler):
         # Đồng nghiệp bridge nội bộ (ext-bridge → inj_suspect, launcher
         # → env_scrub…) append event thống kê vào store để beacon đếm.
         # Whitelist type — giới hạn thiệt hại khi agent tự gọi (chỉ
-        # inflate được đếm trên dashboard, không đổi state).
+        # inflate được đếm trên dashboard, không đổi state). Tín hiệu
+        # rollout (pack_applied/update_applied) KHÔNG qua endpoint này —
+        # không caller nào emit, agent tự emit được giả báo "đã update"
+        # (audit-6 F8); cần thì đi kênh beacon/collector.
         t = str(data.get("t") or "")
-        if t not in ("inj_suspect", "perm:auto", "env_scrub",
-                     "pack_applied", "update_applied"):
+        if t not in ("inj_suspect", "perm:auto", "env_scrub"):
             self._json({"err": "event type không được phép"}, 400)
             return
         ev = {k: data[k] for k in ("t", "action", "patterns",

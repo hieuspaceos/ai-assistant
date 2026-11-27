@@ -1,4 +1,4 @@
-# test-agent-spawn.ps1 — smoke test S4 (Windows sandbox). CAN ADMIN.
+﻿# test-agent-spawn.ps1 — smoke test S4 (Windows sandbox). CAN ADMIN.
 #
 #   powershell -ExecutionPolicy Bypass -File tools\test-agent-spawn.ps1
 #

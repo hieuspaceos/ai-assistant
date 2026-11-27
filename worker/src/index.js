@@ -459,9 +459,11 @@ async function doGet(req, env, path, prefix, orgs, url) {
         "SELECT machine_id FROM skill_bank WHERE org=? ORDER BY ts",
         row.org);
       const merged = {};
-      for (const r2 of rows) {
-        const o = await env.BUCKET.get(
-          `skills/${row.org}/${r2.machine_id}.json`);
+      // audit-6 F10: N R2 GET tuần tự → Promise.all một batch. Giữ thứ
+      // tự theo rows (ORDER BY ts) khi merge — entry mới hơn thắng.
+      const objs = await Promise.all(rows.map(r2 =>
+        env.BUCKET.get(`skills/${row.org}/${r2.machine_id}.json`)));
+      for (const o of objs) {
         if (!o) continue;
         let e;
         try { e = await o.json(); } catch { continue; }
@@ -818,6 +820,36 @@ async function doPost(req, env, path, prefix, orgs, ip) {
     return j({ ok: true });
   }
 
+  if (path === "/api/org-ping") {
+    // collector cty tự host ping rollup về vendor — PING_KEY (telemetry
+    // outbound-only, y collector.py) hoặc master. Endpoint phải đứng
+    // TRƯỚC admin gate: request chỉ mang PING_KEY không phải admin
+    // credential — qua gate chung là chết 401 trước khi tới đây
+    // (audit-6 F4). Key này chỉ mở đúng endpoint này, không tạo role mới.
+    const pk = req.headers.get("X-Admin-Key") || "";
+    const isPing = !!(env.PING_KEY && eq(pk, env.PING_KEY));
+    if (!isPing) {
+      const actor0 = await authAdmin(req, env, orgs);
+      if (!actor0 || actor0.role !== "master")
+        return j({ err: "chỉ master" }, 403);
+    }
+    const [b, err] = await body(req);
+    if (err) return err;
+    // cắt thẳng .slice(0,8000) phá JSON giữa chừng → /api/org-pings
+    // parse rớt. Payload quá dài thì thu về bản tóm tắt hợp lệ (y py)
+    let payload = JSON.stringify(b);
+    if (payload.length > 8000)
+      payload = JSON.stringify(
+        { org: String(b.org || "?").slice(0, 80), _truncated: true });
+    await run(env,
+      "INSERT INTO org_pings(org,ts,payload) VALUES(?,?,?)",
+      String(b.org || "?").slice(0, 80), nowSec(), payload);
+    // prune như py — rollup gần nhất, giữ 90 ngày
+    await run(env, "DELETE FROM org_pings WHERE ts<?",
+              nowSec() - 90 * 86400);
+    return j({ ok: true });
+  }
+
   // --- admin gate: session hoặc key cũ đều qua đây ---
   const actor = await authAdmin(req, env, orgs);
   if (!actor) return j({ err: "thiếu hoặc sai credential" }, 401);
@@ -1057,26 +1089,6 @@ async function doPost(req, env, path, prefix, orgs, ip) {
               b.off ? 0 : 1, mid);
     await audit(env, actor, b.off ? "harvest-cancel" : "harvest",
                 r.org, mid, "");
-    return j({ ok: true });
-  }
-  if (path === "/api/org-ping") {
-    // collector cty tự host ping về vendor — chỉ master cấp
-    if (actor.role !== "master")
-      return j({ err: "chỉ master" }, 403);
-    const [b, err] = await body(req);
-    if (err) return err;
-    // cắt thẳng .slice(0,8000) phá JSON giữa chừng → /api/org-pings
-    // parse rớt. Payload quá dài thì thu về bản tóm tắt hợp lệ (y py)
-    let payload = JSON.stringify(b);
-    if (payload.length > 8000)
-      payload = JSON.stringify(
-        { org: String(b.org || "?").slice(0, 80), _truncated: true });
-    await run(env,
-      "INSERT INTO org_pings(org,ts,payload) VALUES(?,?,?)",
-      String(b.org || "?").slice(0, 80), nowSec(), payload);
-    // prune như py — rollup gần nhất, giữ 90 ngày
-    await run(env, "DELETE FROM org_pings WHERE ts<?",
-              nowSec() - 90 * 86400);
     return j({ ok: true });
   }
   // upload 2 bước như py: zip raw trước, manifest sau — chỉ master

@@ -78,6 +78,7 @@ const I18N = {
     delFailMsg: 'Kiểm tra lại xem chat-bridge có đang chạy không nhé — thử chạy lại file start.',
     gateTitle: 'Cần bạn xác nhận',
     gateMsg: 'Đã gửi thẻ xác nhận vào tab "Hỏi trợ lý" — bấm "Đồng ý" bên đó để hoàn tất.',
+    wtBadUrl: 'Đường link trong bước hướng dẫn không hợp lệ — bỏ qua bước này nhé.',
     warnChat: '<b>Trợ lý chưa mở:</b> chạy lại file <code>start</code> rồi tải lại trang này.',
     warnCli: '<b>Terminal chưa mở:</b> chạy lại <code>start.bat</code>, hoặc mở PowerShell gõ <code>devin</code> để học bình thường.',
     hintNotReady: 'Trợ lý chưa sẵn sàng — mở lại file <code>start</code> rồi tải lại trang này. Nếu mới dùng lần đầu, bấm <a href="onboarding.html"><b>vào đây để cài đặt</b></a>.',
@@ -182,6 +183,7 @@ const I18N = {
     delFailMsg: 'Check whether the chat bridge is running — try running the start file again.',
     gateTitle: 'Needs your confirmation',
     gateMsg: 'A confirmation card was sent to the "Ask the assistant" tab — tap "Đồng ý" (agree) there to finish.',
+    wtBadUrl: 'The link in this guide step is invalid — skipping it.',
     warnChat: '<b>The assistant isn\'t up:</b> run the <code>start</code> file again, then reload this page.',
     warnCli: '<b>Terminal isn\'t up:</b> run the <code>start</code> file again, or open a shell and type <code>devin</code>.',
     hintNotReady: 'The assistant isn\'t ready — run the <code>start</code> file again and reload. First time here? <a href="onboarding.html"><b>Click to set up</b></a>.',
@@ -758,7 +760,14 @@ async function wtDraw() {
       return;
     }
     if (a === 'choice') { if (s.var) wt.vars[s.var] = b.dataset.v; return wtGo(1); }
-    if (a === 'openurl') { window.open(sub(s.url), '_blank'); if (s.then_probe && s.then_probe.app) wtPoll({ conn: s.then_probe.app }); return; }
+    if (a === 'openurl') {
+      const u = sub(s.url);
+      // scheme check — javascript: kế thừa origin portal, chạy được
+      // script trong context học viên (audit-6 F6; lớp 2 sau validator
+      // test-walkthrough — URL chứa {{biến}} chỉ check được lúc chạy)
+      if (!/^https?:\/\//i.test(u)) { uiAlert(t('gateTitle'), t('wtBadUrl')); return; }
+      window.open(u, '_blank'); if (s.then_probe && s.then_probe.app) wtPoll({ conn: s.then_probe.app }); return;
+    }
     if (a === 'auto') {
       b.disabled = true; b.textContent = '⏳ ' + t('wtWaiting');
       await wtPostPrompt(sub(s.send)).catch(() => {});

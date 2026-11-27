@@ -57,6 +57,12 @@ check(os.path.isfile(os.path.join(ROOT, "web", "adm-render.js")),
 check(read(os.path.join(ROOT, "web", "adm-render.js"))
       == read(os.path.join(ROOT, "collector-web", "adm-render.js")),
       "hai bản adm-render.js đồng bộ")
+# audit-6 F11: beacon.ps1 ghi tool_fail vào snapshot; adm-render
+# hiển thị row cảnh báo từ d.tool_fail
+check("tool_fail" in ps_beacon,
+      "beacon.ps1 có logic ghi snap.tool_fail")
+check('toolFail' in read(os.path.join(ROOT, "web", "adm-render.js")),
+      "adm-render.js có i18n key toolFail")
 check("api/skills-bank" in dash and "api/harvest" in dash,
       "dashboard gọi skills-bank + harvest")
 check("bank" in read(os.path.join(TOOLS, "apply-pack.py")),
@@ -247,7 +253,8 @@ try:
             "bots": {"active": "b1", "bots": [{"id": "b1"}]},
             "perms": {"folders": []}, "conns": {"apps": []},
             "skills": [{"id": "s-tuan", "name": "Cong thuc A",
-                        "desc": "mo ta"}]}
+                        "desc": "mo ta"}],
+            "tool_fail": "no-python"}
     beacon_body = {"beacon_ver": 1, "machine_id": "m-test-1",
                    "hostname": "PC-01", "os": "Windows 11",
                    "version": "1.0.2", "pack_version": "1",
@@ -302,6 +309,10 @@ try:
                    {"X-Admin-Key": SEC_A})
     check(code == 200 and r.get("snapshot", {}).get("bridge_up"),
           "detail trả snapshot đầy đủ cho trang chi tiết")
+    # audit-6 F11: tool_fail nằm trong snapshot → collector persist
+    # qua snapshot_json, drawer đọc được
+    check(r.get("snapshot", {}).get("tool_fail") == "no-python",
+          "snapshot.tool_fail persist qua collector")
 
     # label + seats export (1click-b2b 06): admin gán tên NV vào máy,
     # CSV báo cáo ghế có cột label — vendor read key bị chặn cả hai

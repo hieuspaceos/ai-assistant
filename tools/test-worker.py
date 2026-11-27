@@ -311,6 +311,24 @@ try:
     check(s == 200 and d.get("status") == "pending",
           "máy re-pair bằng secret mới → pending")
 
+    # --- audit-6 F4: /api/org-ping nhận PING_KEY (telemetry outbound)
+    # hoặc master — endpoint đứng TRƯỚC admin gate vì PING_KEY không
+    # phải admin credential
+    s, d = http("POST", base + "/api/org-ping",
+                H("test-ping-key-audit6"),
+                body={"org": "TSTCO", "machines": 3})
+    check(s == 200, "org-ping với PING_KEY → 200")
+    s, d = http("POST", base + "/api/org-ping", H("sai-key"),
+                body={"org": "TSTCO"})
+    check(s == 403, "org-ping key sai → 403")
+    s, d = http("POST", base + "/api/org-ping", body={"org": "TSTCO"})
+    check(s == 403, "org-ping không key → 403")
+    s, d = http("POST", base + "/api/org-ping", H(VENDOR_KEY),
+                body={"org": "TSTCO", "machines": 3})
+    check(s == 200, "org-ping với master key → 200 (fallback)")
+    rows = d1("SELECT org FROM org_pings WHERE org='TSTCO'")
+    check(len(rows) == 2, "org-ping ghi được 2 payload vào org_pings")
+
     # --- logout ---
     s, d = http("POST", base + "/api/logout", B(tok))
     s, d = http("GET", base + "/api/whoami", B(tok))

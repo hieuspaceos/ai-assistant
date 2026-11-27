@@ -628,3 +628,52 @@ Accepted-risk còn lại:
 - Vá F1 chỉ ý nghĩa trên máy **đa-user** (admin cài, nhiều người dùng
   chung máy); kịch bản một-máy-một-người vốn đã an toàn — `-ForUser`
   của installer cho phép chỉ định chủ nhân thay vì grant `BUILTIN\Users`.
+
+## Audit đợt 6 — drift parity + vá (plan `261127-0827-audit-6-fix`)
+
+13 finding F1–F13, không CAO độc lập mới — hầu hết là drift `.py`↔`.ps1`/`.js`
+trên bản Windows. Đã vá: F1 (CSP suffixes `serve.ps1` chỉ `.html/.htm` →
+`.svg` độc trong `workspace/` XSS origin portal trộm `bridge_token`),
+F2 (secrets wipe ps1 so nhầm key → first-save mất user/password — creds
+Windows chưa bao giờ lưu đủ), F3 (junction/reparse-point không resolve —
+`Get-Item.LinkTarget`), F4 (worker `/api/org-ping` hoisted trước admin
+gate — `PING_KEY` telemetry outbound-only chỉ mở đúng endpoint này, qua
+gate chung là 401 mãi), F5 (port đủ 5 endpoint sang `.ps1` — xem residual),
+F6 (walkthrough `open-url` siết scheme http/https — 2 lớp: validator
+`test-walkthrough.py` + renderer `app.js`, URL chứa `{{var}}` chỉ enforce
+lúc chạy), F7 (pin sha256 node Linux x64 — trước fetch trần qua HTTPS),
+F8 (xoá `pack_applied`/`update_applied` khỏi whitelist emit-event —
+không caller nào; agent cầm token emit được tín hiệu rollout giả.
+Decision log: cần báo rollout từ máy thì đi kênh beacon/collector,
+không mở lại endpoint này), F9/F10 (collector `_conn()` tách migrate —
+trước mỗi query là connect + DDL + migrate-check ~10 lần/beacon POST;
+`_bank_cache` theo mtime + worker `Promise.all` batch R2 GET),
+F11 (beacon.ps1 ghi `tool_fail` vào snapshot — collector lưu qua
+`snapshot_json`, dashboard hiện badge "không tự cập nhật được"),
+F12 (`test-deny-parity.py` — canonical `cmd_deny.py` ↔ 4 mirror;
+test vừa viết bắt luôn `julia1.9`/`kotlin1.9`/`pwsh7`/`r4.3` lọt —
+đã siết regex canonical + glob `term-gate.sh`).
+
+### Residual / quyết định chủ đích
+
+- **F11 accepted-risk**: máy Windows source-mode không cài Python vẫn
+  không tự áp update/pack được (`update.py`/`apply-pack.py` là .py) —
+  beacon báo `tool_fail` ngược lên dashboard thay vì im lặng. Vá gốc =
+  port 2 tool sang ps1 hoặc ship frozen `troly.exe` — ghi
+  known-limitation, không vá đợt này.
+- **F5 quyết định — port đủ**: `/api/bots`, `/api/bot`,
+  `/api/bot-import`, `/api/bot-import-confirm`, `/api/install-brain`
+  port sang `chat-bridge.ps1` (+ `install-brain.ps1` mirror
+  `install-brain.py` — máy Windows học viên thường không có Python nên
+  spawn `.py` sẽ chết ngầm y hệt trước). Consent gate giữ nguyên:
+  activate/delete/import-confirm/install-brain sau onboard đều qua card.
+  `pick-folder`/`reveal` không port — `.py` darwin-only, đánh dấu
+  `DARWIN_ONLY` trong `test-parity.py`. Deploy: `install-brain.ps1`
+  spawn qua `powershell.exe` hidden, log `.logs\install-brain.log`,
+  state `.devin\install-brain.json` y hệt .py.
+- **F4 deploy note**: tier hosted cần `wrangler secret put PING_KEY`
+  trước khi collector tự-host ping rollup — thiếu thì `/api/org-ping`
+  403 mãi (đúng thiết kế).
+- **F13 accepted**: `background.js` check `u.port !== '8080'` cứng —
+  đổi PORT serve.py phải sửa cùng chỗ, dự phòng = dán mã tay trong
+  trang options (comment in-code).

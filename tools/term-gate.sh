@@ -44,9 +44,9 @@ case "$_bt" in
   micropython|gjs|qjs|nodemon|tsx|ts-node|bunx|uv|uvx|pipx|conda|\
   poetry|pdm|jupyter|vitest|jest|mocha|clj|clojure|lein|stack|cabal|\
   mise|asdf|\
-  python*|perl*|php*|pip*|ruby*|node*|lua*|tclsh*|rscript*|java*|\
+  python*|perl*|php*|pip*|ruby*|node*|lua*|tclsh*|rscript*|r[0-9]*|java*|\
   julia*|groovy*|kotlin*|ipython*|pypy*|jython*|micropython*|pyspark*|\
-  ?sh|??sh|*sh[0-9]*|bundle|irb|pry|runghc|ghci)
+  pwsh*|?sh|??sh|*sh[0-9]*|bundle|irb|pry|runghc|ghci)
     echo "Lenh terminal khong hop le - chay devin."; BRAIN_TERM=devin ;;
 esac
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

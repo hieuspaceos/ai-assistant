@@ -81,6 +81,9 @@ function connect() {
 // token (DoS reconnect), không đánh cắp được gì.
 chrome.runtime.onMessageExternal.addListener((m, sender, reply) => {
   // matches không ràng được port — kiểm tay: chỉ nhận token từ portal :8080
+  // audit-6 F13 (accepted): port 8080 cứng. Đổi PORT trong serve.py thì
+  // phải sửa luôn check này — nếu không auto-pair chết ngầm, user vẫn
+  // còn đường dự phòng = dán mã tay trong trang options của extension.
   try {
     const u = new URL(sender.url || sender.origin || '');
     if (!['localhost', '127.0.0.1'].includes(u.hostname) || u.port !== '8080') return;

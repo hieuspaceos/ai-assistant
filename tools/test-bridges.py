@@ -302,6 +302,44 @@ def main():
         check("15f. secrets cùng url → merge giữ",
               s == 202 and sa3 == 200 and wp.get("user") == "u2",
               str(wp)[:80])
+        # audit-6 F2: first-save trên ps1 từng rơi nhánh wipe → chỉ còn
+        # url, mất user/password. App mới tinh + đủ 3 field một lần.
+        s, b, _ = http("POST", base + f"/api/secrets?token={TOKEN}",
+                       {"app": "zalo-oa", "fields":
+                        {"access_token": "tok-fresh-1"}})
+        sa4 = _approve(base, b.get("pending"))
+        s2, b2x, _ = http("POST", base + f"/api/secrets?token={TOKEN}",
+                          {"app": "fresh-wp", "fields":
+                           {"url": "https://moi.vn", "user": "u9",
+                            "app_password": "p9"}})
+        sa5 = _approve(base, b2x.get("pending"))
+        creds = json.load(open(os.path.join(wd, ".devin",
+                                            "secrets.local.json")))
+        fw = creds.get("fresh-wp") or {}
+        check("15g. secrets first-save giữ ĐỦ field vừa nhập (audit-6 F2)",
+              s2 == 202 and sa5 == 200 and fw.get("url") == "https://moi.vn"
+              and fw.get("user") == "u9" and fw.get("app_password") == "p9",
+              str(fw)[:80])
+        # audit-6 F2: đổi "host" (không phải "url") cũng phải wipe —
+        # ps1 chỉ check url, py check url|host|endpoint.
+        s2, b2x, _ = http("POST", base + f"/api/secrets?token={TOKEN}",
+                          {"app": "fresh-wp",
+                           "fields": {"host": "https://evil2.example"}})
+        sa6 = _approve(base, b2x.get("pending"))
+        creds = json.load(open(os.path.join(wd, ".devin",
+                                            "secrets.local.json")))
+        fw = creds.get("fresh-wp") or {}
+        check("15h. secrets đổi host → wipe (parity url|host|endpoint)",
+              s2 == 202 and sa6 == 200
+              and fw.get("host") == "https://evil2.example"
+              and "url" not in fw and "user" not in fw
+              and "app_password" not in fw, str(fw)[:80])
+        # audit-6 F8: emit-event không nhận tín hiệu rollout (agent tự
+        # emit được giả "đã update" — không caller nào cần)
+        s, b, _ = http("POST", base + f"/api/emit-event?token={TOKEN}",
+                       {"t": "update_applied", "msg": "fake rollout"})
+        check("15i. emit-event update_applied → 400 (audit-6 F8)",
+              s == 400, str(s))
 
         s, b, _ = http("POST", base + f"/api/setup?token={TOKEN}",
                        {"language": "vi", "learner_name": "Test"})

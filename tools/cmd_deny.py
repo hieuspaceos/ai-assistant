@@ -64,11 +64,11 @@ BRAIN_CMD_DENY = {
 _BRAIN_CMD_DENY_RE = re.compile(r"""^(?:
     (i?python|pypy|jython|micropython|pyspark)[\d.]*w? | py |
     perl[\d.]* | ruby[\d.]* | php[\d.]* | pip[\d.]* | node(js)?[\d.]* |
-    (ba|z|fi|da|k|c|tc)?sh\d* |
+    (ba|z|fi|da|k|c|tc)?sh\d* | pwsh[\d.]* |
     lua(jit)?[\d.]* | tclsh[\d.]* | r(script)?[\d.]* |
-    java\w* | jshell | groovy\w* | scala | kotlin\w* | dotnet | mono |
+    java\w* | jshell | groovy\w* | scala | kotlin[\w.]* | dotnet | mono |
     brew | gh | go | cargo | xcodebuild | plutil | shortcuts |
-    bundle | irb | pry | julia | gjs | qjs | runghc | ghci
+    bundle | irb | pry | julia[\w.]* | gjs | qjs | runghc | ghci
 )$""", re.X | re.I)
 
 

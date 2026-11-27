@@ -36,6 +36,12 @@ $csp = "sandbox allow-scripts allow-top-navigation-by-user-activation " +
        "connect-src 'none'; form-action 'none'; base-uri 'none'; " +
        "object-src 'none'; frame-src 'self' https:; frame-ancestors 'self'"
 
+# Moi loai file render thanh document chay duoc script — parity CSP_SUFFIXES
+# cua serve.py (audit-5 N4): .svg/.xml co <script>/XSLT chay trong origin
+# :8080 doc duoc localStorage.bridge_token.
+$cspSuffixes = @('.html','.htm','.svg','.xml','.xhtml','.xht',
+                 '.shtml','.mhtml','.mht')
+
 # JSON điều khiển quyền/cấu hình + persona bot: đọc qua API có token, không
 # để GET trần trên :8080 (parity serve.py). So hoa-thường bắt buộc vì FS
 # Windows không phân biệt case — /MY-COURSE/PERMISSIONS.JSON cùng một file.
@@ -53,7 +59,7 @@ try { $listener.Start() } catch {
 Write-Host "Portal dang chay tai http://localhost:$port/web/  (Ctrl+C de dung)"
 
 $handler = {
-  param($ctx, $root, $rootPrefix, $mime, $csp, $blockedJson)
+  param($ctx, $root, $rootPrefix, $mime, $csp, $cspSuffixes, $blockedJson)
   try {
     $req = $ctx.Request; $res = $ctx.Response
     $path = [System.Uri]::UnescapeDataString($req.Url.LocalPath)
@@ -86,7 +92,7 @@ $handler = {
       # /MY-COURSE/x.html resolve ra cung file — so case-sensitive se lam
       # content doc thoat CSP qua alias viet hoa.
       if (($path.ToLower().StartsWith('/workspace/') -or $path.ToLower().StartsWith('/intro/')) -and
-          ($ext -eq '.html' -or $ext -eq '.htm')) {
+          ($cspSuffixes -contains $ext)) {
         $res.Headers.Add('Content-Security-Policy', $csp)
       }
 
@@ -149,7 +155,7 @@ while ($listener.IsListening) {
   try {
     $ps = [powershell]::Create()
     $ps.RunspacePool = $pool
-    [void]$ps.AddScript($handler).AddArgument($ctx).AddArgument($root).AddArgument($rootPrefix).AddArgument($mime).AddArgument($csp).AddArgument($blockedJson)
+    [void]$ps.AddScript($handler).AddArgument($ctx).AddArgument($root).AddArgument($rootPrefix).AddArgument($mime).AddArgument($csp).AddArgument($cspSuffixes).AddArgument($blockedJson)
     [void]$jobs.Add(@{ ps = $ps; h = $ps.BeginInvoke() })
     # dọn job đã xong để $jobs không phình theo số request
     for ($i = $jobs.Count - 1; $i -ge 0; $i--) {

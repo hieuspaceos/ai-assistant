@@ -50,6 +50,16 @@ check('/api/emit-event' in cbps, "chat-bridge.ps1 có /api/emit-event")
 # emit-event whitelist — không phải cửa hở nhận event tùy ý
 for t in ("inj_suspect", "perm:auto", "env_scrub"):
     check(t in cb, f"emit-event whitelist có '{t}'")
+# audit-6 F8: whitelist KHÔNG còn pack_applied/update_applied — check
+# thẳng tuple/array trong code (chuỗi có thể nằm trong comment)
+wl = re.search(r"if t not in \(([^)]*)\)", cb)
+check(wl is not None and "pack_applied" not in wl.group(1)
+      and "update_applied" not in wl.group(1),
+      "whitelist .py không còn pack_applied/update_applied (audit-6 F8)")
+wl_ps = re.search(r"\$t -in @\(([^)]*)\)", cbps)
+check(wl_ps is not None and "pack_applied" not in wl_ps.group(1)
+      and "update_applied" not in wl_ps.group(1),
+      "whitelist .ps1 không còn pack_applied/update_applied (audit-6 F8)")
 check('scrub_env(' in cb and 'load_env_extra' in cb,
       "não spawn qua env allowlist (chat-bridge.py)")
 check('EnvironmentVariables.Clear()' in cbps,
@@ -278,6 +288,14 @@ try:
     st, _ = req("POST", "/api/emit-event",
                 {"t": "shell_exec", "msg": "lạ"}, token)
     check(st == 400, "type ngoài whitelist → 400")
+    # audit-6 F8: tín hiệu rollout không qua endpoint này (agent tự emit
+    # được giả "đã update" — không caller hợp lệ nào cần)
+    st, _ = req("POST", "/api/emit-event",
+                {"t": "update_applied", "msg": "fake"}, token)
+    check(st == 400, "update_applied → 400 (audit-6 F8)")
+    st, _ = req("POST", "/api/emit-event",
+                {"t": "pack_applied", "msg": "fake"}, token)
+    check(st == 400, "pack_applied → 400 (audit-6 F8)")
     st, _ = req("POST", "/api/emit-event", {"t": "perm:auto"}, token)
     check(st == 200, "perm:auto → 200")
     # poll — event phải hiện trong stream kèm run_id

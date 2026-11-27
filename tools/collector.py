@@ -176,11 +176,26 @@ def db():
             "INSERT INTO meta(k,v) VALUES('schema_version',?) "
             "ON CONFLICT(k) DO UPDATE SET v=excluded.v", (str(ver),))
     conn.commit()
+    global _schema_ok
+    _schema_ok = True
+    return conn
+
+_schema_ok = False
+def _conn():
+    # audit-6 F9: q() trước đây gọi db() mỗi query = connect + CREATE
+    # TABLE (DDL write trên mọi read) + vòng migrate-check ~8-10 lần
+    # mỗi beacon POST. Migrate chỉ cần 1 lần lúc boot; đường nóng dùng
+    # conn nhẹ. Path nào gọi q() trước migrate (test import thẳng) thì
+    # fallback db() đầy đủ một lần rồi flag on.
+    if not _schema_ok:
+        return db()
+    conn = sqlite3.connect(DB_FP)
+    conn.row_factory = sqlite3.Row
     return conn
 
 def q(sql, args=(), one=False, write=False):
     with _db_lock:
-        conn = db()
+        conn = _conn()
         try:
             cur = conn.execute(sql, args)
             rows = cur.fetchone() if one else cur.fetchall()
@@ -1057,12 +1072,21 @@ def _bank_version(org):
          for fn in os.listdir(d) if fn.endswith(".json")),
         default=0))
 
+# audit-6 F10: GET bank.json trước đây đọc+parse mọi JSON của org mỗi
+# pull — O(machines). Cache theo _bank_version (mtime — rẻ); upload mới
+# đổi mtime → ver đổi → tự miss. Tái dùng _db_lock (đã serialize q()).
+_bank_cache = {}   # org -> (ver, merged_dict)
+
 def _merged_bank(org):
     """Gộp mọi entry của org thành bank.json — máy mới vào thay kéo về
     một lần là đủ công thức của những người trước. Skill id trùng:
     entry mới hơn thắng. bank_version dùng chung nguồn với
     _bank_version (mtime) — máy ghi lại số này, lệch nguồn thì hint
     lặp mãi."""
+    v = _bank_version(org)
+    hit = _bank_cache.get(org)
+    if hit and hit[0] == v:
+        return hit[1]
     d = os.path.join(SKILL_DIR, org)
     merged, ver = {}, 0
     if os.path.isdir(d):
@@ -1080,7 +1104,10 @@ def _merged_bank(org):
             for sid, files in (e.get("skills") or {}).items():
                 merged[sid] = files
             ver = max(ver, int(mt))
-    return {"org": org, "bank_version": ver, "skills": merged}
+    out = {"org": org, "bank_version": ver, "skills": merged}
+    with _db_lock:
+        _bank_cache[org] = (v, out)
+    return out
 
 def _write_rel_manifest(man):
     # tmp + os.replace — máy pull /api/releases/latest giữa chừng ghi

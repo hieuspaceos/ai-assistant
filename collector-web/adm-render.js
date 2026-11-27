@@ -23,6 +23,7 @@ window.AdmRender = (function () {
                  inj_suspect: 'nghi nội dung độc' },
       accRead: 'chỉ đọc', accRW: 'đọc + sửa',
       countsSince: 'lượt kể từ lần báo trước',
+      toolFail: '⚠ không tự cập nhật được',
     },
     en: {
       sys: 'System', bot: 'Assistant', perm: 'Allowed folders',
@@ -37,6 +38,7 @@ window.AdmRender = (function () {
                  inj_suspect: 'suspect content' },
       accRead: 'read', accRW: 'read-write',
       countsSince: 'events since last report',
+      toolFail: '⚠ cannot self-update',
     },
   };
 
@@ -59,7 +61,10 @@ window.AdmRender = (function () {
       row(t(S, 'brain'), (b.label || b.id || t(S, 'none'))) +
       row(t(S, 'brainCmd'), b.cmd ? [b.cmd].concat(b.args || []).join(' ') : t(S, 'none')) +
       row(t(S, 'lang'), cfg.language || t(S, 'none')) +
-      row(t(S, 'learner'), cfg.learner_name || t(S, 'none'));
+      row(t(S, 'learner'), cfg.learner_name || t(S, 'none')) +
+      // audit-6 F11: beacon báo máy không chạy được update/pack
+      // (thiếu python trên Windows source-mode) — badge cảnh báo
+      (d.tool_fail ? row(t(S, 'toolFail'), d.tool_fail) : '');
 
     const bots = (d.bots && d.bots.bots) || [];
     els.bots.innerHTML = bots.length

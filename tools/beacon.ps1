@@ -1,4 +1,4 @@
-# beacon.ps1 — bản Windows của tools/beacon.py (parity — đọc docstring
+﻿# beacon.ps1 — bản Windows của tools/beacon.py (parity — đọc docstring
 # file .py cho đầy đủ luồng pairing/backoff; contract snapshot giống hệt).
 # Chỉ chạy khi có .devin\fleet.json; spawn bởi start.bat.
 param([string]$WorkDir = "")
@@ -163,6 +163,7 @@ if (-not $fleet -or -not $fleet.collector -or -not $fleet.beacon_secret) {
 $base = $fleet.collector.TrimEnd("/")
 $mid = Machine-Id
 $fails = 0
+$toolFail = @{}   # update/apply-pack không đá được (thiếu python…) → báo ngược
 while ($true) {
     $nap = $INTERVAL
     try {
@@ -188,6 +189,13 @@ while ($true) {
             } else { $fails++ }
         } else {
             $got = Collect-Snapshot
+            # máy không tự vá được → báo trong snapshot (collector lưu
+            # snapshot_json nguyên trạng, dashboard thấy badge thay vì
+            # tưởng máy đang update — audit-6 F11)
+            if ($toolFail.Count) {
+                $got.snap["tool_fail"] = ($toolFail.GetEnumerator() |
+                    ForEach-Object { "$($_.Key):$($_.Value)" }) -join ", "
+            }
             $os = "$([Environment]::OSVersion.Platform) " +
                   "$([Environment]::OSVersion.Version)"
             $payload = [ordered]@{
@@ -226,7 +234,12 @@ while ($true) {
                             Start-Process -WindowStyle Hidden python `
                                 -ArgumentList "`"$PSScriptRoot\$t.py`"", "`"$WorkDir`"" `
                                 -WorkingDirectory $WorkDir
-                        } catch {}
+                            [void]$toolFail.Remove($t)
+                        } catch {
+                            # máy fleet không-Python nhận hint nhưng không
+                            # áp được — không nuốt: snapshot sau báo ngược
+                            $toolFail[$t] = "no-python"
+                        }
                     }
                 }
                 if ($r.obj -and $r.obj.status -eq "revoked") {

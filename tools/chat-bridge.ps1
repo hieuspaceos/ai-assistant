@@ -92,9 +92,9 @@ function Get-ExtVersion {
 # PATH thì preset mới coi là "đã cài" (adapter qua npx vẫn cần CLI gốc để
 # đăng nhập — vd codex-acp cần `codex`).
 $BrainPresets = @(
-    [pscustomobject]@{ id="devin";   label="Devin";                   cmd="devin";   args=@("acp","--process-model","in-process");        terminal="devin";   requires=@("devin");   cost="paid";
+    [pscustomobject]@{ id="devin";   label="Devin";                   cmd="devin";   args=@("acp","--process-model","in-process");        terminal="devin";   requires=@("devin");   cost="paid";  auto=$true;
         desc=@{ vi="Não mặc định — đi kèm bộ trợ lý này";                              en="Default brain — ships with this assistant" } }
-    [pscustomobject]@{ id="gemini";  label="Gemini CLI (Google)";     cmd="gemini";  args=@("--acp");                                      terminal="gemini";  requires=@("gemini");  cost="free";
+    [pscustomobject]@{ id="gemini";  label="Gemini CLI (Google)";     cmd="gemini";  args=@("--acp");                                      terminal="gemini";  requires=@("gemini");  cost="free";  auto=$true;
         desc=@{ vi="Miễn phí với tài khoản Google cá nhân — não gợi ý cho người mới";  en="Free with a personal Google account — suggested brain for new users" } }
     [pscustomobject]@{ id="codex";   label="Codex CLI (OpenAI)";      cmd="npx";     args=@("-y","@agentclientprotocol/codex-acp");        terminal="codex";   requires=@("npx","codex"); cost="paid";
         desc=@{ vi="Qua adapter codex-acp — cần cài + đăng nhập Codex CLI";            en="Via codex-acp adapter — needs Codex CLI installed and signed in" } }
@@ -138,11 +138,11 @@ $BrainCmdDeny = @("python3","python","py","sh","bash","zsh","fish","dash",
 $BrainCmdDenyRe = [regex]'(?x)^(?:
     (i?python|pypy|jython|micropython|pyspark)[\d.]*w? | py |
     perl[\d.]* | ruby[\d.]* | php[\d.]* | pip[\d.]* | node(js)?[\d.]* |
-    (ba|z|fi|da|k|c|tc)?sh\d* |
+    (ba|z|fi|da|k|c|tc)?sh\d* | pwsh[\d.]* |
     lua(jit)?[\d.]* | tclsh[\d.]* | r(script)?[\d.]* |
-    java\w* | jshell | groovy\w* | scala | kotlin\w* | dotnet | mono |
+    java\w* | jshell | groovy\w* | scala | kotlin[\w.]* | dotnet | mono |
     brew | gh | go | cargo | xcodebuild | plutil | shortcuts |
-    bundle | irb | pry | julia | gjs | qjs | runghc | ghci
+    bundle | irb | pry | julia[\w.]* | gjs | qjs | runghc | ghci
 )$'
 function Test-BrainDenied([string]$name) {
     $n = $name.ToLower()
@@ -223,8 +223,21 @@ function New-Gate($title, [scriptblock]$applyFn) {
 
 # Folder NHẠY CẢM không được cấp quyền dù request hợp lệ — card xác nhận
 # không bảo vệ được người bấm đại "Đồng ý" (parity path_sensitive() py).
+# Resolve junction/symlink nếu path tồn tại — parity path_guard.realpath:
+# junction sẵn có trỏ vào vùng nhạy mà chỉ so lexical là lọt check.
+# Path chưa tồn tại (xin grant mới) giữ dạng lexical — y realpath().
+function Resolve-RealPath($rpl) {
+    try {
+        $item = Get-Item $rpl -ErrorAction Stop
+        if ($item.LinkTarget) {
+            return [IO.Path]::GetFullPath($item.LinkTarget).TrimEnd('\', '/').ToLower()
+        }
+    } catch {}
+    return $rpl
+}
+
 function Test-SensitivePath($p) {
-    $rpl = [IO.Path]::GetFullPath([string]$p).TrimEnd('\', '/').ToLower()
+    $rpl = Resolve-RealPath ([IO.Path]::GetFullPath([string]$p).TrimEnd('\', '/').ToLower())
     $home = [IO.Path]::GetFullPath($env:USERPROFILE).TrimEnd('\', '/')
     if ($rpl -match '^[a-z]:$' -or $rpl -eq $home.ToLower()) { return $true }
     $sens = @("$home\.ssh", "$home\.gnupg", "$home\.aws", "$home\.kube",
@@ -260,7 +273,7 @@ function Test-SensitivePath($p) {
 # ngoài mọi hàng rào (parity rw_grant_ok trong chat-bridge.py). Path nằm
 # trong vùng writable sẵn (workspace…) thì cho qua — thừa nhưng vô hại.
 function Test-RwGrantOk($p) {
-    $rpl = [IO.Path]::GetFullPath([string]$p).TrimEnd('\', '/').ToLower()
+    $rpl = Resolve-RealPath ([IO.Path]::GetFullPath([string]$p).TrimEnd('\', '/').ToLower())
     $cwdl = [IO.Path]::GetFullPath($WorkDir).TrimEnd('\', '/').ToLower()
     if ($rpl -ne $cwdl -and -not $rpl.StartsWith($cwdl + '\') -and
         -not $cwdl.StartsWith($rpl + '\')) { return $true }
@@ -868,9 +881,40 @@ $ConnFp = Join-Path $McDir "connections.json"
 $ConfigFp = Join-Path $McDir "config.json"
 $SkillPacks = Join-Path $WorkDir ".devin\skill-packs"
 $SkillsDir = Join-Path $WorkDir ".devin\skills"
+$BotsFp = Join-Path $McDir "bots.json"
+$BotMdFp = Join-Path $McDir "bot.md"
+$RolesDir = Join-Path $SkillPacks "roles"
+$InstallFp = Join-Path $WorkDir ".devin\install-brain.json"
+$script:InstallProc = $null     # process install-brain đang chạy (1 cái)
+$script:ImportStages = @{}      # stage_id -> @{dir;bot;skills} (nhập bot 2 bước)
+$SkillNameRe = [regex]'^[a-zA-Z0-9_-]{1,64}$'   # parity SKILL_NAME_RE
+
+# Não cài "lén" (install-brain) nằm trong DATA\node hoặc ~\.local\bin —
+# prepend vào PATH để spawn + preset installed-check thấy được (parity
+# _augment_brain_path bên .py). Gọi lại sau mỗi lần cài xong.
+function Add-BrainPath {
+    foreach ($d in @((Join-Path $WorkDir "node\bin"),
+                    (Join-Path $WorkDir "node"),
+                    (Join-Path $env:USERPROFILE ".local\bin"))) {
+        if ((Test-Path $d -PathType Container) -and
+            (($env:PATH -split ';') -notcontains $d)) {
+            $env:PATH = "$d;$env:PATH"
+        }
+    }
+}
+Add-BrainPath
 
 function Load-Json($fp, $fallback) {
     try { return Get-Content $fp -Raw -Encoding UTF8 | ConvertFrom-Json } catch { return $fallback }
+}
+# Entry JSON có thể là hashtable (file mới ghi) hoặc PSCustomObject (file
+# đã có qua ConvertFrom-Json) — chuẩn hoá về hashtable để so/ghi thống nhất.
+function Copy-Props($o) {
+    $h = @{}
+    if ($null -eq $o) { return $h }
+    if ($o -is [hashtable]) { foreach ($k in @($o.Keys)) { $h[$k] = $o[$k] } }
+    else { foreach ($p in $o.PSObject.Properties) { $h[$p.Name] = $p.Value } }
+    return $h
 }
 function Save-Json($fp, $obj) {
     # Ghi ra file tạm rồi đổi tên (atomic — crash giữa chừng không corrupt),
@@ -884,6 +928,283 @@ function Expand-Path($p) {
     $p = [string]$p
     if ($p.StartsWith("~")) { $p = Join-Path $env:USERPROFILE $p.Substring(1).TrimStart('/','\') }
     return $p
+}
+
+# ---------- bots.json + nhập bot từ file (parity _g_bots/_h_bot/
+# stage_bot_bundle/confirm_bot_bundle bên chat-bridge.py — audit-6 F5) ----------
+function Get-SlugId($s) {
+    # slug_id .py: NFKD tách dấu → bỏ ký tự đấu → đ→d → [^a-z0-9]→"-" —
+    # id bot đi vào JSON/file nên phải thuần ASCII.
+    $t = ([string]$s).Normalize([Text.NormalizationForm]::FormKD)
+    $sb = New-Object Text.StringBuilder
+    foreach ($c in $t.ToCharArray()) {
+        if ([Globalization.CharUnicodeInfo]::GetUnicodeCategory($c) -ne
+            [Globalization.UnicodeCategory]::NonSpacingMark) {
+            [void]$sb.Append($c)
+        }
+    }
+    $t = $sb.ToString() -replace 'đ','d' -replace 'Đ','D'
+    $t = ($t -replace '[^a-zA-Z0-9]+','-').Trim('-').ToLower()
+    if ($t) { return $t } else { return "bot" }
+}
+function Get-RoleTemplates {
+    if (-not (Test-Path $RolesDir -PathType Container)) { return @() }
+    $out = @()
+    foreach ($f in (Get-ChildItem $RolesDir -Filter *.json | Sort-Object Name)) {
+        $t = Load-Json $f.FullName $null
+        if ($t -and $t.id) { $out += $t }
+    }
+    return $out
+}
+function Get-CleanRecipes($raw) {
+    # parity _clean_recipes: chuẩn hoá về {command, meaning} + kẹp số
+    # lượng/độ dài — bot do agent tạo/import nhồi payload phình bots.json.
+    $out = @(); $n = 0
+    foreach ($r0 in @($raw)) {
+        if ($n -ge 20) { break }
+        $r = Copy-Props $r0
+        if (-not $r.ContainsKey("command")) { continue }
+        $c = [string]$r["command"]; $m = [string]$r["meaning"]
+        if ($c.Length -gt 60) { $c = $c.Substring(0,60) }
+        if ($m.Length -gt 120) { $m = $m.Substring(0,120) }
+        $out += @{ command = $c; meaning = $m }; $n++
+    }
+    return $out
+}
+function Write-BotMd($bot) {
+    $cfg = Load-Json $ConfigFp @{}
+    $lang = "vi"; if ($cfg -and $cfg.language) { $lang = [string]$cfg.language }
+    $bh = Copy-Props $bot
+    $ins = $bh["instructions"]
+    if ($null -ne $ins -and $ins -isnot [string]) {
+        $ih = Copy-Props $ins
+        $ins = ""
+        if ($ih[$lang]) { $ins = [string]$ih[$lang] }
+        elseif ($ih["vi"]) { $ins = [string]$ih["vi"] }
+    }
+    if ($null -eq $ins) { $ins = "" }
+    New-Item -ItemType Directory -Force -Path $McDir | Out-Null
+    [IO.File]::WriteAllText($BotMdFp,
+        ("# Trợ lý đang làm việc: " + [string]$bh["name"] + " (" +
+         [string]$bh["role"] + ")`n`n" + $ins +
+         "`n`n_Mọi luật an toàn trong AGENTS.md đứng trên file này._`n"),
+        [Text.UTF8Encoding]::new($false))
+}
+function Enable-Bot($bot) {
+    # parity activate_bot: cài skill còn thiếu + ghi bot.md + gộp recipes
+    # vào manifest. Trả list tên skill không cài được (để báo học viên).
+    $cfg = Load-Json $ConfigFp @{}
+    $lang = "vi"; if ($cfg -and $cfg.language) { $lang = [string]$cfg.language }
+    $smh = Copy-Props (Load-Json (Join-Path $SkillPacks "skill-map.json") @{})
+    $bh = Copy-Props $bot
+    $missing = @()
+    New-Item -ItemType Directory -Force -Path $SkillsDir | Out-Null
+    foreach ($s0 in @($bh["skills"])) {
+        $s = [string]$s0
+        if ($lang -eq "en") {
+            if (-not $smh.ContainsKey($s)) { $missing += $s; continue }
+            $name = [string]$smh[$s]
+        } else { $name = $s }
+        # Tên skill đi thẳng vào đường dẫn — "..", "/", "\" coi như không
+        # cài được, tuyệt đối không join (bots.json là đầu vào không tin).
+        if (-not $SkillNameRe.IsMatch($name)) { $missing += $name; continue }
+        $dst = Join-Path $SkillsDir $name
+        $src = Join-Path $SkillPacks "$lang\$name"
+        if (Test-Path $dst -PathType Container) { continue }
+        if (Test-Path $src -PathType Container) {
+            Copy-Item $src $dst -Recurse
+        } else { $missing += $name }
+    }
+    Write-BotMd $bot
+    $mf = Join-Path $McDir "manifest.json"
+    $mh = Copy-Props (Load-Json $mf @{})
+    $rec = @(); if ($mh["recipes"]) { $rec = @($mh["recipes"]) }
+    $have = @{}
+    foreach ($r0 in $rec) {
+        $rh = Copy-Props $r0
+        if ($rh["command"]) { $have[[string]$rh["command"]] = $true }
+    }
+    foreach ($r0 in @($bh["recipes"])) {
+        $rh = Copy-Props $r0
+        if ($rh["command"] -and -not $have.ContainsKey([string]$rh["command"])) {
+            $rec += $r0
+        }
+    }
+    $mh["recipes"] = $rec
+    Save-Json $mf $mh
+    return $missing
+}
+function Disable-Bot {
+    try { Remove-Item $BotMdFp -Force -ErrorAction Stop } catch {}
+}
+function Stage-BotBundle($b64) {
+    # parity stage_bot_bundle: bung zip base64 vào temp → @{preview}/@{err}.
+    # Chỉ nhận bot.json / README.txt / skills/<tên>/... — chống zip-slip.
+    Add-Type -AssemblyName System.IO.Compression
+    try {
+        $raw = [Convert]::FromBase64String([string]$b64)
+        $ms = New-Object IO.MemoryStream (,$raw)
+        $zf = New-Object IO.Compression.ZipArchive($ms, [IO.Compression.ZipArchiveMode]::Read)
+    } catch {
+        return @{ err = "file không đọc được — có phải file trợ lý (.zip) không?" }
+    }
+    $tmp = Join-Path ([IO.Path]::GetTempPath()) ("troly-bot-" + [guid]::NewGuid().ToString("N").Substring(0,8))
+    New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+    $skills = @(); $bot = $null; $total = 0; $err = $null
+    try {
+        foreach ($m in $zf.Entries) {
+            $parts = @($m.FullName -replace '\\','/' -split '/' |
+                       Where-Object { $_ -ne '' -and $_ -ne '.' })
+            if (-not $m.Name -or $parts.Count -eq 0 -or
+                $parts -contains '..' -or $parts[0] -eq '__MACOSX') { continue }
+            $total += $m.Length
+            if ($total -gt 64MB) {   # zip bomb — 8MB nén bung ra rất lớn
+                $err = "file bung ra quá lớn — không nhập được"; break
+            }
+            $rel = $parts -join '/'
+            if ($rel -eq 'bot.json') {
+                try {
+                    $rd = New-Object IO.StreamReader($m.Open(), [Text.Encoding]::UTF8)
+                    $bot = ($rd.ReadToEnd() | ConvertFrom-Json)
+                    $rd.Close()
+                } catch { $err = "bot.json trong file hỏng — file này không dùng được"; break }
+            } elseif ($rel -eq 'README.txt' -or
+                      ($parts[0] -eq 'skills' -and $parts.Count -gt 1)) {
+                $dst = Join-Path $tmp ($parts -join '\')
+                New-Item -ItemType Directory -Force -Path (Split-Path $dst) | Out-Null
+                $src = $m.Open(); $fs = [IO.File]::Create($dst)
+                $src.CopyTo($fs); $fs.Close(); $src.Close()
+                if ($parts[0] -eq 'skills' -and $parts.Count -ge 3) {
+                    $skills += $parts[1]   # skills/<dir>/<file> — dir là tên skill
+                }
+            }
+        }
+    } finally { $zf.Dispose(); $ms.Dispose() }
+    if ($err) {
+        Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+        return @{ err = $err }
+    }
+    if (-not $bot -or -not $bot.name) {
+        Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+        return @{ err = "file này thiếu bot.json — không phải file trợ lý" }
+    }
+    # preview không xác nhận thì stage nằm mãi trong RAM + temp — giữ tối
+    # đa 10 stage, đuổi cái cũ nhất kèm dọn temp (parity .py)
+    while ($script:ImportStages.Count -ge 10) {
+        $oldKey = @($script:ImportStages.Keys)[0]
+        Remove-Item $script:ImportStages[$oldKey].dir -Recurse -Force `
+            -ErrorAction SilentlyContinue
+        $script:ImportStages.Remove($oldKey)
+    }
+    $sid = ([BitConverter]::ToString(
+        [System.Security.Cryptography.RandomNumberGenerator]::GetBytes(6)
+    )).Replace('-','').ToLower()
+    $bundled = @($skills | Sort-Object -Unique)
+    $script:ImportStages[$sid] = @{ dir = $tmp; bot = $bot; skills = $bundled }
+    return @{ ok = $true; preview = @{
+        stage = $sid; name = $bot.name; avatar = $bot.avatar
+        role = $bot.role; instructions = $bot.instructions
+        skills = @($bot.skills); needs = @($bot.needs)
+        bundled = $bundled } }
+}
+function Confirm-BotBundle($sid) {
+    # parity confirm_bot_bundle: cài skill kèm zip (không đè) + thêm bot
+    # vào bots.json. KHÔNG tự activate. Trả $null khi ok / chuỗi lỗi.
+    if (-not $script:ImportStages.ContainsKey($sid)) {
+        return "hết hạn rồi — nhập lại file nhé"
+    }
+    $st = $script:ImportStages[$sid]
+    $script:ImportStages.Remove($sid)
+    try {
+        New-Item -ItemType Directory -Force -Path $SkillsDir | Out-Null
+        foreach ($s in @($st.skills)) {
+            if (-not $SkillNameRe.IsMatch([string]$s)) { continue }
+            $src = Join-Path $st.dir "skills\$s"
+            $dst = Join-Path $SkillsDir $s
+            if ((Test-Path $src -PathType Container) -and
+                -not (Test-Path $dst)) { Copy-Item $src $dst -Recurse }
+        }
+        # chỉ giữ đúng field schema + kẹp độ dài — id do file gửi bị bỏ
+        $raw = Copy-Props $st.bot
+        $skl = @()
+        foreach ($s0 in @($raw["skills"])) {
+            $s = [string]$s0
+            if ($SkillNameRe.IsMatch($s)) { $skl += $s }
+        }
+        $nd = @()
+        foreach ($n0 in @($raw["needs"])) {
+            $nn = [string]$n0
+            if ($nn.Length -gt 40) { $nn = $nn.Substring(0,40) }
+            $nd += $nn
+        }
+        $ins = $raw["instructions"]
+        if ($ins -is [string]) {
+            if ($ins.Length -gt 2000) { $ins = $ins.Substring(0,2000) }
+        } elseif ($ins) {
+            # dict {vi,en} cũng phải kẹp — trước chỉ str bị cắt, dict trôi
+            # → bot.md khổng lồ nhồi prompt mỗi phiên (parity .py)
+            $ih = Copy-Props $ins; $ins2 = @{}
+            foreach ($k in @("vi","en")) {
+                if ($ih[$k]) {
+                    $v = [string]$ih[$k]
+                    if ($v.Length -gt 2000) { $v = $v.Substring(0,2000) }
+                    $ins2[$k] = $v
+                }
+            }
+            $ins = $ins2
+        } else { $ins = "" }
+        $name = ([string]$raw["name"]).Trim()
+        if ($name.Length -gt 60) { $name = $name.Substring(0,60) }
+        $av = [string]$raw["avatar"]; if ($av.Length -gt 8) { $av = $av.Substring(0,8) }
+        $role = ([string]$raw["role"]).Trim()
+        if ($role.Length -gt 40) { $role = $role.Substring(0,40) }
+        $bot = @{ name = $name; avatar = $av; role = $role; skills = $skl
+                  needs = $nd; recipes = (Get-CleanRecipes $raw["recipes"])
+                  instructions = $ins; triggers = @() }
+        $bh = Copy-Props (Load-Json $BotsFp @{ active = $null; bots = @() })
+        if (-not $bh["bots"]) { $bh["bots"] = @() }
+        $bid = Get-SlugId $name; $base = $bid; $n = 2
+        while (@($bh["bots"]) | Where-Object { $_.id -eq $bid }) {
+            $bid = "$base-$n"; $n++
+        }
+        $bot["id"] = $bid
+        $bh["bots"] = @($bh["bots"]) + $bot
+        Save-Json $BotsFp $bh
+        return $null
+    } finally {
+        Remove-Item $st.dir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+function Start-BrainInstall($preset) {
+    # parity _brain_install: spawn install-brain.ps1 (bản Windows của
+    # install-brain.py — máy học viên thường không có Python). Script tự
+    # ghi .devin\install-brain.json nên poll sống qua restart bridge.
+    if ($null -ne $script:InstallProc -and -not $script:InstallProc.HasExited) {
+        return   # đang cài rồi — POST lặp là no-op
+    }
+    $logdir = Join-Path $WorkDir ".logs"
+    New-Item -ItemType Directory -Force -Path $logdir | Out-Null
+    $args0 = '-NoProfile -ExecutionPolicy Bypass -File "' +
+        (Join-Path $PSScriptRoot "install-brain.ps1") + '" "' +
+        $preset.id + '" "' + $WorkDir + '"'
+    $script:InstallProc = Start-Process "powershell.exe" -ArgumentList $args0 `
+        -WorkingDirectory $WorkDir -WindowStyle Hidden -PassThru `
+        -RedirectStandardOutput (Join-Path $logdir "install-brain.log") `
+        -RedirectStandardError (Join-Path $logdir "install-brain.err.log")
+}
+function Start-BrainLogin($preset) {
+    # parity _brain_login nhánh Windows: mở cửa sổ cmd chạy CLI não —
+    # OAuth chỉ hoàn tất trong terminal thật. Chích PATH dir chứa não
+    # vào lệnh vì cmd mới không thừa hưởng PATH đã augment.
+    Add-BrainPath
+    $term = [string]$preset.terminal
+    if (-not $term) { $term = [string]$preset.cmd }
+    try { $term = (Get-Command $term -ErrorAction Stop).Source } catch {}
+    $termdir = Split-Path $term -Parent
+    $setp = ""
+    if ($termdir) { $setp = 'set "PATH=' + $termdir + ';%PATH%" && ' }
+    Start-Process "cmd.exe" -ArgumentList `
+        ('/c start "" cmd /k ' + $setp + '"' + $term + '"')
 }
 function Test-Probe($probe) {
     # probe phải khớp schema cố định (parity validate_probe bên .py):
@@ -1083,7 +1404,8 @@ try {
             # body quá lớn → chặn trước khi đọc (save-page cho tới 8MB vì
             # trang clone nhúng ảnh base64; mọi POST khác 1MB)
             if ($ctx.Request.HttpMethod -eq "POST") {
-                $cap = if ($path -eq "/api/save-page") { 8000000 } else { 1000000 }
+                $cap = if ($path -eq "/api/save-page" -or
+                           $path -eq "/api/bot-import") { 8000000 } else { 1000000 }
                 if ($ctx.Request.ContentLength64 -gt $cap) {
                     Send-Json $ctx @{ err = "body quá lớn" } 413
                     continue
@@ -1094,6 +1416,7 @@ try {
             }
             elseif ($ctx.Request.HttpMethod -eq "GET" -and $path -eq "/api/brain") {
                 $cur = Get-Brain
+                Add-BrainPath   # não vừa cài lén trong DATA\node phải thấy được
                 $pres = @()
                 foreach ($p in $BrainPresets) {
                     $inst = $true
@@ -1240,22 +1563,26 @@ try {
                     $b = [ordered]@{ id = $(if ($bid) { $bid } else { "custom" }); label = $label; cmd = $cmd; args = $bArgs; terminal = $term }
                     $requires = @($cmd)
                 }
+                Add-BrainPath   # vừa cài xong → resolve được não mới
                 $missing = @($requires | Where-Object { -not (Get-Command $_ -ErrorAction SilentlyContinue) })
                 if ($missing.Count -gt 0) {
                     Send-Json $ctx @{ err = "chưa cài trên máy: $($missing -join ', ')"; missing = $missing } 404
-                } elseif (-not $preset) {
-                    # Não tự nhập → consent gate (preset vẫn đổi thẳng)
-                    $disp = "$cmd $($bArgs -join ' ')"
-                    if ($disp.Length -gt 80) { $disp = $disp.Substring(0, 80) }
-                    $rid = New-Gate "Đổi não sang lệnh tự nhập `"$disp`"?" ({
+                } else {
+                    # Mọi đổi não đều qua card — kể cả preset: agent cũng
+                    # gọi được endpoint này nên preset đổi thẳng = agent tự
+                    # kill session/spam spawn/ghi brain.json qua cửa vòng
+                    # (parity .py — audit-3 M5)
+                    $title = "Đổi não sang $($preset.label)?"
+                    if (-not $preset) {
+                        $disp = "$cmd $($bArgs -join ' ')"
+                        if ($disp.Length -gt 80) { $disp = $disp.Substring(0, 80) }
+                        $title = "Chạy lệnh tùy ý `"$disp`" làm não?"
+                    }
+                    $rid = New-Gate $title ({
                         Save-Json $BrainFp $b
                         Start-Brain
                     }.GetNewClosure())
                     Send-Json $ctx @{ pending = $rid; msg = "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để đổi não" } 202
-                } else {
-                    Save-Json $BrainFp $b
-                    Start-Brain
-                    Send-Json $ctx @{ ok = $true; brain = $b }
                 }
             }
             elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/respond") {
@@ -1545,25 +1872,34 @@ try {
                         Send-Json $ctx @{ err = "chưa nhập gì" } 400
                     } else {
                         $fp = Join-Path $WorkDir ".devin\secrets.local.json"
-                        # Card báo trước wipe — đổi url là xoá hết thông tin cũ.
+                        # Card báo trước wipe — đổi endpoint (url/host/endpoint)
+                        # là xoá hết thông tin cũ (parity py).
                         $creds0 = Load-Json $fp @{}
-                        $oldUrl0 = if ($creds0.$appId) { [string]$creds0.$appId.url } else { $null }
-                        $wipe = ($cleanFields.ContainsKey("url") -and $cleanFields.url -ne $oldUrl0)
+                        $old0 = Copy-Props $creds0.$appId
+                        $endpointKeys = @('url','host','endpoint')
+                        $wipe = $false
+                        foreach ($k in $endpointKeys) {
+                            if ($cleanFields.ContainsKey($k) -and
+                                $cleanFields[$k] -ne [string]$old0[$k]) { $wipe = $true; break }
+                        }
                         $gateTitle = "Lưu thông tin đăng nhập cho $appId`?"
                         if ($wipe) { $gateTitle = "Lưu thông tin đăng nhập cho $appId — đổi địa chỉ site sẽ XOÁ thông tin cũ`?" }
                         $rid = New-Gate $gateTitle ({
                             $creds = Load-Json $fp @{}
-                            $oldUrl = if ($creds.$appId) { [string]$creds.$appId.url } else { $null }
+                            $old = Copy-Props $creds.$appId
                             $entry = @{}
-                            if ($creds.$appId) {
-                                $creds.$appId.PSObject.Properties | ForEach-Object { $entry[$_.Name] = $_.Value }
-                            }
+                            foreach ($k in @($old.Keys)) { $entry[$k] = $old[$k] }
                             foreach ($kn in @($cleanFields.Keys)) { $entry[$kn] = $cleanFields[$kn] }
-                            # Đổi url → xoá toàn bộ creds còn lại: giữ user/app_password
-                            # qua URL mới là kênh gửi credential thật tới host attacker
-                            if ($cleanFields.ContainsKey("url") -and $cleanFields.url -ne $oldUrl) {
-                                $entry = @{ url = $cleanFields.url }
+                            # Đổi endpoint (url/host/endpoint) → chỉ giữ TOÀN BỘ
+                            # field vừa submit (parity py: creds[app] = clean).
+                            # Giữ user/app_password cũ qua host mới là kênh gửi
+                            # credential thật tới host attacker.
+                            $wiped = $false
+                            foreach ($k in $endpointKeys) {
+                                if ($cleanFields.ContainsKey($k) -and
+                                    $cleanFields[$k] -ne [string]$old[$k]) { $wiped = $true; break }
                             }
+                            if ($wiped) { $entry = $cleanFields.Clone() }
                             # Load-Json trả hashtable (file mới) hoặc PSCustomObject
                             # (file đã có) — ghi đúng cách cho từng kiểu
                             if ($creds -is [hashtable]) {
@@ -1657,12 +1993,15 @@ try {
             }
             elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/emit-event") {
                 # Endpoint nội bộ: ext-bridge/tools phát event phụ (inj_suspect,
-                # perm:auto, env_scrub, pack_applied, update_applied) vào event
-                # stream để beacon đếm. Whitelist type — không nhận gì lạ.
+                # perm:auto, env_scrub) vào event stream để beacon đếm.
+                # Whitelist type — không nhận gì lạ. Tín hiệu rollout
+                # (pack_applied/update_applied) KHÔNG qua endpoint này —
+                # không caller nào emit, agent cầm token tự emit được giả
+                # báo "đã update" (audit-6 F8); cần thì đi kênh beacon.
                 $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
                 $body = $reader.ReadToEnd() | ConvertFrom-Json
                 $t = [string]$body.t
-                if ($t -in @("inj_suspect","perm:auto","env_scrub","pack_applied","update_applied")) {
+                if ($t -in @("inj_suspect","perm:auto","env_scrub")) {
                     # parity .py — giữ đủ field để beacon/dashboard đọc
                     $ev = [ordered]@{ t = $t }
                     foreach ($k in @("action","patterns","dropped","title","pattern","msg")) {
@@ -1672,6 +2011,259 @@ try {
                     Send-Json $ctx @{ ok = $true }
                 } else {
                     Send-Json $ctx @{ err = "type không nhận" } 400
+                }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "GET" -and $path -eq "/api/bots") {
+                # parity _g_bots — gallery trợ lý + template nghề
+                $bh = Copy-Props (Load-Json $BotsFp @{ active = $null; bots = @() })
+                Send-Json $ctx @{ active = $bh["active"]
+                                 bots = @($bh["bots"])
+                                 templates = (Get-RoleTemplates) }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "GET" -and $path -eq "/api/install-brain") {
+                # parity _g_install_brain — onboarding poll trạng thái cài
+                # não; script tự ghi state file nên sống qua restart bridge
+                $sth = Copy-Props (Load-Json $InstallFp @{})
+                $running = ($null -ne $script:InstallProc -and
+                            -not $script:InstallProc.HasExited)
+                $state = $sth["state"]
+                if ($running) { $state = "running" }
+                elseif ($state -eq "running") {
+                    # proc chết giữa chừng (bridge restart/kill) mà file
+                    # kẹt "running" → ép về error để UI cho cài lại
+                    $state = "error"
+                }
+                $lg = @($sth["log"])
+                if ($lg.Count -gt 12) { $lg = $lg[($lg.Count-12)..($lg.Count-1)] }
+                Send-Json $ctx @{ ok = $true; running = $running
+                                 state = $state; id = $sth["id"]
+                                 step = $sth["step"]; log = $lg }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/install-brain") {
+                # parity _h_install_brain — cài não 1-click (install-brain.ps1)
+                # hoặc mở terminal đăng nhập {"login":true}. Máy đã onboard/
+                # fleet → qua card xác nhận; máy CHƯA onboard thì chưa có
+                # agent nào giả nút → chạy luôn (nút bấm của học viên chính
+                # là consent — y hệt /api/setup lần đầu).
+                $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
+                $body = $reader.ReadToEnd() | ConvertFrom-Json
+                $bid = ([string]$body.id).Trim()
+                $preset = $BrainPresets | Where-Object { $_.id -eq $bid } | Select-Object -First 1
+                $login = [bool]$body.login
+                if (-not $preset) {
+                    Send-Json $ctx @{ err = "không có não này" } 400
+                } elseif (-not $login -and -not $preset.auto) {
+                    Send-Json $ctx @{ err = "não này chưa cài tự động được — làm theo trang hướng dẫn của hãng" } 400
+                } else {
+                    $cfg0 = Load-Json $ConfigFp @{}
+                    $onboarded = ($cfg0 -and $cfg0.language) -or
+                        (Test-Path (Join-Path $WorkDir ".devin\fleet.json"))
+                    $applyInstall = {
+                        if ($login) { Start-BrainLogin $preset }
+                        else { Start-BrainInstall $preset }
+                    }.GetNewClosure()
+                    if ($onboarded) {
+                        $lbl = if ($login) { "Mở terminal đăng nhập não $($preset.label)?" }
+                               else { "Cài não $($preset.label) lên máy?" }
+                        $rid = New-Gate $lbl $applyInstall
+                        Send-Json $ctx @{ pending = $rid; msg = "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để chạy" } 202
+                    } else {
+                        try { & $applyInstall; Send-Json $ctx @{ ok = $true } }
+                        catch { Send-Json $ctx @{ err = "$($_.Exception.Message)" } 500 }
+                    }
+                }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/bot") {
+                # parity _h_bot — create/activate/delete/rename trên
+                # workspace\bots.json; activate/delete qua consent card
+                $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
+                $body = $reader.ReadToEnd() | ConvertFrom-Json
+                $action = [string]$body.action
+                $bh = Copy-Props (Load-Json $BotsFp @{ active = $null; bots = @() })
+                if (-not $bh["bots"]) { $bh["bots"] = @() }
+                if ($action -eq "create") {
+                    $name = ([string]$body.name).Trim()
+                    if ($name.Length -gt 60) { $name = $name.Substring(0,60) }
+                    $role = ([string]$body.role).Trim()
+                    if ($role.Length -gt 40) { $role = $role.Substring(0,40) }
+                    $ins = ([string]$body.instructions).Trim()
+                    if (-not $name) {
+                        Send-Json $ctx @{ err = "thiếu tên bot" } 400
+                    } elseif ($ins.Length -gt 500) {
+                        Send-Json $ctx @{ err = "lời dặn quá 500 chữ — viết ngắn lại giúp" } 400
+                    } elseif (@($bh["bots"]).Count -ge 50) {
+                        # không cap thì agent loop tạo hàng nghìn bot →
+                        # bots.json phình (parity .py)
+                        Send-Json $ctx @{ err = "tối đa 50 trợ lý — xoá bớt trợ lý cũ trước" } 400
+                    } else {
+                        $bid = Get-SlugId ($name + "-" + $role); $base = $bid; $n = 2
+                        while (@($bh["bots"]) | Where-Object { $_.id -eq $bid }) {
+                            $bid = "$base-$n"; $n++
+                        }
+                        $av = [string]$body.avatar
+                        if ($av.Length -gt 8) { $av = $av.Substring(0,8) }
+                        $skl = @()
+                        foreach ($s0 in @($body.skills)) {
+                            $s = [string]$s0
+                            if ($s.Length -gt 40) { $s = $s.Substring(0,40) }
+                            if ($SkillNameRe.IsMatch($s)) { $skl += $s }
+                        }
+                        $nd = @()
+                        foreach ($n0 in @($body.needs)) {
+                            $nn = [string]$n0
+                            if ($nn.Length -gt 40) { $nn = $nn.Substring(0,40) }
+                            $nd += $nn
+                        }
+                        $bot = @{ id = $bid; name = $name; role = $role
+                                  avatar = $av; skills = $skl; needs = $nd
+                                  recipes = (Get-CleanRecipes $body.recipes)
+                                  instructions = $ins; triggers = @() }
+                        $bh["bots"] = @($bh["bots"]) + $bot
+                        Save-Json $BotsFp $bh
+                        Send-Json $ctx @{ ok = $true; bot = $bot }
+                    }
+                } elseif ($action -eq "activate") {
+                    # activate/deactivate = ghi bots.json + viết bot.md +
+                    # cài skill → consent card (agent tự đổi/xoá persona
+                    # âm thầm nếu không gate — parity .py)
+                    $bid = $body.id
+                    if ($null -ne $bid -and [string]$bid -ne "" -and
+                        -not (@($bh["bots"]) | Where-Object { $_.id -eq $bid })) {
+                        Send-Json $ctx @{ err = "không thấy bot này" } 404
+                    } else {
+                        $bot0 = @($bh["bots"]) | Where-Object { $_.id -eq $bid } | Select-Object -First 1
+                        $bname = "Trợ lý chung"
+                        if ($bot0 -and $bot0.name) { $bname = [string]$bot0.name }
+                        # card phải preview lời dặn — instructions chạy
+                        # vào mọi session, chỉ hiện tên thì agent tạo bot
+                        # độc rồi xin activate lách review (audit-3 M2)
+                        $insPrev = ""
+                        if ($bot0 -and $bot0.instructions) {
+                            $ip0 = $bot0.instructions
+                            if ($ip0 -isnot [string]) {
+                                # instructions dạng {vi,en} (bot nhập) —
+                                # lấy bản vi/en thay vì cast ra tên kiểu
+                                $iph = Copy-Props $ip0; $ip0 = ""
+                                if ($iph["vi"]) { $ip0 = [string]$iph["vi"] }
+                                elseif ($iph["en"]) { $ip0 = [string]$iph["en"] }
+                            }
+                            $ip = ([string]$ip0).Trim()
+                            if ($ip.Length -gt 80) { $ip = $ip.Substring(0,80) }
+                            $insPrev = $ip
+                        }
+                        $applyAct = {
+                            # đọc lại từ đĩa — bot có thể đổi giữa lúc chờ bấm
+                            $bbh = Copy-Props (Load-Json $BotsFp @{ active = $null; bots = @() })
+                            if (-not $bbh["bots"]) { $bbh["bots"] = @() }
+                            if ($null -eq $bid -or [string]$bid -eq "") {
+                                $bbh["active"] = $null   # về trợ lý chung
+                                Disable-Bot
+                                Save-Json $BotsFp $bbh
+                                return
+                            }
+                            $botx = @($bbh["bots"]) | Where-Object { $_.id -eq $bid } | Select-Object -First 1
+                            if (-not $botx) {
+                                Push-Event ([ordered]@{ t = "err"; msg = "không thấy bot này nữa" })
+                                return
+                            }
+                            $missing = Enable-Bot $botx
+                            $bbh["active"] = [string]$bid
+                            Save-Json $BotsFp $bbh
+                            if ($missing.Count) {
+                                Push-Event ([ordered]@{ t = "err"; msg =
+                                    ("đã đổi trợ lý nhưng chưa cài được: " +
+                                     ($missing -join ", ") +
+                                     " — nhờ trợ lý trong chat cài thêm") })
+                            }
+                        }.GetNewClosure()
+                        $title = "Đặt $bname làm trợ lý đang làm việc?"
+                        if ($insPrev) { $title += " Lời dặn: `"$insPrev…`"" }
+                        $rid = New-Gate $title $applyAct
+                        Send-Json $ctx @{ pending = $rid; msg = "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để đổi trợ lý" } 202
+                    }
+                } elseif ($action -eq "delete") {
+                    # xoá bot là vĩnh viễn (không thùng rác) → gate y như
+                    # delete-lesson (parity .py)
+                    $bid = [string]$body.id
+                    $bot = @($bh["bots"]) | Where-Object { $_.id -eq $bid } | Select-Object -First 1
+                    if (-not $bot) {
+                        Send-Json $ctx @{ err = "không thấy bot này" } 404
+                    } else {
+                        $applyDel = {
+                            $bbh = Copy-Props (Load-Json $BotsFp @{ active = $null; bots = @() })
+                            $bbh["bots"] = @(@($bbh["bots"]) | Where-Object { $_.id -ne $bid })
+                            if ($bbh["active"] -eq $bid) {
+                                $bbh["active"] = $null
+                                Disable-Bot   # không để bot.md mồ côi
+                            }
+                            Save-Json $BotsFp $bbh
+                        }.GetNewClosure()
+                        $nm = $bid; if ($bot.name) { $nm = [string]$bot.name }
+                        $rid = New-Gate "Xoá trợ lý $nm?" $applyDel
+                        Send-Json $ctx @{ pending = $rid; msg = "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để xoá" } 202
+                    }
+                } elseif ($action -eq "rename") {
+                    $bid = [string]$body.id
+                    $idx = -1
+                    for ($i = 0; $i -lt @($bh["bots"]).Count; $i++) {
+                        if ($bh["bots"][$i].id -eq $bid) { $idx = $i; break }
+                    }
+                    if ($idx -lt 0) {
+                        Send-Json $ctx @{ err = "không thấy bot này" } 404
+                    } else {
+                        $bx = Copy-Props $bh["bots"][$idx]
+                        if ($body.name) {
+                            $nm = ([string]$body.name).Trim()
+                            if ($nm.Length -gt 60) { $nm = $nm.Substring(0,60) }
+                            $bx["name"] = $nm
+                        }
+                        if ($null -ne $body.avatar) {
+                            $av = [string]$body.avatar
+                            if ($av.Length -gt 8) { $av = $av.Substring(0,8) }
+                            $bx["avatar"] = $av
+                        }
+                        $lst = @($bh["bots"]); $lst[$idx] = $bx
+                        $bh["bots"] = $lst
+                        Save-Json $BotsFp $bh
+                        if ($bh["active"] -eq $bid) { Write-BotMd $bx }   # bot.md theo tên mới
+                        Send-Json $ctx @{ ok = $true; bot = $bx }
+                    }
+                } else {
+                    Send-Json $ctx @{ err = "action phải là create/activate/delete/rename" } 400
+                }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/bot-import") {
+                # parity _h_bot_import — bước 1: bung zip → preview để học
+                # viên ĐỌC instructions trước khi cài
+                $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
+                $body = $reader.ReadToEnd() | ConvertFrom-Json
+                $r = Stage-BotBundle ([string]$body.file)
+                if ($r.err) {
+                    Send-Json $ctx @{ err = $r.err } 400
+                } else {
+                    Send-Json $ctx @{ ok = $true; preview = $r.preview }
+                }
+            }
+            elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/bot-import-confirm") {
+                # parity _h_bot_import_confirm — bước 2: qua consent card
+                # (file ngoài = nạp instruction+recipe cho não, không gate
+                # thì agent tự stage+confirm được im lặng)
+                $reader = New-Object System.IO.StreamReader($ctx.Request.InputStream, [System.Text.Encoding]::UTF8)
+                $body = $reader.ReadToEnd() | ConvertFrom-Json
+                $sid = [string]$body.stage
+                $st = $script:ImportStages[$sid]
+                if (-not $st) {
+                    Send-Json $ctx @{ err = "hết hạn rồi — nhập lại file nhé" } 400
+                } else {
+                    $applyConf = {
+                        $e = Confirm-BotBundle $sid
+                        if ($e) { Push-Event ([ordered]@{ t = "err"; msg = $e }) }
+                    }.GetNewClosure()
+                    $bn = [string]($st.bot.name)
+                    if (-not $bn) { $bn = "?" }
+                    if ($bn.Length -gt 60) { $bn = $bn.Substring(0,60) }
+                    $rid = New-Gate "Cài trợ lý `"$bn`" từ file chia sẻ?" $applyConf
+                    Send-Json $ctx @{ pending = $rid; msg = "đã gửi thẻ xác nhận vào chat — bấm Đồng ý để cài" } 202
                 }
             }
             else {
