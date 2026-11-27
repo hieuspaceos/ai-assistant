@@ -22,7 +22,7 @@ việc lặp lại. Không có skill agent vẫn làm được — có skill th�
 - **Skill mới muốn phát cho học viên → copy vào CẢ HAI pack.** Skill chỉ
   nằm ở `.devin/skills/` sẽ KHÔNG có trong bản đóng gói `troly`
   (launcher chỉ bundle `skill-packs/`) — đã từng mất `/clone-trang`
-  vì lỗi này. `tools/test-packs.py` kiểm tự động.
+  vì lỗi này. `tests/test-packs.py` kiểm tự động.
 - Skill mới do agent tự viết khi học viên lặp một lời nhờ nhiều lần —
   đặt thẳng vào `.devin/skills/`, không cần đăng ký thêm.
 - `/gom-skill` (`pack-skill` en) nén skill tự sinh để chia sẻ cho người
@@ -85,7 +85,7 @@ Pipeline clone (`data-cs-*` markers): xem `clone-pipeline.md`.
   portal hiện/ẩn theo cờ; `has_walkthrough` → nút "▶ Dùng ngay".
 - **Walkthrough**: `tool-XX/walkthrough.json` — schema trong
   `templates/walkthrough.json` (15 kinds + cond/optional/then_probe/
-  media); runner `web/app.js`, validator `tools/test-walkthrough.py`.
+  media); runner `web/app.js`, validator `tests/test-walkthrough.py`.
 - **`data-cs-*` markers** — contract giữa `clone-trang` (sinh),
   `clone-view.html` (sửa), `trang-moi` (nhân bản): `data-cs`,
   `data-cs-type`, `data-cs-text/img/link/bg`, `data-cs-page`,

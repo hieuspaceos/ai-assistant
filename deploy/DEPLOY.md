@@ -187,7 +187,7 @@ trong `index.json` (schema: title/desc/icon/dept i18n, `prompt` với
 `{{input}}`, `inputs`, `requires`, `checklist`, `verify`). Nhân viên
 thấy card trong portal → bấm Chạy → điền form → trợ lý làm → tick
 checklist. Đẩy cho cả fleet qua `workflows/` trong config-pack
-(plan 2) — máy tự áp trong 15'. `tools/test-packs.py` validate schema
+(plan 2) — máy tự áp trong 15'. `tests/test-packs.py` validate schema
 mỗi release — viết xong chạy nó trước khi đẩy pack.
 
 ## 6.5. Gỡ / rollback

@@ -92,7 +92,7 @@ Máy áp qua `apply-pack.py` (beacon gọi khi inbox có `pack`):
 ## Thao tác vendor
 
 ```bash
-bash tools/build-release.sh 1.0.3        # cổng đầy đủ → releases/1.0.3/
+bash scripts/build-release.sh 1.0.3        # cổng đầy đủ → releases/1.0.3/
 # đẩy origin (file tĩnh)
 scp releases/1.0.3/* vps:site/releases/
 # hoặc đẩy thẳng vào collector của một cty — cần "release_key" trong
@@ -108,12 +108,12 @@ curl -X POST -H "X-Admin-Key: <release_key>" -H "Content-Type: application/json"
 # Bearer của tài khoản master, không phải admin_key của org khách
 ```
 
-Pack: `python3 tools/sync-fork.sh` (interim, hút từ fork) hoặc viết tay
+Pack: `python3 scripts/sync-fork.sh` (interim, hút từ fork) hoặc viết tay
 `packs/<org>/pack.json` → `POST /api/packs`.
 
 ## Test
 
-`python3 tools/test-distribution.py` — dựng collector thật + máy giả:
+`python3 tests/test-distribution.py` — dựng collector thật + máy giả:
 pair→approve→key → upload zip+manifest → beacon báo update → update.py
 stage → `apply_pending` → VERSION đổi → pack áp merge → mọi abort path
 (sha sai, sig sai, zip-slip, whitelist, org khác, allowlist độc).

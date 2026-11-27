@@ -7,12 +7,12 @@ License là "đếm và báo" (gentle): máy nhân viên chỉ đọc expiry đ�
 banner vàng; enforcement thật nằm ở collector (verify sig + đếm ghế).
 
     TROLY_LICENSE_SECRET=<org-secret> \
-        python3 tools/make-license.py --org IMA --seats 20 \
+        python3 scripts/make-license.py --org IMA --seats 20 \
             --expiry 2027-01-01 --out .devin/license.json
 
     # kiểm tra lại một license (đối chiếu collector):
     TROLY_LICENSE_SECRET=<org-secret> \
-        python3 tools/make-license.py --check .devin/license.json
+        python3 scripts/make-license.py --check .devin/license.json
 
 sig = HMAC-SHA256(license_secret, "org|seats|expiry|issued") — chuỗi ký
 phải khớp nguyên mẫu với phía verify trong tools/collector.py

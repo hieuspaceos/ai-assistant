@@ -12,7 +12,7 @@ fleet-console). Hai lớp:
    đá về revoked. Không cần bridge :7682 — payload giả lập đúng shape
    beacon gửi (drift shape thật được canh bởi phần static).
 
-Chạy: python3 tools/test-fleet.py"""
+Chạy: python3 tests/test-fleet.py"""
 import json, os, re, socket, subprocess, sys, tempfile, time
 import urllib.request, urllib.error
 
@@ -78,7 +78,7 @@ check("beacon.ps1" in read(os.path.join(ROOT, "start.bat")),
 
 # chuỗi ký license phải khớp nguyên mẫu hai phía — drift = mọi license
 # invalid ngay khi deploy
-mk_lic = read(os.path.join(TOOLS, "make-license.py"))
+mk_lic = read(os.path.join(ROOT, "scripts", "make-license.py"))
 collector_src = read(os.path.join(TOOLS, "collector.py"))
 check('f"{org}|{seats}|{expiry}|{issued}"' in mk_lic,
       "make-license.py ký 'org|seats|expiry|issued'")
@@ -167,7 +167,7 @@ try:
     lic_fp = os.path.join(tmp, "license.json")
     env = dict(os.environ, TROLY_LICENSE_SECRET=SEC_L)
     subprocess.run([sys.executable,
-                    os.path.join(TOOLS, "make-license.py"),
+                    os.path.join(ROOT, "scripts", "make-license.py"),
                     "--org", "TST", "--seats", "3",
                     "--expiry", "2099-01-01", "--out", lic_fp],
                    env=env, check=True, capture_output=True)
@@ -179,7 +179,7 @@ try:
     lic2_fp = os.path.join(tmp, "license-org2.json")
     env2 = dict(os.environ, TROLY_LICENSE_SECRET=SEC_L2)
     subprocess.run([sys.executable,
-                    os.path.join(TOOLS, "make-license.py"),
+                    os.path.join(ROOT, "scripts", "make-license.py"),
                     "--org", "ORG2", "--seats", "5",
                     "--expiry", "2099-01-01", "--out", lic2_fp],
                    env=env2, check=True, capture_output=True)

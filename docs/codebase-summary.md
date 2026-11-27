@@ -108,7 +108,7 @@ spotlight + widget theo kind): `prompt` POST `/api/prompt`, `wait-*`/
 `auto` poll `/api/poll` tự qua bước, `open` gọi `/api/reveal` mở
 Finder, `cond` probe `/api/check-connection`+`/api/check-path`,
 `optional` nút Bỏ qua, tiến trình lưu localStorage. Validator
-`tools/test-walkthrough.py`. Runner là renderer câm — trí tuệ sinh
+`tests/test-walkthrough.py`. Runner là renderer câm — trí tuệ sinh
 nội dung nằm trong skill `/tao-cong-cu` (en: `/make-tool`), kèm pattern
 prompt-optional + wait-run lặp gánh lượt hỏi lẻ giữa run.
 
@@ -168,14 +168,14 @@ Kế hoạch nhiều phase đã/thực thi — mỗi folder `YYMMDD-HHMM-<tên>/
   dashboard không cần `wrangler secret put`.
 - `tools/update.py` — kéo release ký ed25519 (pubkey trong `vendor-pubkey`,
   override `TROLY_VENDOR_PUBKEY` cho test), sha256 + verify + stage + rollback
-  qua `tools/backup.py`; `tools/make-license.py` cấp license.
+  qua `tools/backup.py`; `scripts/make-license.py` cấp license.
 - `tools/apply-pack.py` — áp pack cty: skills/bots/connections/workflows/
   rules/permissions + `devin_files` (whitelist mcp_config*.json —
   env-allowlist cố ý ngoài whitelist vì nó un-scrub env) +
   `mycourse_files` (chỉ máy mới).
 - `tools/content_guard.py` — bọc UNTRUSTED cho nội dung ngoài, sanitize,
   detect_injection, scrub_env; exec allowlist đọc `.devin/exec-allowlist.json`.
-- `tools/build-release.sh`, `sign-release.py`, `build-ext.sh`,
+- `scripts/build-release.sh`, `sign-release.py`, `build-ext.sh`,
   `sync-fork.sh` (merge khác-biệt fork → pack), `ed25519.py` vendored.
 - `packs/IMA/pack.json` v3 — pack đầu đời thật (IMA Travel DMC).
 - `deploy/` — install.ps1/sh, DEPLOY.md, force-install.md, CHECKLIST.md,

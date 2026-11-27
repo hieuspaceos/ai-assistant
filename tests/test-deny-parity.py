@@ -12,7 +12,7 @@ mà quên mirror = não "python3.13" lọt qua trên một nền. Test FAIL khi
 tên trong canonical thiếu ở một file, tên lạ xuất hiện ở mirror, hoặc
 regex mirror lệch token với _BRAIN_CMD_DENY_RE.
 
-Chạy: python3 tools/test-deny-parity.py"""
+Chạy: python3 tests/test-deny-parity.py"""
 import fnmatch
 import os
 import re

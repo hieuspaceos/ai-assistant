@@ -8,10 +8,10 @@ Ba script stdlib, không cần dep — chạy trên máy dev trước khi đóng
 hoặc sau khi đụng `tools/*.py`, `tools/*.ps1`, `.devin/skill*/`:
 
 ```bash
-python3 tools/test-bridges.py   # endpoint-level: auth, save-page, brain…
-python3 tools/test-parity.py    # endpoint .py ↔ .ps1 phải khớp
-python3 tools/test-packs.py     # skill active ↔ packs ↔ recipes
-python3 tools/test-gates.py     # endpoint POST phải khai GATED/OPEN_OK
+python3 tests/test-bridges.py   # endpoint-level: auth, save-page, brain…
+python3 tests/test-parity.py    # endpoint .py ↔ .ps1 phải khớp
+python3 tests/test-packs.py     # skill active ↔ packs ↔ recipes
+python3 tests/test-gates.py     # endpoint POST phải khai GATED/OPEN_OK
 ```
 
 Sau khi đụng phần fleet: `test-fleet.py` (collector thật + parity
@@ -22,7 +22,7 @@ chạy trong CI).
 Bất kỳ test nào đỏ → KHÔNG release. `test-parity` đỏ thường là quên port
 endpoint sang bản bridge kia; `test-packs` đỏ là skill mới/sửa chưa đồng
 bộ vào `skill-packs/`; `test-gates` đỏ là thêm endpoint POST mới mà chưa
-khai vào `GATED`/`OPEN_OK` trong `tools/test-gates.py` — bắt buộc quyết
+khai vào `GATED`/`OPEN_OK` trong `tests/test-gates.py` — bắt buộc quyết
 định "agent tự gọi được endpoint này có an toàn không" ngay lúc viết.
 
 ## 0.5. Release một phiên bản mới (CI)
@@ -42,13 +42,13 @@ mới nhất). Chạy thử build không release: Actions → build → Run work
 
 Sự cố CI thường gặp:
 - Build Windows chết `ModuleNotFoundError` khi chạy exe → thiếu
-  `--hidden-import` trong `tools/build.sh` (children chạy qua runpy nên
+  `--hidden-import` trong `scripts/build.sh` (children chạy qua runpy nên
   PyInstaller không tự thấy import của chúng).
 - `--hidden-import winreg` trên macOS cảnh báo "not found" — bình
   thường, bỏ qua.
 - SmartScreen chặn `TroLyAI.exe` trên máy học viên → hướng dẫn "More
   info → Run anyway" (Windows chưa ký code — macOS đã ký Developer ID +
-  notarize qua `tools/sign-macos.sh` / CI nên không còn chặn).
+  notarize qua `scripts/sign-macos.sh` / CI nên không còn chặn).
 
 ## 1. Health check nhanh
 

@@ -202,10 +202,10 @@ tên lạ không làm reject cả batch (cờ `harvest` khỏi kẹt).
 
 ## License — "đếm và báo"
 
-`tools/make-license.py` (chỉ chạy phía vendor):
+`scripts/make-license.py` (chỉ chạy phía vendor):
 
 ```bash
-TROLY_LICENSE_SECRET=<org-secret> python3 tools/make-license.py \
+TROLY_LICENSE_SECRET=<org-secret> python3 scripts/make-license.py \
     --org IMA --seats 20 --expiry 2027-01-01 --out .devin/license.json
 ```
 
@@ -273,14 +273,14 @@ Tất cả là machine state → đã gitignore, KHÔNG đi vào release.
 
 ## Test
 
-`python3 tools/test-fleet.py` — static contract (snapshot keys parity
+`python3 tests/test-fleet.py` — static contract (snapshot keys parity
 .py/.ps1, chuỗi ký license khớp hai phía, adm-render.js dùng chung,
 launcher/start spawn đúng điều kiện, **endpoint set collector.py ↔
 worker** với `WORKER_ONLY` khai tường minh) + integration dựng
 collector thật: pair sai key 401 → pending → approve → beacon 200 →
 license ok/invalid → usage gộp → revoke → 403 revoked.
 
-`python3 tools/test-worker.py` — integration cho hosted tier: spawn
+`python3 tests/test-worker.py` — integration cho hosted tier: spawn
 `wrangler dev` + D1 local (cần `worker/.dev.vars`), phủ toàn bộ vòng
 đời 2 tầng: bootstrap self-lock, legacy X-Admin-Key, login session,
 tạo org, license HMAC khớp `make-license.py`, phân quyền cross-org

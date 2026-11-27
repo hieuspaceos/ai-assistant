@@ -21,7 +21,7 @@ the assistant remembers" story band, a real demo video, a B2B band
 with five clickable mock screens (fleet dashboard, employee machine,
 company pack, onboarding, offboarding), an FAQ, and download buttons
 (single file per OS — `troly` for macOS, `TroLyAI.exe` for Windows,
-see `tools/build.sh`). All screens are rendered in HTML/CSS — no
+see `scripts/build.sh`). All screens are rendered in HTML/CSS — no
 screenshots — and every CSS change must bump the `style.css?v=N`
 query string (Cloudflare caches by URL).
 
@@ -118,7 +118,7 @@ content or file contents.
 - **Distribution** — releases signed ed25519 (private key offline)
   flow vendor → collector → machines; the macOS `troly` binary is
   also Developer ID codesigned + notarized in CI
-  (`tools/sign-macos.sh` locally — cert in keychain,
+  (`scripts/sign-macos.sh` locally — cert in keychain,
   `tools/entitlements.plist` for the PyInstaller-bundled Python), so
   Gatekeeper opens it without the right-click dance with stage + rollback; per-org
   **packs** (skills/workflows/rules) push company customization to
@@ -139,7 +139,7 @@ you like → the agent measures it live in your real browser (DOM,
 computed styles, interaction states, route architecture) → rebuilds a
 `.html` file identical in structure with your content in place.
 Pipeline: measure → survey → tokens → build → compare → deliver, with
-an automated compare loop (`tools/clone-compare.py`: style-diff by
+an automated compare loop (`scripts/clone-compare.py`: style-diff by
 `data-cs-ref` + pixel-diff via `sips`, no Pillow needed).
 
 - Multi-page site → one `.html` file with a hash router (`#/route` →
@@ -175,12 +175,12 @@ ai-assistant/
 ├── tools/collector.py         # fleet collector: pairing/approve/revoke/repair, license check, dashboard, release+pack store
 ├── tools/update.py            # pull signed release: no-redirect → sha256 → ed25519 → stage → apply at boot + rollback
 ├── tools/apply-pack.py        # apply org pack (skills/workflows/rules) — lint pack phía máy: exec_allowlist first-token deny, open_url http(s)-only, drive/env paths, permissions_template qua path_guard; never overrides consent
-├── tools/make-license.py      # vendor: sign license.json (HMAC org|seats|expiry|issued)
-├── tools/sign-release.py + ed25519.py  # vendor: sign release offline (private key never in repo)
-├── tools/sign-macos.sh + entitlements.plist  # macOS: codesign Developer ID (hardened runtime) + notarytool --wait + quarantine verify — CI gọi cùng bước, keychain profile troly-notary
+├── scripts/make-license.py      # vendor: sign license.json (HMAC org|seats|expiry|issued)
+├── scripts/sign-release.py + ed25519.py  # vendor: sign release offline (private key never in repo)
+├── scripts/sign-macos.sh + entitlements.plist  # macOS: codesign Developer ID (hardened runtime) + notarytool --wait + quarantine verify — CI gọi cùng bước, keychain profile troly-notary
 ├── tools/backup.py            # snapshot .devin/ + workspace/ before update/pack-apply
 ├── tools/content_guard.py     # UNTRUSTED-content wrapper, injection detect, env allowlist scrub
-├── tools/test-*.py            # stdlib smoke tests: bridge endpoints, .py↔.ps1 parity, fleet lifecycle, worker 2-tier, packs sync
+├── tests/test-*.py            # stdlib smoke tests: bridge endpoints, .py↔.ps1 parity, fleet lifecycle, worker 2-tier, packs sync
 ├── worker/                    # port of collector.py → Cloudflare Workers + D1 + R2 (hosted tier, /fleet/)
 ├── collector-web/             # fleet dashboard: login (account or admin key) + role-based tabs
 ├── deploy/                    # company install kit: install.ps1/sh, DEPLOY.md, force-install.md, vendor-infra.md
@@ -189,10 +189,10 @@ ai-assistant/
 ├── site/                      # landing page troly.hieuspace.com (deploy via gh-pages branch + CNAME; bump ?v=N on CSS change)
 ├── plans/                     # multi-phase work plans (executed and in-flight)
 ├── web/                       # portal: index.html + app.js + styles.css + clone-view.html (clone editor)
-├── tools/clone-compare.py     # /clone-trang "compare" phase: style-diff + pixel-diff, no Pillow
+├── scripts/clone-compare.py     # /clone-trang "compare" phase: style-diff + pixel-diff, no Pillow
 ├── templates/                 # walkthrough.json (15 step kinds) + lesson.md guide scaffold
 │   │                          #   (+ exercise/video-script/slide-deck kept for the builders — unused by default)
-├── tools/test-walkthrough.py  # validator: kinds/fields/{{var}}/cond/media exists/banned words — generator must run it
+├── tests/test-walkthrough.py  # validator: kinds/fields/{{var}}/cond/media exists/banned words — generator must run it
 ├── .devin/
 │   ├── skills/                # active skills — copied from skill-packs by onboarding
 │   ├── skill-packs/
@@ -243,7 +243,7 @@ ai-assistant/
 1. Send them **troly.hieuspace.com** — the download button points at
    the latest GitHub Release. On macOS it's just the single `troly`
    file; Windows uses `start.bat` per `SETUP.md` (a packaged `.exe`
-   built by `tools/build.sh` on a Windows machine).
+   built by `scripts/build.sh` on a Windows machine).
 2. Done. The agent handles everything else with the learner.
 
 **Updates:** the portal checks GitHub Releases on open — a new version

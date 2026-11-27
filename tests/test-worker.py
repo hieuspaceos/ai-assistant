@@ -11,7 +11,7 @@ rotate-secret (kể cả kill_machines) → logout.
 Yêu cầu: worker/.dev.vars có ORGS_JSON + VENDOR_KEY; node + wrangler
 đã cài. Chỉ chạy LOCAL — reset D1 local mỗi lần (xoá sạch rows).
 
-Chạy: python3 tools/test-worker.py"""
+Chạy: python3 tests/test-worker.py"""
 import hmac as hmac_mod, hashlib, json, os, re, socket, subprocess, sys
 import tempfile, time
 import urllib.request, urllib.error

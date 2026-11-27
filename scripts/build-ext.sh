@@ -6,7 +6,7 @@
 # force-install đã cài. Zip phải chứa file ở ROOT (không bọc folder)
 # và không kèm file rác (.DS_Store, *.pem chữ ký tạm...).
 #
-# Chạy: sh tools/build-ext.sh   →  dist/troly-ext-<ver>.zip
+# Chạy: sh scripts/build-ext.sh   →  dist/troly-ext-<ver>.zip
 set -e
 cd "$(dirname "$0")/.."
 

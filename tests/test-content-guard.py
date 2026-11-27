@@ -11,7 +11,7 @@
    handler emit-event là HTTP thuần), POST /api/emit-event với
    inj_suspect → event xuất hiện trong /api/poll kèm run_id.
 
-Chạy: python3 tools/test-content-guard.py"""
+Chạy: python3 tests/test-content-guard.py"""
 import json, os, re, subprocess, sys, tempfile, time
 import urllib.request, urllib.error
 
@@ -75,7 +75,7 @@ check('png_b64' in eb.split('wrap_obj')[1] if 'wrap_obj' in eb else False,
       "wrap đặt SAU bóc png_b64 (base64 không bị bọc)")
 
 # parity test không được hở endpoint mới mà không khai báo
-tp = read(os.path.join(TOOLS, "test-parity.py"))
+tp = read(os.path.join(ROOT, "tests", "test-parity.py"))
 check('"/api/emit-event"' in tp or 'emit-event' in tp or True,
       "test-parity biết /api/emit-event")
 

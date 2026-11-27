@@ -9,7 +9,7 @@ Bắt các drift:
   - SKILL.md thiếu frontmatter name/description
   - recipes manifest trỏ tới skill không có trong pack vi
 
-Chạy: python3 tools/test-packs.py"""
+Chạy: python3 tests/test-packs.py"""
 import filecmp, json, os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

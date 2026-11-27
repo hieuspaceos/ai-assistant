@@ -9,10 +9,10 @@ có private key. Đây là lý do KHÔNG dùng HMAC: khoá đối xứng phải 
 trên máy để verify → trích ra được → forge release cho cả org.
 
     # một lần: sinh cặp khoá — giữ private key ở chỗ an toàn (offline)
-    python3 tools/sign-release.py --gen-key
+    python3 scripts/sign-release.py --gen-key
 
     # mỗi release: ký manifest (build-release.sh gọi bước này)
-    python3 tools/sign-release.py --key ~/.troly-release-key \
+    python3 scripts/sign-release.py --key ~/.troly-release-key \
         --zip releases/1.1.0/troly-1.1.0.zip --version 1.1.0 \
         --min-ver 1.0.0 --out releases/1.1.0/manifest.json
 
@@ -20,11 +20,11 @@ Manifest: {"version","url","sha256","min_ver","sig"} — sig =
 ed25519(bytes.fromhex(sha256)) — update.py verify đúng chuỗi này.
 """
 import argparse, hashlib, json, os, secrets, sys
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools"))
 from ed25519 import publickey, signature  # noqa: E402
 
-PUBKEY_FP = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                         "vendor-pubkey")
+PUBKEY_FP = os.path.join(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))), "tools", "vendor-pubkey")
 
 
 def main():

@@ -1,6 +1,6 @@
 ﻿# test-agent-spawn.ps1 — smoke test S4 (Windows sandbox). CAN ADMIN.
 #
-#   powershell -ExecutionPolicy Bypass -File tools\test-agent-spawn.ps1
+#   powershell -ExecutionPolicy Bypass -File tests\test-agent-spawn.ps1
 #
 # Gia dinh setup-agent-user.ps1 da chay (CI chay truoc). Khong co cred thi
 # test tu tao user de van chay duoc phan unit-test AgentSpawn.

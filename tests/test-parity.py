@@ -2,7 +2,7 @@
 """test-parity.py — chat-bridge.py và chat-bridge.ps1 phải cùng tập
 endpoint /api/*. Drift đã từng làm mất /api/save-page trên Windows.
 
-Chạy: python3 tools/test-parity.py"""
+Chạy: python3 tests/test-parity.py"""
 import os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

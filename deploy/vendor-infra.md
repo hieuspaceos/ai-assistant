@@ -82,8 +82,8 @@ protocol endpoint phải patch cả hai, giống parity `.py`/`.ps1`.
 ## Đẩy release lên /releases/
 
 ```sh
-# sau khi tools/build-release.sh xanh:
-tools/sign-release.py --key ~/.troly/vendor.key dist/troly-<ver>.zip
+# sau khi scripts/build-release.sh xanh:
+scripts/sign-release.py --key ~/.troly/vendor.key dist/troly-<ver>.zip
 # → dist/manifest-<ver>.json gồm {version,file,sha256,size,sig}
 # ghép vào dist/latest.json rồi:
 rsync -av dist/ troly:/var/www/troly.hieuspace.com/releases/

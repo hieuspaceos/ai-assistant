@@ -119,14 +119,14 @@ Maps sống), media `self`/`data:`. Form clone chỉ giả lập —
 5. Kiểm tĩnh sau chèn (đếm template vẫn 1, route parse được) → mở
    viewer ngay trang mới.
 
-## tools/clone-compare.py — so tự động (pha 4)
+## scripts/clone-compare.py — so tự động (pha 4)
 
 ```
-python3 tools/clone-compare.py harvest <clone.html> <tabId> [-o out.json]
+python3 scripts/clone-compare.py harvest <clone.html> <tabId> [-o out.json]
     → đo styles mọi phần tử data-cs-ref trên tab clone qua bridge
-python3 tools/clone-compare.py styles <ref-styles.json> <clone-styles.json>
+python3 scripts/clone-compare.py styles <ref-styles.json> <clone-styles.json>
     → từng chỗ lệch px>2 / rgb>8 + phần tử chỉ có một bên
-python3 tools/clone-compare.py shot <ref.png> <clone.png>
+python3 scripts/clone-compare.py shot <ref.png> <clone.png>
     → % pixel khác qua sips (macOS, không cần Pillow); chỉ dùng cho
       khối ít ảnh — section nền là ảnh khác nhau thì % cao là đương nhiên
 ```

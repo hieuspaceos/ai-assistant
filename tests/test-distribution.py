@@ -8,7 +8,7 @@ Chuỗi thật được chạy: dựng collector tạm → máy tạm pair→app
 machine.key → vendor "phát" release bằng đúng sign-release.py + key
 test → máy chạy update.py → apply_pending của launcher → VERSION đổi.
 
-Chạy: python3 tools/test-distribution.py"""
+Chạy: python3 tests/test-distribution.py"""
 import hashlib, json, os, secrets, socket, subprocess, sys, tempfile
 import time, urllib.request, urllib.error, zipfile
 

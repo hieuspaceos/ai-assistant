@@ -3,7 +3,7 @@
 
 Spawn mỗi bridge THẬT trên port động với CWD tạm (não giả → dead ngay
 nhưng bridge vẫn sống — đúng thiết kế). Không cần dep ngoài, không cần
-não thật. Chạy: python3 tools/test-bridges.py"""
+não thật. Chạy: python3 tests/test-bridges.py"""
 import importlib.util
 import json, os, secrets, shutil, socket, subprocess, sys, tempfile, threading, time
 import urllib.error, urllib.request, urllib.parse

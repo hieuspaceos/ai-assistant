@@ -1,7 +1,7 @@
 #!/bin/bash
 # sign-macos.sh — ký + notarize + verify dist/troly (macOS)
 #
-# Dùng: bash tools/sign-macos.sh [đường-dẫn-binary]   (mặc định dist/troly)
+# Dùng: bash scripts/sign-macos.sh [đường-dẫn-binary]   (mặc định dist/troly)
 #
 # Yêu cầu 1 lần:
 #   1. Cert "Developer ID Application" trong keychain (tạo ở developer.apple.com)

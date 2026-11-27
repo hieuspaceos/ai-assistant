@@ -3,7 +3,7 @@
 # packs/ima/pack.json trong repo này. "NO FORK, only pack": fork chết
 # dần, mọi khác biệt của cty sống trong pack — một code base duy nhất.
 #
-#   bash tools/sync-fork.sh [đường-tới-ima-assistant]
+#   bash scripts/sync-fork.sh [đường-tới-ima-assistant]
 #
 # Quy tắc tách:
 #   - skill có trong fork mà KHÔNG có trong .devin/skill-packs/vi/

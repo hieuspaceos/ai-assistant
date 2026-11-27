@@ -2,7 +2,7 @@
 # build-release.sh — cổng phát hành của vendor. Chạy ở máy dev trước khi
 # đẩy release; MỌI bước fail → dừng, không phát bản lởm.
 #
-#   bash tools/build-release.sh <version>
+#   bash scripts/build-release.sh <version>
 #
 # Cổng (theo thứ tự):
 #   1. git sạch (uncommitted = release không truy được nguồn)
@@ -19,7 +19,7 @@
 # machine.key, license, fleet.json, skills cài sẵn là state máy khách.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-VER="${1:?cần version — bash tools/build-release.sh 1.0.3}"
+VER="${1:?cần version — bash scripts/build-release.sh 1.0.3}"
 KEY_FP="${TROLY_RELEASE_KEY:-$HOME/.troly-release-key}"
 
 die() { echo "GATE FAIL: $1" >&2; exit 1; }
@@ -38,7 +38,7 @@ grep -q "^## \[$VER\]\|^## $VER" CHANGELOG.md \
     || die "CHANGELOG.md chưa có mục cho $VER"
 
 # --- 4. test suite ---
-for t in tools/test-*.py; do
+for t in tests/test-*.py; do
     echo "== $t"
     python3 "$t" || die "$t FAIL — sửa trước khi phát"
 done
@@ -83,7 +83,7 @@ PY
 
 # --- 7. ký ---
 [ -f "$KEY_FP" ] || die "thiếu private key — đặt ở $KEY_FP hoặc \$TROLY_RELEASE_KEY"
-python3 tools/sign-release.py --key "$KEY_FP" --zip "$ZIP" \
+python3 scripts/sign-release.py --key "$KEY_FP" --zip "$ZIP" \
     --version "$VER" --out "$OUT/manifest.json"
 
 echo

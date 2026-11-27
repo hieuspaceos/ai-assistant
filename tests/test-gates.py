@@ -13,7 +13,7 @@ Giới hạn: chỉ soi POST (GET hiện toàn read-only — thêm GET-ghi-state
 phải tự khai). Không chứng minh được gate ĐÚNG — chỉ chứng minh có lời
 gọi gate trong block handler; logic điều kiện vẫn phải tự đọc.
 
-Chạy: python3 tools/test-gates.py"""
+Chạy: python3 tests/test-gates.py"""
 import os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -39,6 +39,7 @@ GATED = {
 # thì BẮT BUỘC ghi lý do — "vì sao agent tự gọi được mà không sao".
 OPEN_OK = {
     "/api/prompt":           "chức năng chính — gửi tin cho não",
+    "/api/cancel":           "notification session/cancel không-id — không ghi file/quyền; không có lượt thì no-op, idempotent",
     "/api/respond":          "tự vệ: pending-id + optionId + Origin + one-shot",
     "/api/save-page":        "ghi .html dưới workspace/; CSP sandbox đè lên",
     "/api/check-connection": "chỉ ghi status probe vào connections.json",
@@ -76,7 +77,7 @@ for ep, mn in sorted(routes.items()):
             fail = True
     elif ep not in OPEN_OK:
         print(f"FAIL — chat-bridge.py: endpoint POST mới {ep} chưa khai "
-              f"GATED hay OPEN_OK trong tools/test-gates.py")
+              f"GATED hay OPEN_OK trong tests/test-gates.py")
         fail = True
 
 # --- chat-bridge.ps1: vẫn elif-style, pattern đã tự lọc POST ---
@@ -96,7 +97,7 @@ for ep, blk in sorted(blocks.items()):
             fail = True
     elif ep not in OPEN_OK:
         print(f"FAIL — chat-bridge.ps1: endpoint POST mới {ep} chưa khai "
-              f"GATED hay OPEN_OK trong tools/test-gates.py")
+              f"GATED hay OPEN_OK trong tests/test-gates.py")
         fail = True
 
 # ngược chiều: endpoint đã xoá mà khai còn → nhắc dọn (không fail —

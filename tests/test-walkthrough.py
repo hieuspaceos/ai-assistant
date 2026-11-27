@@ -5,7 +5,7 @@ Runner portal là renderer câm nên file hỏng = màn hướng dẫn hỏng ng
 giữa chừng học viên. Generator (/tao-cong-cu) chạy file này SAU KHI
 viết walkthrough.json và trước khi báo xong; CI cũng chạy qua suite.
 
-Cách chạy:  python3 tools/test-walkthrough.py [đường-dẫn-workspace]
+Cách chạy:  python3 tests/test-walkthrough.py [đường-dẫn-workspace]
 Mặc định:   ./workspace
 
 Kiểm:

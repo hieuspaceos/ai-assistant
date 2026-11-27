@@ -1,7 +1,7 @@
 # Changelog
 
 Format theo [Keep a Changelog](https://keepachangelog.com/). Mỗi release
-phải có mục riêng — `tools/build-release.sh` fail nếu thiếu.
+phải có mục riêng — `scripts/build-release.sh` fail nếu thiếu.
 
 ## [Unreleased]
 
@@ -14,7 +14,7 @@ phải có mục riêng — `tools/build-release.sh` fail nếu thiếu.
   choice/pick-file/open-url/wait-perm/wait-run/auto/spotlight/open/
   watch/download/check/copy/done) + flow (cond/optional/then_probe/
   media) + resume localStorage. Schema: `templates/walkthrough.json`;
-  runner: `web/app.js`; validator: `tools/test-walkthrough.py`.
+  runner: `web/app.js`; validator: `tests/test-walkthrough.py`.
 - Skill **`/tao-cong-cu`** (en: `/make-tool`) — gói một việc lặp lại
   thành skill `/command` + walkthrough + guide; `/phong-van` gọi lại
   nó, học viên cũng gọi trực tiếp được.
@@ -54,7 +54,7 @@ phải có mục riêng — `tools/build-release.sh` fail nếu thiếu.
   admin_key — fleet.json/admin_key cũ chết ngay; `kill_machines` đá
   toàn bộ máy về pending buộc re-pair. Org env-only → migrate sang D1.
   Nút "Xoay khoá" trên tab Công ty.
-- `tools/test-worker.py`: integration test worker qua wrangler dev +
+- `tests/test-worker.py`: integration test worker qua wrangler dev +
   D1 local — đủ vòng đời 2-tầng (37 check). `test-fleet.py` thêm
   parity collector.py ↔ worker/index.js (endpoint set, worker-only
   khai trong WORKER_ONLY).
@@ -140,7 +140,7 @@ phải có mục riêng — `tools/build-release.sh` fail nếu thiếu.
   (skills/bots/connections/workflows/rules/allowlist) qua apply-pack.py —
   "một code base, khác biệt là pack".
 - `tools/backup.py`: snapshot workspace + state .devin trước update/pack.
-- `tools/sync-fork.sh`: trích khác biệt từ fork cũ sang `packs/<org>/`.
+- `scripts/sync-fork.sh`: trích khác biệt từ fork cũ sang `packs/<org>/`.
 - `build-release.sh`: cổng phát hành — git sạch, test suite, CHANGELOG,
   secret-scan zip, ký, xuất manifest.
 
