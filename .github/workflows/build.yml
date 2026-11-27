@@ -84,6 +84,45 @@ jobs:
         with: { python-version: "3.12" }
       - run: python -m pip install pyinstaller==6.11.1   # pin version — build tool kéo code tuỳ ý
       - run: bash tools/build.sh
+      - name: sign + notarize (macOS)
+        if: matrix.os == 'macos-latest'
+        env:
+          MACOS_P12: ${{ secrets.MACOS_P12 }}
+          MACOS_P12_PASSWORD: ${{ secrets.MACOS_P12_PASSWORD }}
+          NOTARY_KEY_B64: ${{ secrets.NOTARY_KEY_B64 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER: ${{ secrets.NOTARY_ISSUER }}
+          SIGN_IDENTITY: "Developer ID Application: Hieu Phan Trong (KHZWP95P4J)"
+        run: |
+          set -euo pipefail
+          # Keychain tạm — cert import xong thì hỏng cũng không sao,
+          # runner xoá cùng job.
+          KC=build.keychain
+          KCPW="$(openssl rand -hex 16)"
+          security create-keychain -p "$KCPW" "$KC"
+          security set-keychain-settings -lut 3600 "$KC"
+          security unlock-keychain -p "$KCPW" "$KC"
+          echo "$MACOS_P12" | base64 -d > cert.p12
+          security import cert.p12 -k "$KC" -P "$MACOS_P12_PASSWORD" \
+              -T /usr/bin/codesign
+          # set-key-partition-list: bắt buộc trên runner headless để
+          # codesign đọc private key không bị prompt GUI
+          security set-key-partition-list -S apple-tool:,apple: \
+              -k "$KCPW" "$KC"
+          security list-keychain -d user -s "$KC" \
+              $(security list-keychain -d user | tr -d '"')
+          shred -u cert.p12 2>/dev/null || rm -fP cert.p12
+
+          codesign --force --options runtime --timestamp \
+              --entitlements tools/entitlements.plist \
+              --keychain "$KC" --sign "$SIGN_IDENTITY" dist/troly
+
+          ditto -c -k --keepParent dist/troly troly-notary.zip
+          echo "$NOTARY_KEY_B64" | base64 -d > AuthKey.p8
+          xcrun notarytool submit troly-notary.zip \
+              --key AuthKey.p8 --key-id "$NOTARY_KEY_ID" \
+              --issuer "$NOTARY_ISSUER" --wait
+          rm -f AuthKey.p8 troly-notary.zip
       - name: rename artifact
         run: mv dist/troly* "dist/${{ matrix.name }}" || true
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
