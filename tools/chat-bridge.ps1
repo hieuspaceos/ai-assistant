@@ -1535,6 +1535,15 @@ try {
                     }
                 }
             }
+            elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/cancel") {
+                # Nút "Dừng" trong chat — parity .py: notification
+                # session/cancel chuẩn ACP (không id). Không có lượt → ok
+                # idempotent, nút bấm dư không hại.
+                if (-not $script:AcpDead -and $script:SessionId -and $script:PromptBusy) {
+                    try { Send-Acp ([ordered]@{ jsonrpc = "2.0"; method = "session/cancel"; params = @{ sessionId = $script:SessionId } }) } catch {}
+                }
+                Send-Json $ctx @{ ok = $true }
+            }
             elseif ($ctx.Request.HttpMethod -eq "POST" -and $path -eq "/api/brain") {
                 # Đổi não: {"id": <preset>} hoặc lệnh tự nhập {"cmd","args","terminal"}.
                 # cmd chỉ cho phép tên lệnh trần (không path) — trang local bị

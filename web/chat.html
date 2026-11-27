@@ -173,7 +173,7 @@ const STR = {
     hello: 'Xin chào! Mình là trợ lý AI của bạn. Bạn cứ nhắn như nhắn tin cho một người giúp việc.\n\nChưa biết bắt đầu từ đâu thì gõ **`/phong-van`**, mình sẽ hỏi vài câu rồi làm bộ công cụ riêng cho bạn.',
     helloBot: 'Xin chào! Mình là **{n}** — trợ lý của bạn. Bạn cứ nhắn như nhắn tin cho một người giúp việc.\n\nChưa biết bắt đầu từ đâu thì gõ **`/phong-van`**, mình sẽ hỏi vài câu rồi làm bộ công cụ riêng cho bạn.',
     ph: 'Nhắn cho trợ lý… (VD: /phong-van) · Enter gửi, Shift+Enter xuống dòng',
-    send: 'Gửi', busy: 'Trợ lý đang làm việc', permSuffix: ' — bạn cho phép không?',
+    send: 'Gửi', stop: '■ Dừng', busy: 'Trợ lý đang làm việc', permSuffix: ' — bạn cho phép không?',
     noOpt: 'Không đồng ý', errPfx: 'Ừm, có lỗi nhỏ: ',
     deadMsg: 'trợ lý đang tắt — mở lại app bằng file start rồi tải lại trang này',
     nativeHint: 'Xác nhận trong hộp thoại vừa hiện trên màn hình máy bạn — trợ lý không tự bấm được nút đó.',
@@ -186,7 +186,7 @@ const STR = {
     hello: 'Hi! I\'m your AI assistant — just message me like you\'d message a helpful coworker.\n\nNot sure where to start? Type **`/interview`** and I\'ll ask a few questions, then build tools just for you.',
     helloBot: 'Hi! I\'m **{n}** — your assistant. Just message me like you\'d message a helpful coworker.\n\nNot sure where to start? Type **`/interview`** and I\'ll ask a few questions, then build tools just for you.',
     ph: 'Message the assistant… (e.g. /interview) · Enter sends, Shift+Enter new line',
-    send: 'Send', busy: 'The assistant is working', permSuffix: ' — allow it?',
+    send: 'Send', stop: '■ Stop', busy: 'The assistant is working', permSuffix: ' — allow it?',
     noOpt: 'Decline', errPfx: 'Hmm, small hiccup: ',
     deadMsg: 'the assistant is off — reopen the app with the start file, then reload this page',
     nativeHint: 'Confirm in the dialog on your screen — the assistant cannot click that button for you.',
@@ -370,9 +370,19 @@ function addErr(msg) {
 }
 function setBusy(b) {
   statusEl.style.display = b ? 'block' : 'none';
-  sendBtn.disabled = b;   // đang xử lý thì chặn gửi trùng
-  if (b) { startBusyClock(); addTyping(); }
-  else { clearInterval(busyTimer); busyTimer = null; removeTyping(); }
+  if (b) {
+    startBusyClock(); addTyping();
+    sendBtn.dataset.mode = 'stop'; sendBtn.textContent = S.stop;
+  } else {
+    clearInterval(busyTimer); busyTimer = null; removeTyping();
+    sendBtn.dataset.mode = 'send'; sendBtn.textContent = S.send;
+  }
+}
+async function cancelTurn() {
+  // Bấm Dừng → bridge gửi session/cancel; não bơ thì lượt vẫn chạy tới
+  // done — nút vẫn ở "Dừng" nhưng không treo vô hạn (done/err tới là về).
+  try { await bfetch(BRIDGE + '/api/cancel', {method: 'POST'}); }
+  catch (e) { setBusy(false); addErr(S.deadMsg); }
 }
 function say(t) { agentBubble(); curBubble.dataset.raw = t; curBubble.innerHTML = md(t); }
 
@@ -383,6 +393,7 @@ function grow() {
 input.addEventListener('input', grow);
 
 async function send() {
+  if (sendBtn.dataset.mode === 'stop') return;   // đang chạy → nút là Dừng; giữ draft
   if (sendBtn.disabled) return;
   const t = input.value.trim();
   if (!t) return;
@@ -399,7 +410,8 @@ async function send() {
     setBusy(false);
   }
 }
-sendBtn.onclick = send;
+sendBtn.onclick = () =>
+  (sendBtn.dataset.mode === 'stop') ? cancelTurn() : send();
 // Enter = gửi, Shift+Enter = xuống dòng; isComposing = đang gõ dấu tiếng Việt/IME
 input.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }

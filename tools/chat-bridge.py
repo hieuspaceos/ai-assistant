@@ -1579,6 +1579,7 @@ class Handler(BaseHTTPRequestHandler):
     }
     POST_ROUTES = {
         "/api/prompt":        "_h_prompt",
+        "/api/cancel":        "_h_cancel",
         "/api/respond":       "_h_respond",
         "/api/brain":         "_h_brain",
         "/api/delete-lesson": "_h_delete_lesson",
@@ -1921,6 +1922,20 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"err": "trợ lý đã dừng — chạy lại file start"}, 503); return
         threading.Timer(TURN_TIMEOUT, _turn_watchdog,
                         args=(turn_gen[0],)).start()
+        self._json({"ok": True})
+
+    def _h_cancel(self, data):
+        # Nút "Dừng" trong chat: não đang chạy lượt → notification
+        # session/cancel chuẩn ACP (không id). Không có lượt → ok
+        # idempotent, nút bấm dư không hại. Não phớt lờ cancel thì
+        # lượt cứ chạy tới done — không tự ý kill process ở đây.
+        if acp is not None and not acp.dead and acp.session_id \
+                and prompt_lock.locked():
+            try:
+                acp.send({"jsonrpc": "2.0", "method": "session/cancel",
+                          "params": {"sessionId": acp.session_id}})
+            except (BrokenPipeError, OSError):
+                pass
         self._json({"ok": True})
 
     def _h_respond(self, data):
