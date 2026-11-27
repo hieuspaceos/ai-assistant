@@ -227,13 +227,24 @@ function New-Gate($title, [scriptblock]$applyFn) {
 # junction sẵn có trỏ vào vùng nhạy mà chỉ so lexical là lọt check.
 # Path chưa tồn tại (xin grant mới) giữ dạng lexical — y realpath().
 function Resolve-RealPath($rpl) {
-    try {
-        $item = Get-Item $rpl -ErrorAction Stop
-        if ($item.LinkTarget) {
-            return [IO.Path]::GetFullPath($item.LinkTarget).TrimEnd('\', '/').ToLower()
-        }
-    } catch {}
-    return $rpl
+    # .LinkTarget chỉ có từ PowerShell 6 — máy học viên Windows 10/11
+    # mặc định PS 5.1 nơi property này trả $null → check trước đây silent
+    # no-op và junction vẫn lách. PS 5.1 expose target qua .Target.
+    # Vòng tối đa 8 hop cho link chồng link (realpath resolve hết).
+    $cur = $rpl
+    for ($hop = 0; $hop -lt 8; $hop++) {
+        try {
+            $item = Get-Item $cur -Force -ErrorAction Stop
+            $lt = $item.LinkTarget
+            if (-not $lt -and $item.Target) { $lt = @($item.Target)[0] }
+            if (-not $lt) { break }
+            if (-not [IO.Path]::IsPathRooted([string]$lt)) {
+                $lt = Join-Path (Split-Path $cur -Parent) $lt
+            }
+            $cur = [IO.Path]::GetFullPath([string]$lt).TrimEnd('\', '/').ToLower()
+        } catch { break }
+    }
+    return $cur
 }
 
 function Test-SensitivePath($p) {
@@ -886,7 +897,7 @@ $BotMdFp = Join-Path $McDir "bot.md"
 $RolesDir = Join-Path $SkillPacks "roles"
 $InstallFp = Join-Path $WorkDir ".devin\install-brain.json"
 $script:InstallProc = $null     # process install-brain đang chạy (1 cái)
-$script:ImportStages = @{}      # stage_id -> @{dir;bot;skills} (nhập bot 2 bước)
+$script:ImportStages = [ordered]@{}  # stage_id -> @{dir;bot;skills} (nhập bot 2 bước; ordered để evict đúng cái cũ nhất — parity dict.pop(next(iter)))
 $SkillNameRe = [regex]'^[a-zA-Z0-9_-]{1,64}$'   # parity SKILL_NAME_RE
 
 # Não cài "lén" (install-brain) nằm trong DATA\node hoặc ~\.local\bin —
@@ -1000,6 +1011,7 @@ function Enable-Bot($bot) {
     $missing = @()
     New-Item -ItemType Directory -Force -Path $SkillsDir | Out-Null
     foreach ($s0 in @($bh["skills"])) {
+        if ($null -eq $s0) { continue }
         $s = [string]$s0
         if ($lang -eq "en") {
             if (-not $smh.ContainsKey($s)) { $missing += $s; continue }
@@ -1104,13 +1116,14 @@ function Stage-BotBundle($b64) {
     return @{ ok = $true; preview = @{
         stage = $sid; name = $bot.name; avatar = $bot.avatar
         role = $bot.role; instructions = $bot.instructions
-        skills = @($bot.skills); needs = @($bot.needs)
+        skills = @($bot.skills | Where-Object { $null -ne $_ })
+        needs = @($bot.needs | Where-Object { $null -ne $_ })
         bundled = $bundled } }
 }
 function Confirm-BotBundle($sid) {
     # parity confirm_bot_bundle: cài skill kèm zip (không đè) + thêm bot
     # vào bots.json. KHÔNG tự activate. Trả $null khi ok / chuỗi lỗi.
-    if (-not $script:ImportStages.ContainsKey($sid)) {
+    if (-not $script:ImportStages.Contains($sid)) {
         return "hết hạn rồi — nhập lại file nhé"
     }
     $st = $script:ImportStages[$sid]
@@ -1128,11 +1141,13 @@ function Confirm-BotBundle($sid) {
         $raw = Copy-Props $st.bot
         $skl = @()
         foreach ($s0 in @($raw["skills"])) {
+            if ($null -eq $s0) { continue }
             $s = [string]$s0
             if ($SkillNameRe.IsMatch($s)) { $skl += $s }
         }
         $nd = @()
         foreach ($n0 in @($raw["needs"])) {
+            if ($null -eq $n0) { continue }
             $nn = [string]$n0
             if ($nn.Length -gt 40) { $nn = $nn.Substring(0,40) }
             $nd += $nn
@@ -2016,8 +2031,11 @@ try {
             elseif ($ctx.Request.HttpMethod -eq "GET" -and $path -eq "/api/bots") {
                 # parity _g_bots — gallery trợ lý + template nghề
                 $bh = Copy-Props (Load-Json $BotsFp @{ active = $null; bots = @() })
+                # key "bots" vắng/null trong file → @() chứ không phát
+                # [null] — web .filter() trên null element là chết
+                $botsArr = @($bh["bots"] | Where-Object { $null -ne $_ })
                 Send-Json $ctx @{ active = $bh["active"]
-                                 bots = @($bh["bots"])
+                                 bots = $botsArr
                                  templates = (Get-RoleTemplates) }
             }
             elseif ($ctx.Request.HttpMethod -eq "GET" -and $path -eq "/api/install-brain") {
@@ -2033,7 +2051,7 @@ try {
                     # kẹt "running" → ép về error để UI cho cài lại
                     $state = "error"
                 }
-                $lg = @($sth["log"])
+                $lg = @($sth["log"] | Where-Object { $null -ne $_ })
                 if ($lg.Count -gt 12) { $lg = $lg[($lg.Count-12)..($lg.Count-1)] }
                 Send-Json $ctx @{ ok = $true; running = $running
                                  state = $state; id = $sth["id"]
@@ -2104,12 +2122,14 @@ try {
                         if ($av.Length -gt 8) { $av = $av.Substring(0,8) }
                         $skl = @()
                         foreach ($s0 in @($body.skills)) {
+                            if ($null -eq $s0) { continue }
                             $s = [string]$s0
                             if ($s.Length -gt 40) { $s = $s.Substring(0,40) }
                             if ($SkillNameRe.IsMatch($s)) { $skl += $s }
                         }
                         $nd = @()
                         foreach ($n0 in @($body.needs)) {
+                            if ($null -eq $n0) { continue }
                             $nn = [string]$n0
                             if ($nn.Length -gt 40) { $nn = $nn.Substring(0,40) }
                             $nd += $nn
