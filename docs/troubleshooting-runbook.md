@@ -47,7 +47,8 @@ Sự cố CI thường gặp:
 - `--hidden-import winreg` trên macOS cảnh báo "not found" — bình
   thường, bỏ qua.
 - SmartScreen chặn `TroLyAI.exe` trên máy học viên → hướng dẫn "More
-  info → Run anyway" (chưa ký code trong pilot).
+  info → Run anyway" (Windows chưa ký code — macOS đã ký Developer ID +
+  notarize qua `tools/sign-macos.sh` / CI nên không còn chặn).
 
 ## 1. Health check nhanh
 

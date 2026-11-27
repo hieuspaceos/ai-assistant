@@ -40,16 +40,17 @@ query string (Cloudflare caches by URL).
 4. Open the **💬 Ask the assistant** tab → type `/phong-van`.
    This tab has 2 modes: **Chat** (default — message bubbles,
    bold/italic/headings like Word) and **Terminal** (the brain's CLI
-   via ttyd). Chat goes through `tools/chat-bridge.ps1` → the ACP brain
+   via ttyd — **off by default**, toggle in Settings; skipping ttyd
+   saves RAM). Chat goes through `tools/chat-bridge.ps1` → the ACP brain
    picked by `brain.json` (`tools/chat-bridge.py` on macOS/Linux).
 5. The agent asks: which tools do you use? What repetitive work eats
    your time? → drafts a plan → the learner approves it.
 6. For each pain point it packages a **tool**: a new skill
-   (`/command`) or an existing one + a lesson folder
+   (`/command`) or an existing one + a tool folder
    `workspace/tool-XX-*/` containing **`walkthrough.json`** (the
    interactive product) and `guide.md` (the readable version). No
    slides, no exercises, no videos — the learner works, not studies.
-7. `manifest.json` updates → refresh the portal → each lesson shows a
+7. `manifest.json` updates → refresh the portal → each tool shows a
    **▶ Use it now** button that opens the walkthrough modal: one step
    at a time, typed prompts send straight into the chat, permission/
    run waits advance on their own, result folders open in Finder. A
@@ -115,7 +116,11 @@ content or file contents.
   also provision the brain (`deploy/install-brain.ps1`, or a pack
   `brain` field that writes `brain.json` on not-yet-onboarded machines).
 - **Distribution** — releases signed ed25519 (private key offline)
-  flow vendor → collector → machines with stage + rollback; per-org
+  flow vendor → collector → machines; the macOS `troly` binary is
+  also Developer ID codesigned + notarized in CI
+  (`tools/sign-macos.sh` locally — cert in keychain,
+  `tools/entitlements.plist` for the PyInstaller-bundled Python), so
+  Gatekeeper opens it without the right-click dance with stage + rollback; per-org
   **packs** (skills/workflows/rules) push company customization to
   every machine without touching code.
 - **Skill handoff** — the dashboard shows each machine's skill count
@@ -172,6 +177,7 @@ ai-assistant/
 ├── tools/apply-pack.py        # apply org pack (skills/workflows/rules) — lint pack phía máy: exec_allowlist first-token deny, open_url http(s)-only, drive/env paths, permissions_template qua path_guard; never overrides consent
 ├── tools/make-license.py      # vendor: sign license.json (HMAC org|seats|expiry|issued)
 ├── tools/sign-release.py + ed25519.py  # vendor: sign release offline (private key never in repo)
+├── tools/sign-macos.sh + entitlements.plist  # macOS: codesign Developer ID (hardened runtime) + notarytool --wait + quarantine verify — CI gọi cùng bước, keychain profile troly-notary
 ├── tools/backup.py            # snapshot .devin/ + workspace/ before update/pack-apply
 ├── tools/content_guard.py     # UNTRUSTED-content wrapper, injection detect, env allowlist scrub
 ├── tools/test-*.py            # stdlib smoke tests: bridge endpoints, .py↔.ps1 parity, fleet lifecycle, worker 2-tier, packs sync
@@ -179,7 +185,7 @@ ai-assistant/
 ├── collector-web/             # fleet dashboard: login (account or admin key) + role-based tabs
 ├── deploy/                    # company install kit: install.ps1/sh, DEPLOY.md, force-install.md, vendor-infra.md
 ├── packs/                     # per-org config packs (skills/workflows/rules — the "same codebase" differentiator)
-├── intro/slides.html          # static intro deck (Lesson 0)
+├── intro/slides.html          # static intro deck (the intro section)
 ├── site/                      # landing page troly.hieuspace.com (deploy via gh-pages branch + CNAME; bump ?v=N on CSS change)
 ├── plans/                     # multi-phase work plans (executed and in-flight)
 ├── web/                       # portal: index.html + app.js + styles.css + clone-view.html (clone editor)

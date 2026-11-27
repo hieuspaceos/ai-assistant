@@ -6,12 +6,10 @@
 > cần Python, không cần các bước dưới.
 > *(macOS: file `troly` · Windows: file `TroLyAI.exe` — lấy đúng file cho máy mình.)*
 >
-> **Lần đầu mở bị máy "chặn"?** Đó là cảnh báo bình thường với app chưa
-> ký số, không phải virus:
-> - Windows: màn hình xanh SmartScreen → bấm **More info** rồi **Run
->   anyway**.
-> - macOS: báo "cannot be opened" → **chuột phải** vào file `troly` →
->   **Open** → **Open** thêm lần nữa.
+> **Lần đầu mở bị máy "chặn"?** File `troly` cho macOS đã ký số +
+> notarize nên mở là chạy — không còn bước nào. Trên Windows có thể
+> gặp màn hình xanh SmartScreen (file `.exe` chưa ký — cảnh báo bình
+> thường, không phải virus): bấm **More info** rồi **Run anyway**.
 >
 > **Cập nhật sau này:** portal sẽ tự báo "Có bản mới" — bấm vào là ra
 > trang tải. Tải file mới chạy đè là xong, công cụ và cài đặt giữ

@@ -9,7 +9,7 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 | `AGENTS.md` | Persona "giáo viên ELI10" + quy tắc an toàn — áp cho mọi session agent |
 | `README.md` | Giới thiệu + cấu trúc folder |
 | `SETUP.md` | Hướng dẫn cài cho học viên (Windows Terminal, Devin CLI, ttyd) |
-| `start.bat` / `start.sh` | Launcher: serve :8080 + chat-bridge :7682 + ext-bridge :7684 + ttyd :7681 + mở browser |
+| `start.bat` / `start.sh` | Launcher: serve :8080 + chat-bridge :7682 + ext-bridge :7684 + ttyd :7681 (chỉ khi `config.terminal` — mặc định TẮT, tiết RAM) + mở browser |
 | `brain.json` | "Não" agent đang dùng — `{id,label,cmd,args,terminal}`; mặc định devin, đổi trong onboarding/panel Cài đặt hoặc `POST /api/brain` |
 
 ## tools/ — các bridge và tiện ích
@@ -41,6 +41,7 @@ Bản đồ file theo vai trò. Inventory thật: `git ls-files`.
 | `apply-pack.py` | Áp config-pack cty vào `.devin/` — lint exec_allowlist, permissions/exec_allowlist chỉ máy mới, rules.local.md |
 | `make-license.py` | Vendor: cấp license.json ký HMAC theo org/seats/expiry |
 | `sign-release.py` + `ed25519.py` | Vendor: ký release offline (`--gen-key` sinh cặp khoá, privkey KHÔNG vào repo) |
+| `sign-macos.sh` + `entitlements.plist` | macOS: codesign Developer ID + notarize (`notarytool --wait`) + verify quarantine — CI gọi cùng chuỗi qua secrets, local qua keychain profile `troly-notary` |
 | `build-release.sh` | Release-readiness gate: test suite + secret-scan zip + changelog + git sạch |
 | `sync-fork.sh` | Hút phần IMA-only từ `../ima-assistant` → `packs/ima/pack.json` (skill diff, config, workflows, rules) |
 | `content_guard.py` | Lớp ranh giới: wrap UNTRUSTED (sanitize marker + NFKC fold + id hash), detect_injection advisory, scrub_env allowlist spawn, exec_allowed glob |
@@ -119,13 +120,13 @@ prompt-optional + wait-run lặp gánh lượt hỏi lẻ giữa run.
 | `permissions.json` | Folder agent được đọc/ghi ngoài workspace |
 | `connections.json` | Trạng thái kết nối app/web + field bí mật (`secret:true`) |
 | `manifest.json` | Danh sách công cụ — portal đọc để render |
-| `tool-XX-<slug>/` | Một bài (luồng mới): walkthrough.json + guide.md — bài cũ có thể kèm slides.html/video.mp4/exercise.md |
+| `tool-XX-<slug>/` | Một công cụ: walkthrough.json + guide.md — công cụ sinh trước đợt rework có thể kèm slides.html/video.mp4/exercise.md |
 | `clone-work/<site>/` | Số liệu đo mỗi site clone: ref-dom, ref-styles, ref-css/, ref-assets, ref-shot-*, ref-states.md, tokens.md |
 | `trang-*.html` | File clone thành phẩm (mở trong clone-view hoặc trực tiếp) |
 
 ## intro/
 
-`slides.html` — deck giới thiệu tĩnh (Bài 0) trước khi có bộ công cụ riêng.
+`slides.html` — deck giới thiệu tĩnh (phần giới thiệu) trước khi có bộ công cụ riêng.
 
 ## site/ — landing page troly.hieuspace.com
 
