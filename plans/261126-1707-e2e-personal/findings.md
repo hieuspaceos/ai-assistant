@@ -88,3 +88,36 @@ Env: install `~/TroLyAI-e2e` wipe sạch, binary `dist/troly` rebuild sau rename
 - Phase D app ngoài (D2 Zalo/D3 Sheets/D6 WP — cần credential E1-E3 của owner)
 - G3/G4 workflow chặn-app/fail-giữa-chừng, H1 tạo bot gallery, H3 import zip
 - I1-I5, I8-I9, I11; W4-W5, W7-W8; zoom 125%
+
+## Coverage run 6 (sau audit-6 fix — full reset)
+
+Reset sạch (`~/TroLyAI-e2e` + Brave profile + fixture reset) rồi chạy lại end-to-end.
+
+| Phase | Kết quả |
+|---|---|
+| A/B install + onboarding | PASS — redirect onboarding tự động; 7 bước; 2 native consent card duyệt qua osascript dialog; extension auto-pair |
+| C chat | PASS — reply đúng vai, C5 reload giữ history |
+| D kết nối | PASS — trình duyệt connected; Zalo probe lật sau mở tab + ↻; D9 thêm folder qua UI → native dialog → permissions.json; D5 Canva probe; WP/OA hint đúng |
+| E `/phong-van` flagship | PASS — sinh `/bao-cao-tuan` + `tool-03-bao-cao-tuan-cho-sep` (guide + walkthrough + manifest); xử lý êm file chọn sai, bắt lệch "tuần/tháng", honest khi Zalo chưa login |
+| F walkthrough | PASS — 16 bước đủ loại (say/open-url/pick-file/prompt/wait-perm/wait-run/check/input); bỏ qua step optional khi input trống; mở lại về bước 1 |
+| G workflow gom-file | PASS — 10 file → 3 folder, không xoá, có undo; xin quyền read-write qua native gate; checklist "kiểm kết quả" đầy đủ |
+| H bot chip | PASS — tạo "Hằng marketing" qua gallery, native consent, bots.json active=hang-marketing |
+| W i18n | PASS — vi/en parity 103/103, 0 jargon |
+| J suite | PASS — test-bridges 154/0 + toàn bộ suite tĩnh |
+
+## Findings mới (run 6)
+
+| ID | Phase | Mức | Màn hình | Hiện tượng | Fix | Status |
+|----|-------|-----|----------|-----------|-----|--------|
+| F-029 | C/H | **P1** | chat | Kill bridge giữa session: supervisor respawn + `replay_history()` nạp lại event → `since` client còn hợp lệ → không `reset` → không `done` → `sendBtn.disabled` kẹt vĩnh viễn, "đang làm việc…" 232s+. Tin gửi lúc chết mất ngầm | 2 lớp: (a) bridge — replay xong nếu event cuối là `text`/`tool`/`warn`/`perm_done` (turn chết giữa chừng) → chêm `err` "trợ lý vừa khởi động lại…" để client mở khoá; (b) client — watchdog `!connected && busy>20s` → `setBusy(false)` + báo lỗi | fixed ✓ |
+| F-030 | F | P2 | walkthrough | `wtStop()` xoá `wt_progress_*` khi đóng bằng ✕ → mất 12 bước (reload trang thì resume được — chỉ ✕ mới reset) | — | open |
+
+## Verify F-029
+
+Kill :7682 → gửi tin → lỗi "không nói chuyện được với trợ lý, thử tải lại trang" hiện ngay + nút Gửi mở lại. Bridge respawn → gửi "alo" → Hằng trả lời bình thường. Event cuối là `done` nên không chêm `err` (đúng thiết kế).
+
+## Chưa cover (đợt sau)
+
+- C4/C6/C7/C9–C11; D6/D7 (cần creds WP/OA); E edge (file khoá/file lớn)
+- G3/G4; H3 import zip; I1–I5, I8–I9, I11; W4/W5/W7/W8; zoom 125%
+- F-029 nhánh "kill giữa turn thật" chỉ verify code-path — inject `err` chưa thấy trực tiếp trên UI

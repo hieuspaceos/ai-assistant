@@ -316,6 +316,19 @@ def replay_history():
     # F-018: tiếp tục run_id từ phiên trước — restart mà reset về 0 thì
     # history jsonl (append-only) trộn run_id 2 phiên, dashboard đếm sai
     run_id[0] = max_run
+    # Bridge chết giữa lượt (event cuối không phải done) → lượt ấy mất
+    # theo process: cursor client vẫn hợp lệ sau replay nên KHÔNG có reset,
+    # chat kẹt "đang làm việc" mãi. Chêm err để client tự mở khoá + báo
+    # học viên nhắn lại — chỉ khi store chắc chắn dở dang.
+    last = event_store[-1] if event_store else None
+    if last and last.get("t") in ("text", "tool", "warn", "perm_done",
+                                  "perm", "perm:auto"):
+        with store_lock:
+            event_store.append({
+                "t": "err",
+                "msg": "trợ lý vừa khởi động lại — việc trước đó có thể "
+                       "chưa xong, nhờ lại giúp mình",
+                "run_id": run_id[0]})
     with store_lock:
         excess = len(event_store) - MAX_EVENTS
         if excess > 0:

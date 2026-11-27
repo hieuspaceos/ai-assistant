@@ -175,6 +175,7 @@ const STR = {
     ph: 'Nhắn cho trợ lý… (VD: /phong-van) · Enter gửi, Shift+Enter xuống dòng',
     send: 'Gửi', busy: 'Trợ lý đang làm việc', permSuffix: ' — bạn cho phép không?',
     noOpt: 'Không đồng ý', errPfx: 'Ừm, có lỗi nhỏ: ',
+    deadMsg: 'trợ lý đang tắt — mở lại app bằng file start rồi tải lại trang này',
     nativeHint: 'Xác nhận trong hộp thoại vừa hiện trên màn hình máy bạn — trợ lý không tự bấm được nút đó.',
     nativeTimeout: 'Hộp thoại tự đóng sau ~10 phút nếu không trả lời — khi đó việc đang làm sẽ dừng, bạn nhờ lại nhé.',
   },
@@ -187,6 +188,7 @@ const STR = {
     ph: 'Message the assistant… (e.g. /interview) · Enter sends, Shift+Enter new line',
     send: 'Send', busy: 'The assistant is working', permSuffix: ' — allow it?',
     noOpt: 'Decline', errPfx: 'Hmm, small hiccup: ',
+    deadMsg: 'the assistant is off — reopen the app with the start file, then reload this page',
     nativeHint: 'Confirm in the dialog on your screen — the assistant cannot click that button for you.',
     nativeTimeout: 'The dialog closes itself after ~10 minutes with no answer — the task then stops, just ask again.',
   },
@@ -286,7 +288,17 @@ function startBusyClock() {
   busyAt = Date.now(); lastTool = '';
   statusEl.textContent = fmtBusy();
   clearInterval(busyTimer);
-  busyTimer = setInterval(() => { statusEl.textContent = fmtBusy(); }, 1000);
+  busyTimer = setInterval(() => {
+    statusEl.textContent = fmtBusy();
+    // Bridge chết giữa lượt → không còn event done nào tới: busy kẹt mãi,
+    // nút Gửi disabled luôn. Poll thất bại (connected=false) >20s = chắc
+    // chắn chết (respawn xong poll sống lại → connected=true) → báo lỗi
+    // + mở nút thay vì để học viên ngồi chờ.
+    if (!connected && Date.now() - busyAt > 20000) {
+      setBusy(false);
+      addErr(S.deadMsg);
+    }
+  }, 1000);
 }
 function addTool(title, status) {
   flushBubble();

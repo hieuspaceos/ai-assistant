@@ -150,3 +150,75 @@ sinh ra dùng được ngay qua walkthrough tương tác, không cần đọc gu
 trước. Ba điểm giá trị nhất: (1) prompt bước gửi thẳng vào chat —
 walkthrough "làm thật" chứ không chỉ xem; (2) wait-* tự qua bước nhờ
 event stream; (3) file kết quả ra thật, Finder mở được ngay.
+
+---
+
+# Run 6 — sau audit-6 fix, full reset (ngày nay)
+
+Reset toàn bộ (install `~/TroLyAI-e2e` + Brave profile + fixture `lan-test`),
+fresh install. Mục tiêu: regression pass sau đợt vá audit-6 (13 findings) +
+chạy nốt các phase còn thiếu.
+
+## Kết quả nhanh
+
+| Phase | Run 6 |
+|---|---|
+| A/B | ✅ — 7 bước, 2 native consent qua osascript, ext auto-pair |
+| C | ✅ — đúng vai; C5 reload giữ history |
+| D | ✅ — trình duyệt connected; probe Zalo/Canva lật khi mở tab + ↻; D9 thêm folder qua UI → native dialog → permissions.json |
+| E flagship | ✅ — `/phong-van` → `/bao-cao-tuan` + `tool-03-bao-cao-tuan-cho-sep` (guide + walkthrough + manifest); xử lý êm file sai, bắt lệch "tuần/tháng", honest khi Zalo chưa login (dẫn quét QR, không chụp mũ) |
+| F | ✅ — walkthrough 16 bước đủ loại; skip optional khi input trống; mở lại về bước 1 |
+| G | ✅ — workflow gom-file: 10 file → 3 folder, không xoá, có undo; xin quyền read-write qua native gate; checklist kiểm kết quả |
+| H | ✅ — tạo "Hằng marketing" qua bot-chip gallery + native consent → bots.json active |
+| W | ✅ — i18n vi/en parity 103/103, 0 jargon |
+| J | ✅ — test-bridges **154/0** + toàn bộ suite tĩnh |
+
+## Bug P1 tìm được — F-029 chat wedge (đã vá)
+
+Kill bridge giữa session (crash hoặc supervisor restart):
+- Client poll fail → `connected=false`, repoll mỗi 4s; nhưng `sendBtn.disabled`
+  chỉ được mở bởi event `done`/`err`.
+- Supervisor respawn bridge → `replay_history()` nạp event cũ từ
+  `chat-history.jsonl` → `since` của client vẫn hợp lệ → **không `reset`** →
+  không event `done` nào đến → chat "đang làm việc…" kẹt 232s+, tin gửi lúc
+  chết mất ngầm. Reload trang mới thoát được (cursor mới → reset).
+
+Vá 2 lớp:
+1. `tools/chat-bridge.py` — sau `replay_history()`, nếu event cuối là
+   `text`/`tool`/`warn`/`perm_done` (= turn chết giữa chừng) → chêm `err`
+   "trợ lý vừa khởi động lại — việc trước đó có thể chưa xong, nhờ lại giúp
+   mình" cho client tự mở khoá.
+2. `web/chat.html` — watchdog trong busy-clock: `!connected && busy>20s` →
+   `setBusy(false)` + `addErr(deadMsg)` (i18n vi/en) — cover khoảng bridge
+   chưa kịp respawn.
+
+**Verify**: kill :7682 → gửi tin → lỗi hiện ngay + nút Gửi mở lại → respawn →
+gửi "alo" → Hằng trả lời bình thường. Nhánh inject `err` sau mid-turn kill
+verify bằng code-path (lần này event cuối là `done` → không inject — đúng
+thiết kế).
+
+## F-030 (P2, open)
+
+`wtStop()` xoá `wt_progress_*` khi đóng walkthrough bằng ✕ → mất hết bước
+đã đi (12/16 trong test). Reload trang thì resume được — chỉ nút ✕ mới reset.
+
+## Debunk 2 "bug" cũ — test artifact
+
+- "Bot gallery click bug" (run trước): `find`/`click` của harness bấm trúng
+  outer container, không trúng `.bot-card` → office template auto-select →
+  bot tạo "Lan — văn phòng" thay vì marketing. Sản phẩm đúng, harness sai.
+- "Tạo trợ lý mới" không mở: click trúng title span ẩn thay vì
+  `.bot-item[data-new]` — cùng loại artifact.
+
+## P2 note — agent mất ngữ cảnh sau nạp quyền
+
+Sau `perm_done` (grant read-write giữa turn), agent hỏi lại "bạn vừa làm xong
+việc gì?" thay vì làm tiếp — phải nhắc lại mới dọn tiếp. Không mất dữ liệu,
+nhưng UX hơi lắc. Đáng theo dõi lại khi não respawn sau perm change (F-015
+liên quan).
+
+## Còn lại
+
+- F-030 open; F-029 nhánh inject `err` chưa thấy trực tiếp trên UI
+- C4/C6–C11; D6/D7 cần creds WP/OA; E edge file khoá/file lớn; H3 import zip;
+  I1–I5, I8–I9, I11; W4–W8; zoom 125%
