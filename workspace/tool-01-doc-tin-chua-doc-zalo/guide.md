@@ -94,11 +94,7 @@ nhắc em nếu cần quét mã đăng nhập"*
 Còn nữa thì chụp màn hình dán vào chat (Alt+V trên Windows) và hỏi:
 *"bị gì vậy bạn?"*
 
-## 7. Bài tập
-
-Mở file `exercise.md` trong folder này — làm xong bạn mới thật sự thuộc bài.
-
-## 8. Từ mới gặp trong bài
+## 7. Từ mới gặp trong bài
 
 | Từ | Nghĩa theo lời thường |
 |---|---|
@@ -106,7 +102,7 @@ Mở file `exercise.md` trong folder này — làm xong bạn mới thật sự 
 | hội thoại chưa đọc | các cuộc chat có chấm đỏ — người ta nhắn mà bạn chưa mở ra xem |
 | connector / kết nối | cầu nối sẵn giữa trợ lý và Zalo Web — nhờ nó mà trợ lý mở được trang cho bạn |
 
-## 9. Học xong rồi — biết thêm
+## 8. Học xong rồi — biết thêm
 
 - Sau khi biết ai đang chờ, bạn có thể nhờ tiếp: *"soạn giúp em tin trả
   lời khách Loan"* — trợ lý sẽ đọc ngữ cảnh rồi soạn nháp, và LUÔN hỏi

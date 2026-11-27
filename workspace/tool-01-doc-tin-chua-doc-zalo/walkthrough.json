@@ -1,0 +1,68 @@
+{
+  "title": "Mở Zalo cái là biết ngay ai đang chờ",
+  "steps": [
+    {
+      "kind": "say",
+      "title": "Giới thiệu",
+      "body": "Công cụ này giống người giúp việc lật hết hộp thư Zalo hộ bạn: mở mục **Chưa đọc**, đọc qua từng hội thoại, rồi kể lại ai đang nhắn, mỗi người cần gì. Bạn chỉ việc nghe và quyết trả lời ai trước — không còn bấm từng chấm đỏ một. Giờ mình làm thật luôn nhé."
+    },
+    {
+      "kind": "open-url",
+      "title": "Mở Zalo Web",
+      "body": "Bấm nút dưới để mở Zalo Web. Nếu nó hỏi đăng nhập, quét mã QR bằng app Zalo trên điện thoại — quét một lần là vào.",
+      "url": "https://chat.zalo.me",
+      "then_probe": {"app": "zalo"}
+    },
+    {
+      "kind": "prompt",
+      "title": "Gõ lệnh",
+      "body": "Gõ lệnh vào ô dưới rồi bấm **Gửi**. Trợ lý chỉ ĐỌC rồi kể lại — không tự trả lời ai hết.\n\n*Zalo hôm nay trống, hoặc chưa đăng nhập được? Xoá chữ trong ô và gõ thay:* `đọc file workspace/tool-01-doc-tin-chua-doc-zalo/sample-files/zalo-hop-thu-demo.txt rồi kể cho em những hội thoại nào có tin chưa đọc`",
+      "prefill": "/doc-zalo"
+    },
+    {
+      "kind": "wait-perm",
+      "title": "Duyệt quyền nếu hộp thoại hiện",
+      "body": "Nếu màn hình máy bạn hiện hộp thoại xin phép mở hoặc đọc trang Zalo — đọc xem nó định làm gì rồi bấm **Đồng ý**. Không thấy hộp thoại thì cứ chờ, bước này tự qua."
+    },
+    {
+      "kind": "wait-run",
+      "title": "Chờ trợ lý lật hộp thư",
+      "body": "Trợ lý đang mở Zalo, cuộn hết danh sách Chưa đọc và đọc qua từng hội thoại. Ngồi chờ chút nhé."
+    },
+    {
+      "kind": "prompt",
+      "title": "Trả lời trợ lý",
+      "body": "Trợ lý có thể hỏi thêm (VD: \"đọc cả tin nhóm không?\", \"hội thoại ghim có tính không?\"). Hỏi gì bạn gõ câu trả lời rồi Gửi — nếu nó không hỏi gì thì bấm **Bỏ qua**.",
+      "placeholder": "trả lời câu hỏi của trợ lý…",
+      "optional": true
+    },
+    {
+      "kind": "wait-run",
+      "title": "Chờ trợ lý làm tiếp",
+      "body": "Đang đợi trợ lý hoàn thành lượt này."
+    },
+    {
+      "kind": "check",
+      "title": "Xem danh sách ai đang chờ",
+      "body": "Trong khung chat phải thấy danh sách kiểu: **\"có X hội thoại đang chờ: chị Hương hỏi giá, nhóm Marketing đang bàn banner…\"** — tên hội thoại kèm xem trước nội dung, khớp với các chấm đỏ trên Zalo.",
+      "expect": "Danh sách hội thoại chưa đọc hiện trong chat — mỗi mục có tên người + nội dung họ cần."
+    },
+    {
+      "kind": "prompt",
+      "title": "Đào sâu một hội thoại",
+      "body": "Thấy tên ai đáng chú ý trong danh sách? Sửa chữ `<tên>` trong ô thành đúng tên hiển thị trong Zalo rồi Gửi — trợ lý đọc kỹ hội thoại đó. Không cần đọc sâu thì bấm **Bỏ qua**.",
+      "prefill": "đọc giúp em mấy tin gần nhất của hội thoại với <tên>, tóm tắt xem họ cần gì",
+      "optional": true
+    },
+    {
+      "kind": "wait-run",
+      "title": "Chờ trợ lý đọc",
+      "body": "Trợ lý đang mở đúng hội thoại và tóm tắt. Chờ chút nhé."
+    },
+    {
+      "kind": "done",
+      "title": "Xong!",
+      "body": "Từ giờ sáng nào mở máy bạn gõ `/doc-zalo` là xong — trợ lý lật hộp thư và kể lại ai đang chờ trong 30 giây. Muốn nó soạn tin trả lời thì nhờ tiếp, nó sẽ soạn nháp và hỏi bạn trước khi gửi. Quên bước nào thì mở lại mục này xem lại."
+    }
+  ]
+}

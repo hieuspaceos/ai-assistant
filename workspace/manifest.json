@@ -8,16 +8,20 @@
       "title": "Mở Zalo cái là biết ngay ai đang chờ — đọc hết tin chưa đọc trong 30 giây",
       "description": "Không còn bấm từng hội thoại để xem có gì mới — trợ lý lật hết hộp thư Zalo và kể lại ai đang chờ, mỗi người cần gì.",
       "folder": "tool-01-doc-tin-chua-doc-zalo",
-      "has_slides": true,
-      "has_video": true
+      "has_slides": false,
+      "has_video": false,
+      "has_exercise": false,
+      "has_walkthrough": true
     },
     {
       "id": "tool-02",
       "title": "Làm một trang web giống trang mẫu bạn thích — với nội dung của mình",
       "description": "Thấy landing page đẹp là 'học' được khuôn ngay — trợ lý dựng trang của bạn theo đúng bố cục đó, khỏi thuê người hay vật với Elementor.",
       "folder": "tool-02-trang-giong-trang-mau",
-      "has_slides": true,
-      "has_video": true
+      "has_slides": false,
+      "has_video": false,
+      "has_exercise": false,
+      "has_walkthrough": true
     }
   ]
 }

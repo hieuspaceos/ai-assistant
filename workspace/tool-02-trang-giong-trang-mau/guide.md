@@ -102,11 +102,7 @@ Nếu trang trông "xương" không màu mè — kiểm tra file mở đúng ch�
 Còn nữa thì chụp màn hình dán vào chat (Alt+V trên Windows) và hỏi:
 *"bị gì vậy bạn?"*
 
-## 7. Bài tập
-
-Mở file `exercise.md` trong folder này — làm xong bạn mới thật sự thuộc bài.
-
-## 8. Từ mới gặp trong bài
+## 7. Từ mới gặp trong bài
 
 | Từ | Nghĩa theo lời thường |
 |---|---|
@@ -114,7 +110,7 @@ Mở file `exercise.md` trong folder này — làm xong bạn mới thật sự 
 | bố cục / khuôn trang | cách các phần xếp trên trang: ảnh lớn trước, ưu điểm sau, giá cuối — như khung nhà, còn chữ và hình là nội thất của bạn |
 | file .html | tệp trang web — bấm đúp là trình duyệt mở ra xem được |
 
-## 9. Học xong rồi — biết thêm
+## 8. Học xong rồi — biết thêm
 
 - Trang làm xong đang nằm trên máy bạn. Muốn người khác vào được bằng link
   thật thì cần đưa lên web — khi sẵn sàng hỏi mình "làm sao đưa trang này

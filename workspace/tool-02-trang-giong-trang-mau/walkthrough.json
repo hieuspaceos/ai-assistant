@@ -1,0 +1,75 @@
+{
+  "title": "Làm trang web giống trang mẫu bạn thích",
+  "steps": [
+    {
+      "kind": "say",
+      "title": "Giới thiệu",
+      "body": "Công cụ này giống người thợ nhìn khuôn tủ đẹp rồi đóng cho nhà bạn cái y hệt: trợ lý đọc trang mẫu, học cách bày bài (ảnh lớn → ưu điểm → giá → nút kêu gọi), rồi dựng trang với nội dung của BẠN. **Chữ, hình, logo đều của bạn** — trợ lý chỉ học khuôn, không mang của người ta sang. Giờ mình làm thật luôn nhé."
+    },
+    {
+      "kind": "pick-file",
+      "title": "Chọn trang mẫu",
+      "body": "Bấm nút dưới rồi chọn file trang mẫu (.html). Lần đầu thử? Vào folder **ai-assistant/workspace/tool-02-trang-giong-trang-mau/sample-files/** chọn `trang-mau.html`. Thấy trang nào đẹp trên mạng thì mở trang đó, bấm Ctrl+S (hoặc Cmd+S) lưu về máy rồi chọn file vừa lưu.",
+      "var": "mau",
+      "placeholder": "…/workspace/tool-02-trang-giong-trang-mau/sample-files/trang-mau.html"
+    },
+    {
+      "kind": "input",
+      "title": "Nội dung của bạn",
+      "body": "Viết ngắn gọn nội dung sẽ đưa lên trang: sản phẩm/dịch vụ là gì, khẩu hiệu, ưu điểm, giá, nút kêu gọi. Viết càng rõ trang càng đúng ý.",
+      "var": "noidung",
+      "placeholder": "VD: trà thảo mộc Thanh Lọc — khẩu hiệu 'Ngủ ngon mỗi đêm', nguyên liệu tự nhiên, giá 149.000đ, nút ĐẶT NGAY"
+    },
+    {
+      "kind": "prompt",
+      "title": "Gõ lệnh",
+      "body": "Gõ lệnh vào ô dưới rồi bấm **Gửi** — chữ đã điền sẵn file trang mẫu và nội dung của bạn.",
+      "prefill": "/clone-trang — trang mẫu {{mau}}, nội dung của em: {{noidung}}. Lưu ra file workspace/trang-cua-em.html rồi mở cho em xem"
+    },
+    {
+      "kind": "wait-perm",
+      "title": "Duyệt quyền nếu hộp thoại hiện",
+      "body": "Nếu hộp thoại hiện lên xin quyền đọc file trang mẫu hoặc ghi file trong workspace — đọc xem nó định làm gì rồi bấm **Đồng ý**. Không thấy hộp thoại thì cứ chờ, bước này tự qua."
+    },
+    {
+      "kind": "wait-run",
+      "title": "Chờ trợ lý học khuôn và dựng trang",
+      "body": "Trợ lý đang đọc trang mẫu, phân tích nhịp trình bày rồi viết trang của bạn. Việc này mất vài phút — ngồi chờ nhé."
+    },
+    {
+      "kind": "prompt",
+      "title": "Trả lời trợ lý",
+      "body": "Trợ lý có thể hỏi thêm (VD: \"trang này để bán hàng hay giới thiệu?\", \"đặt tên file là gì?\"). Hỏi gì bạn gõ câu trả lời rồi Gửi — nếu nó không hỏi gì thì bấm **Bỏ qua**.",
+      "placeholder": "trả lời câu hỏi của trợ lý…",
+      "optional": true
+    },
+    {
+      "kind": "wait-run",
+      "title": "Chờ trợ lý làm tiếp",
+      "body": "Đang đợi trợ lý hoàn thành lượt này."
+    },
+    {
+      "kind": "check",
+      "title": "Xem trang của bạn",
+      "body": "Trình duyệt phải mở ra một trang hoàn chỉnh: phần đầu ấn tượng, các ô ưu điểm, giá, nút kêu gọi — và **toàn bộ chữ là của bạn**, không còn chữ của trang mẫu.",
+      "expect": "Trang .html mới mở trên trình duyệt — nhịp giống trang mẫu, nội dung là của bạn."
+    },
+    {
+      "kind": "prompt",
+      "title": "Chỉnh tới khi vừa ý",
+      "body": "Muốn đổi màu, đổi chữ nút, thêm mục? Gõ lời nhờ thường rồi Gửi — trợ lý sửa file, bạn tải lại trang (F5) là thấy bản mới. Vừa ý rồi thì bấm **Bỏ qua**.",
+      "placeholder": "VD: đổi màu chủ đạo thành xanh lá, thêm mục cảm nhận khách hàng",
+      "optional": true
+    },
+    {
+      "kind": "wait-run",
+      "title": "Chờ trợ lý sửa",
+      "body": "Trợ lý đang sửa trang theo ý bạn. Chờ chút nhé."
+    },
+    {
+      "kind": "done",
+      "title": "Xong!",
+      "body": "Từ giờ thấy trang nào đẹp bạn lưu nó về máy rồi gõ `/clone-trang` — trợ lý sẽ hỏi trang mẫu ở đâu, nội dung gì, rồi dựng cho bạn. Muốn người khác vào được bằng link thật thì hỏi mình \"làm sao đưa trang này lên internet\". Quên bước nào thì mở lại mục này xem lại."
+    }
+  ]
+}
